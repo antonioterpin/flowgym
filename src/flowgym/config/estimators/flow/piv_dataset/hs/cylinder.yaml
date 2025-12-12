@@ -1,0 +1,10 @@
+estimator: horn_schunck
+estimate_type: flow
+config:
+    jit: False
+    alpha: 100
+    n_iterations: 200
+    levels: 8
+    sigma: 1
+    # preprocess: src/flowgym/config/estimators/pre-processing/common.yaml
+    # postprocess: src/flowgym/config/estimators/post-processing/common.yaml

@@ -1,0 +1,18 @@
+estimator: dis_jax
+estimate_type: flow
+config:
+    jit: true
+    preset: 1
+    patch_size: 11
+    patch_stride: 2
+    grad_desc_iters: 4
+    var_refine_iters: 0 # WIP
+    use_mean_normalization: false #not yet implemented
+    use_spatial_propagation: false #not yet implemented
+    use_temporal_propagation: false #not yet implemented
+    start_level: 0
+    levels: 3
+    level_steps: 1
+    output_full_res: true
+    preprocess: src/flowgym/config/estimators/pre-processing/common.yaml
+    postprocess: src/flowgym/config/estimators/post-processing/common.yaml

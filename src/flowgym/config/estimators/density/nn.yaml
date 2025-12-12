@@ -1,0 +1,10 @@
+estimator: nn_density
+estimate_type: density
+config:
+    jit: true
+    intensity_capping: 5
+    background_suppression: 0.0
+    features: [32, 64]
+    use_residual: false
+    # bn does not work atm as it requires some changes to the base classes (mutable params)
+    use_bn: false

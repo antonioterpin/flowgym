@@ -1,0 +1,118 @@
+dis_algorithms:
+    - name: DIS0
+      parameters:
+          patch_size: 25
+          patch_stride: 7
+          grad_desc_iters: 16
+          start_level: 1
+          levels: 3
+          temporal_propagation: false
+          filters: true
+    - name: DIS1
+      parameters:
+          patch_size: 31
+          patch_stride: 10
+          grad_desc_iters: 16
+          start_level: 1
+          levels: 3
+          temporal_propagation: false
+          filters: true
+    - name: DIS2
+      parameters:
+          patch_size: 31
+          patch_stride: 25
+          grad_desc_iters: 16
+          start_level: 0
+          levels: 3
+          temporal_propagation: false
+          filters: true
+    - name: DIS3
+      parameters:
+          patch_size: 47
+          patch_stride: 20
+          grad_desc_iters: 6
+          start_level: 1
+          levels: 3
+          temporal_propagation: false
+          filters: false
+    - name: DIS4
+      parameters:
+          patch_size: 51
+          patch_stride: 30
+          grad_desc_iters: 4
+          start_level: 1
+          levels: 3
+          temporal_propagation: false
+          filters: false
+    - name: DIS5
+      parameters:
+          patch_size: 25
+          patch_stride: 13
+          grad_desc_iters: 16
+          start_level: 3
+          levels: 3
+          temporal_propagation: false
+          filters: true
+    - name: DIS6
+      parameters:
+          patch_size: 13
+          patch_stride: 8
+          grad_desc_iters: 16
+          start_level: 0
+          levels: 3
+          temporal_propagation: false
+          filters: true
+    - name: DIS7
+      parameters:
+          patch_size: 23
+          patch_stride: 15
+          grad_desc_iters: 4
+          start_level: 0
+          levels: 2
+          temporal_propagation: false
+          filters: true
+    - name: DIS8
+      parameters:
+          patch_size: 23
+          patch_stride: 12
+          grad_desc_iters: 16
+          start_level: 0
+          levels: 2
+          temporal_propagation: false
+          filters: true
+    - name: DIS9
+      parameters:
+          patch_size: 15
+          patch_stride: 12
+          grad_desc_iters: 16
+          start_level: 0
+          levels: 2
+          temporal_propagation: false
+          filters: true
+    - name: DIS10
+      parameters:
+          patch_size: 21
+          patch_stride: 12
+          grad_desc_iters: 4
+          start_level: 0
+          levels: 2
+          temporal_propagation: false
+          filters: true
+    - name: DIS11
+      parameters:
+          patch_size: 15
+          patch_stride: 10
+          grad_desc_iters: 4
+          start_level: 0
+          levels: 2
+          temporal_propagation: false
+          filters: true
+    - name: DIS12
+      parameters:
+          patch_size: 13
+          patch_stride: 6
+          grad_desc_iters: 4
+          start_level: 0
+          levels: 3
+          temporal_propagation: false
+          filters: true

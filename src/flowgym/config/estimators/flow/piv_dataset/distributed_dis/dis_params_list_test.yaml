@@ -1,0 +1,36 @@
+dis_algorithms:
+- name: DIS0
+  parameters:
+    patch_size: 11
+    patch_stride: 2
+    grad_desc_iters: 4
+    start_level: 0
+    levels: 3
+    temporal_propagation: false
+    # postprocessing_steps:
+    #   - name: median_smoothing
+    #     radius: 2
+    #   - name: median_smoothing
+    #     radius: 2
+    #   - name: average_smoothing
+    #     radius: 3
+    #   - name: average_smoothing
+    #     radius: 2
+    #   - name: average_smoothing
+    #     radius: 1
+- name: DIS1
+  parameters:
+    patch_size: 13
+    patch_stride: 3
+    grad_desc_iters: 4
+    start_level: 0
+    levels: 3
+    temporal_propagation: false
+- name: DIS2
+  parameters:
+    patch_size: 7
+    patch_stride: 3
+    grad_desc_iters: 4
+    start_level: 0
+    levels: 2
+    temporal_propagation: false

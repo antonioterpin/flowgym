@@ -1,0 +1,12 @@
+estimator: farneback
+estimate_type: flow
+config:
+    jit: false
+    pyr_scale: 0.75
+    levels: 4
+    winsize: 48
+    iterations: 5
+    poly_n: 5
+    poly_sigma: 1.2
+    preprocess: src/flowgym/config/estimators/pre-processing/common.yaml
+    postprocess: src/flowgym/config/estimators/post-processing/common.yaml

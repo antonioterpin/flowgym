@@ -1,0 +1,17 @@
+postprocessing_steps:
+    - name: universal_median_test
+      radius: 2
+      epsilon: 0.0001
+      r_threshold: 2.0
+    - name: laplace_interpolation
+      num_iter: 512
+    - name: median_smoothing
+      radius: 2
+    - name: median_smoothing
+      radius: 2
+    - name: median_smoothing
+      radius: 2
+    - name: median_smoothing
+      radius: 2
+    - name: average_smoothing
+      radius: 2

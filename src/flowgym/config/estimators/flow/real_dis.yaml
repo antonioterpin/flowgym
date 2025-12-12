@@ -1,0 +1,33 @@
+estimator: dis_jax
+estimate_type: flow
+# if not specified, is expected to be the same as the input image shape
+estimate_shape: [64, 64, 2]
+config:
+    jit: true
+    preset: 1
+    patch_size: 13
+    patch_stride: 1
+    grad_desc_iters: 16
+    var_refine_iters: 0 # WIP
+    use_mean_normalization: false #not yet implemented
+    use_spatial_propagation: false #not yet implemented
+    use_temporal_propagation: false #not yet implemented
+    start_level: 0
+    levels: 3
+    level_steps: 1
+    output_full_res: true
+    postprocess:
+        - name: resize_flow
+          target_height: 64
+          target_width: 64
+    preprocess:
+        - name: crop_special
+          target_height: 832
+          target_width: 1024
+          fraction_v: 0.5
+          fraction_h: 1.0
+        # - name: resize_image
+        #   target_height: 208
+        #   target_width: 256
+        - name: intensity_capping
+          n: 1.1

@@ -1,0 +1,44 @@
+estimator: consensus
+estimate_type: flow
+config:
+  jit: true
+  consensus_algorithm: admm
+  consensus_config:
+    patch_size: 7
+    solver_flows: "closed_form_l2"
+    flows_objective_type: "l2"
+    weights_type: "photograd"
+    weights: [1.0, 1.0, 1.0]
+    normalization: "none"
+    num_iterations_consensus: 30
+    solver_consensus: "adam"
+    rho: 2.0
+    max_admm_iterations: 30
+
+    # regularizers
+    regularizer_list: ["smoothness", "divergence", "laplacian", "tv"]
+    regularizer_weights:
+      smoothness: 0.3
+      divergence: 40
+      laplacian: 5
+      tv: 0
+
+    # stopping criteria
+    eps_abs_stopping: 1e-4
+    eps_rel_stopping: 1e-4
+
+    # learning rate
+    learning_rate_consensus: 0.01
+    learning_rate_flows:
+
+
+  use_temporal_propagation: true
+  estimators_list_path: src/flowgym/config/estimators/flow/piv_dataset/consensus/raft32_list.yaml
+  preprocess: src/flowgym/config/estimators/pre-processing/common.yaml
+  postprocess: src/flowgym/config/estimators/post-processing/common.yaml
+
+  # Experimental parameters:
+  experiment_params:
+    epe_limit: 0.1
+    log_path: "results/consensus_piv_dataset.csv"
+  oracle: true

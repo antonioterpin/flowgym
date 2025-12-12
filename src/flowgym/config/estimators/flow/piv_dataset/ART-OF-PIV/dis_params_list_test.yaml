@@ -1,0 +1,7 @@
+dis_algorithms:
+- name: DIS0
+  parameters: {patch_size: 21, patch_stride: 5, grad_desc_iters: 4, start_level: 0, levels: 3, temporal_propagation: false}
+- name: DIS1
+  parameters: {patch_size: 13, patch_stride: 3, grad_desc_iters: 8, start_level: 0, levels: 2, temporal_propagation: false}
+- name: DIS2
+  parameters: {patch_size: 11, patch_stride: 3, grad_desc_iters: 8, start_level: 0, levels: 2, temporal_propagation: false}

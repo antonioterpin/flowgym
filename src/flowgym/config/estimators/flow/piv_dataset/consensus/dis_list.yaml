@@ -1,0 +1,10 @@
+estimators:
+  - name: DIS0
+    estimator: dis_jax
+    config: {patch_size: 11, patch_stride: 2, grad_desc_iters: 4, start_level: 0, levels: 3, use_temporal_propagation: false}
+  - name: DIS1
+    estimator: dis_jax
+    config: {patch_size: 13, patch_stride: 3, grad_desc_iters: 4, start_level: 0, levels: 3, use_temporal_propagation: false}
+  - name: DIS2
+    estimator: dis_jax
+    config: {patch_size: 7, patch_stride: 3, grad_desc_iters: 4, start_level: 0, levels: 3, use_temporal_propagation: false}

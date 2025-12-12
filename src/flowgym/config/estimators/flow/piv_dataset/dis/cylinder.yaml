@@ -1,0 +1,13 @@
+estimator: dis
+estimate_type: flow
+config:
+    jit: false
+    preset: 1
+    patch_size: 17
+    patch_stride: 1
+    grad_desc_iters: 16
+    var_refine_iters: 0
+    use_mean_normalization: false
+    use_spatial_propagation: false
+    preprocess: src/flowgym/config/estimators/pre-processing/common.yaml
+    postprocess: src/flowgym/config/estimators/post-processing/common.yaml

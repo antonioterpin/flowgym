@@ -1,0 +1,6 @@
+estimator: raft_torch
+estimate_type: flow
+config:
+  jit: false
+  preprocess: estimators/pre-processing/common.yaml
+  postprocess: estimators/post-processing/common.yaml

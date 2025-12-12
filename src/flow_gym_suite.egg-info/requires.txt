@@ -1,0 +1,15 @@
+jax>=0.6.0
+flax>=0.10.5
+ipywidgets
+robo-goggles>=0.1.6
+pip>=25.3
+
+[cuda12]
+jax[cuda12]>=0.6.0
+
+[other_methods]
+pyoptflow
+openpiv
+opencv-python-headless
+torch>=1.13.1
+torchvision>=0.14.1

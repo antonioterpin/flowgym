@@ -1,0 +1,9 @@
+estimator: openpiv
+estimate_type: flow
+config:
+    jit: False
+    window_size: 21
+    search_size: 24
+    overlap: 20
+    preprocess: src/flowgym/config/estimators/pre-processing/common.yaml
+    postprocess: src/flowgym/config/estimators/post-processing/common.yaml

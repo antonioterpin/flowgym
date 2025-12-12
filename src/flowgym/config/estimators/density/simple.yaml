@@ -1,0 +1,10 @@
+estimator: simple
+estimate_type: density
+config:
+    jit: true
+    threshold: 100
+    preprocess:
+        - name: background_suppression
+          threshold: 50.0
+        - name: intensity_capping
+          n: 1.1
