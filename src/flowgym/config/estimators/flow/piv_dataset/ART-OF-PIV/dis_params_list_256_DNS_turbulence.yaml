@@ -1,0 +1,101 @@
+dis_algorithms:
+    - name: DIS0
+      parameters: {patch_size: 5, patch_stride: 3, grad_desc_iters: 3, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 0, gaussian_filter_5x5_repetitions: 0, project_incompressible: false, invalid_borders: 0}
+    - name: DIS1
+      parameters: {patch_size: 7, patch_stride: 3, grad_desc_iters: 4, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 1, gaussian_filter_5x5_repetitions: 1, project_incompressible: true, invalid_borders: 0}
+    - name: DIS2
+      parameters: {patch_size: 9, patch_stride: 3, grad_desc_iters: 5, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 2, gaussian_filter_5x5_repetitions: 2, project_incompressible: false, invalid_borders: 0}
+    - name: DIS3
+      parameters: {patch_size: 11, patch_stride: 3, grad_desc_iters: 6, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 3, gaussian_filter_5x5_repetitions: 3, project_incompressible: true, invalid_borders: 0}
+    - name: DIS4
+      parameters: {patch_size: 13, patch_stride: 3, grad_desc_iters: 3, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 4, gaussian_filter_5x5_repetitions: 0, project_incompressible: false, invalid_borders: 0}
+    - name: DIS5
+      parameters: {patch_size: 5, patch_stride: 3, grad_desc_iters: 4, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 1, gaussian_filter_5x5_repetitions: 1, project_incompressible: true, invalid_borders: 0}
+    - name: DIS6
+      parameters: {patch_size: 7, patch_stride: 3, grad_desc_iters: 5, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 2, gaussian_filter_5x5_repetitions: 2, project_incompressible: false, invalid_borders: 0}
+    - name: DIS7
+      parameters: {patch_size: 9, patch_stride: 3, grad_desc_iters: 6, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 3, gaussian_filter_5x5_repetitions: 3, project_incompressible: true, invalid_borders: 0}
+    - name: DIS8
+      parameters: {patch_size: 11, patch_stride: 3, grad_desc_iters: 3, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 4, gaussian_filter_5x5_repetitions: 0, project_incompressible: false, invalid_borders: 0}
+    - name: DIS9
+      parameters: {patch_size: 13, patch_stride: 3, grad_desc_iters: 4, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 0, gaussian_filter_5x5_repetitions: 1, project_incompressible: true, invalid_borders: 0}
+    - name: DIS10
+      parameters: {patch_size: 5, patch_stride: 3, grad_desc_iters: 5, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 2, gaussian_filter_5x5_repetitions: 2, project_incompressible: false, invalid_borders: 0}
+    - name: DIS11
+      parameters: {patch_size: 7, patch_stride: 3, grad_desc_iters: 6, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 3, gaussian_filter_5x5_repetitions: 3, project_incompressible: true, invalid_borders: 0}
+    - name: DIS12
+      parameters: {patch_size: 9, patch_stride: 3, grad_desc_iters: 3, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 4, gaussian_filter_5x5_repetitions: 0, project_incompressible: false, invalid_borders: 0}
+    - name: DIS13
+      parameters: {patch_size: 11, patch_stride: 3, grad_desc_iters: 4, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 0, gaussian_filter_5x5_repetitions: 1, project_incompressible: true, invalid_borders: 0}
+    - name: DIS14
+      parameters: {patch_size: 13, patch_stride: 3, grad_desc_iters: 5, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 1, gaussian_filter_5x5_repetitions: 2, project_incompressible: false, invalid_borders: 0}
+    - name: DIS15
+      parameters: {patch_size: 5, patch_stride: 3, grad_desc_iters: 6, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 3, gaussian_filter_5x5_repetitions: 3, project_incompressible: true, invalid_borders: 0}
+    - name: DIS16
+      parameters: {patch_size: 7, patch_stride: 3, grad_desc_iters: 3, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 4, gaussian_filter_5x5_repetitions: 0, project_incompressible: false, invalid_borders: 0}
+    - name: DIS17
+      parameters: {patch_size: 9, patch_stride: 3, grad_desc_iters: 4, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 0, gaussian_filter_5x5_repetitions: 1, project_incompressible: true, invalid_borders: 0}
+    - name: DIS18
+      parameters: {patch_size: 11, patch_stride: 3, grad_desc_iters: 5, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 1, gaussian_filter_5x5_repetitions: 2, project_incompressible: false, invalid_borders: 0}
+    - name: DIS19
+      parameters: {patch_size: 13, patch_stride: 3, grad_desc_iters: 6, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 2, gaussian_filter_5x5_repetitions: 3, project_incompressible: true, invalid_borders: 0}
+    - name: DIS20
+      parameters: {patch_size: 5, patch_stride: 4, grad_desc_iters: 3, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 0, gaussian_filter_5x5_repetitions: 1, project_incompressible: false, invalid_borders: 0}
+    - name: DIS21
+      parameters: {patch_size: 7, patch_stride: 4, grad_desc_iters: 4, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 1, gaussian_filter_5x5_repetitions: 2, project_incompressible: true, invalid_borders: 0}
+    - name: DIS22
+      parameters: {patch_size: 9, patch_stride: 4, grad_desc_iters: 5, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 2, gaussian_filter_5x5_repetitions: 3, project_incompressible: false, invalid_borders: 0}
+    - name: DIS23
+      parameters: {patch_size: 11, patch_stride: 4, grad_desc_iters: 6, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 3, gaussian_filter_5x5_repetitions: 0, project_incompressible: true, invalid_borders: 0}
+    - name: DIS24
+      parameters: {patch_size: 13, patch_stride: 4, grad_desc_iters: 3, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 4, gaussian_filter_5x5_repetitions: 1, project_incompressible: false, invalid_borders: 0}
+    - name: DIS25
+      parameters: {patch_size: 5, patch_stride: 4, grad_desc_iters: 4, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 1, gaussian_filter_5x5_repetitions: 2, project_incompressible: true, invalid_borders: 0}
+    - name: DIS26
+      parameters: {patch_size: 7, patch_stride: 4, grad_desc_iters: 5, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 2, gaussian_filter_5x5_repetitions: 3, project_incompressible: false, invalid_borders: 0}
+    - name: DIS27
+      parameters: {patch_size: 9, patch_stride: 4, grad_desc_iters: 6, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 3, gaussian_filter_5x5_repetitions: 0, project_incompressible: true, invalid_borders: 0}
+    - name: DIS28
+      parameters: {patch_size: 11, patch_stride: 4, grad_desc_iters: 3, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 4, gaussian_filter_5x5_repetitions: 1, project_incompressible: false, invalid_borders: 0}
+    - name: DIS29
+      parameters: {patch_size: 13, patch_stride: 4, grad_desc_iters: 4, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 0, gaussian_filter_5x5_repetitions: 2, project_incompressible: true, invalid_borders: 0}
+    - name: DIS30
+      parameters: {patch_size: 5, patch_stride: 4, grad_desc_iters: 5, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 2, gaussian_filter_5x5_repetitions: 3, project_incompressible: false, invalid_borders: 0}
+    - name: DIS31
+      parameters: {patch_size: 7, patch_stride: 4, grad_desc_iters: 6, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 3, gaussian_filter_5x5_repetitions: 0, project_incompressible: true, invalid_borders: 0}
+    - name: DIS32
+      parameters: {patch_size: 9, patch_stride: 4, grad_desc_iters: 3, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 4, gaussian_filter_5x5_repetitions: 1, project_incompressible: false, invalid_borders: 0}
+    - name: DIS33
+      parameters: {patch_size: 11, patch_stride: 4, grad_desc_iters: 4, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 0, gaussian_filter_5x5_repetitions: 2, project_incompressible: true, invalid_borders: 0}
+    - name: DIS34
+      parameters: {patch_size: 13, patch_stride: 4, grad_desc_iters: 5, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 1, gaussian_filter_5x5_repetitions: 3, project_incompressible: false, invalid_borders: 0}
+    - name: DIS35
+      parameters: {patch_size: 5, patch_stride: 5, grad_desc_iters: 3, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 0, gaussian_filter_5x5_repetitions: 1, project_incompressible: true, invalid_borders: 0}
+    - name: DIS36
+      parameters: {patch_size: 7, patch_stride: 5, grad_desc_iters: 4, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 1, gaussian_filter_5x5_repetitions: 2, project_incompressible: false, invalid_borders: 0}
+    - name: DIS37
+      parameters: {patch_size: 9, patch_stride: 5, grad_desc_iters: 5, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 2, gaussian_filter_5x5_repetitions: 3, project_incompressible: true, invalid_borders: 0}
+    - name: DIS38
+      parameters: {patch_size: 11, patch_stride: 5, grad_desc_iters: 6, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 3, gaussian_filter_5x5_repetitions: 0, project_incompressible: false, invalid_borders: 0}
+    - name: DIS39
+      parameters: {patch_size: 13, patch_stride: 5, grad_desc_iters: 3, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 4, gaussian_filter_5x5_repetitions: 1, project_incompressible: true, invalid_borders: 0}
+    - name: DIS40
+      parameters: {patch_size: 5, patch_stride: 5, grad_desc_iters: 4, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 1, gaussian_filter_5x5_repetitions: 2, project_incompressible: false, invalid_borders: 0}
+    - name: DIS41
+      parameters: {patch_size: 7, patch_stride: 5, grad_desc_iters: 5, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 2, gaussian_filter_5x5_repetitions: 3, project_incompressible: true, invalid_borders: 0}
+    - name: DIS42
+      parameters: {patch_size: 9, patch_stride: 5, grad_desc_iters: 6, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 3, gaussian_filter_5x5_repetitions: 0, project_incompressible: false, invalid_borders: 0}
+    - name: DIS43
+      parameters: {patch_size: 11, patch_stride: 5, grad_desc_iters: 3, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 4, gaussian_filter_5x5_repetitions: 1, project_incompressible: true, invalid_borders: 0}
+    - name: DIS44
+      parameters: {patch_size: 13, patch_stride: 5, grad_desc_iters: 4, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 0, gaussian_filter_5x5_repetitions: 2, project_incompressible: false, invalid_borders: 0}
+    - name: DIS45
+      parameters: {patch_size: 5, patch_stride: 5, grad_desc_iters: 5, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 2, gaussian_filter_5x5_repetitions: 3, project_incompressible: true, invalid_borders: 0}
+    - name: DIS46
+      parameters: {patch_size: 7, patch_stride: 5, grad_desc_iters: 6, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 3, gaussian_filter_5x5_repetitions: 0, project_incompressible: false, invalid_borders: 0}
+    - name: DIS47
+      parameters: {patch_size: 9, patch_stride: 5, grad_desc_iters: 3, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 4, gaussian_filter_5x5_repetitions: 1, project_incompressible: true, invalid_borders: 0}
+    - name: DIS48
+      parameters: {patch_size: 11, patch_stride: 5, grad_desc_iters: 4, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 0, gaussian_filter_5x5_repetitions: 2, project_incompressible: false, invalid_borders: 0}
+    - name: DIS49
+      parameters: {patch_size: 13, patch_stride: 5, grad_desc_iters: 5, start_level: 0, levels: 2, temporal_propagation: false, gaussian_filter_3x3_repetitions: 1, gaussian_filter_5x5_repetitions: 3, project_incompressible: true, invalid_borders: 0}

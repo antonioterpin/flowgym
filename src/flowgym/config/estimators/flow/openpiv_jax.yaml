@@ -1,0 +1,15 @@
+estimator: openpiv_jax
+estimate_type: flow
+config:
+    jit: true
+    background_suppression: 0.0
+    intensity_capping: 2
+    speed_upper_bound: 3.0
+    speed_lower_bound: 0.0
+    window_size: 16
+    search_size: 21
+    overlap: 8
+    velocity_filter: "None" # "None", "Manual" or "Adaptive"
+    # std_threshold: 1.05 # only for adaptive filtering
+    openpiv_outlier_replacement_kernel_size: 3 # kernel size for outlier replacement
+    openpiv_outlier_replacement_n_iter: 10 # number of iterations for outlier replacement

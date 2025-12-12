@@ -1,0 +1,49 @@
+estimator: distributed_dis
+estimate_type: flow
+config:
+  jit: true
+  consensus_algorithm: admm
+  consensus_config:
+    patch_size: 7
+    solver_flows: "closed_form_l2"
+    flows_objective_type: "l2"
+    weights_type: "photograd"
+    weights: [1.0, 1.0, 1.0]
+    normalization: "none"
+    num_iterations_consensus: 30
+    solver_consensus: "adam"
+    rho: 2.0
+    max_admm_iterations: 30
+
+    # regularizers
+    regularizer_list: ["smoothness", "divergence", "laplacian", "tv"]
+    regularizer_weights:
+      smoothness: 0.3
+      divergence: 40
+      laplacian: 5
+      tv: 0
+
+    # stopping criteria
+    eps_abs_stopping: 1e-4
+    eps_rel_stopping: 1e-4
+
+    # learning rate
+    learning_rate_consensus: 0.01
+    learning_rate_flows:
+
+    # this is for the test, using DIS algorithms I want to limit the max EPE:
+    test_max_epe: true
+    epe_limit: 0.1
+    masking: true
+    noise_filling: 0
+
+    # this test take the gt and choose the best estimate px by px
+    test_only_best: false
+
+  use_temporal_propagation: true
+  output_full_res: true
+  dis_algorithms_path: src/flowgym/config/estimators/flow/piv_dataset/distributed_dis/dis_params_list_test.yaml
+  noise_gt: 0.0
+  output_dis_gt: true
+  preprocess: src/flowgym/config/estimators/pre-processing/common.yaml
+  postprocess: src/flowgym/config/estimators/post-processing/common.yaml

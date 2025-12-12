@@ -1,0 +1,19 @@
+estimators:
+  - name: RAFT_CYLINDER
+    estimator: raft_jax
+    parameters: {patch_size: 32, patch_stride: 8, hidden_dim: 128, context_dim: 128, corr_levels: 4, corr_radius: 4, iters: 12, patches_groups: 50, norm_fn: instance, dropout: 0.0, train: false, gamma: 0.8, use_temporal_propagation: false, trainable_state_path: cylinder/raft_jax/piv_dataset_class1_eval_original.yaml/train_raft/0/good_one.pkl}
+  - name: RAFT_BACKSTEP
+    estimator: raft_jax
+    parameters: {patch_size: 32, patch_stride: 8, hidden_dim: 128, context_dim: 128, corr_levels: 4, corr_radius: 4, iters: 12, patches_groups: 50, norm_fn: instance, dropout: 0.0, train: false, gamma: 0.8, use_temporal_propagation: false, trainable_state_path: backstep/raft_jax/piv_dataset_class1_eval_original.yaml/train_raft/0/good_one.pkl}
+  - name: RAFT_DNS
+    estimator: raft_jax
+    parameters: {patch_size: 32, patch_stride: 8, hidden_dim: 128, context_dim: 128, corr_levels: 4, corr_radius: 4, iters: 12, patches_groups: 50, norm_fn: instance, dropout: 0.0, train: false, gamma: 0.8, use_temporal_propagation: false, trainable_state_path: DNS/raft_jax/piv_dataset_class1_eval_original.yaml/train_raft/0/good_one.pkl}
+  - name: RAFT_SQG
+    estimator: raft_jax
+    parameters: {patch_size: 32, patch_stride: 8, hidden_dim: 128, context_dim: 128, corr_levels: 4, corr_radius: 4, iters: 12, patches_groups: 50, norm_fn: instance, dropout: 0.0, train: false, gamma: 0.8, use_temporal_propagation: false, trainable_state_path: SQG/raft_jax/piv_dataset_class1_eval_original.yaml/train_raft/0/good_one.pkl}
+  - name: RAFT_UNIFORM
+    estimator: raft_jax
+    parameters: {patch_size: 32, patch_stride: 8, hidden_dim: 128, context_dim: 128, corr_levels: 4, corr_radius: 4, iters: 12, patches_groups: 50, norm_fn: instance, dropout: 0.0, train: false, gamma: 0.8, use_temporal_propagation: false, trainable_state_path: uniform/raft_jax/piv_dataset_class1_eval_original.yaml/train_raft/0/good_one.pkl}
+  - name: RAFT_JHTDB
+    estimator: raft_jax
+    parameters: {patch_size: 32, patch_stride: 8, hidden_dim: 128, context_dim: 128, corr_levels: 4, corr_radius: 4, iters: 12, patches_groups: 50, norm_fn: instance, dropout: 0.0, train: false, gamma: 0.8, use_temporal_propagation: false, trainable_state_path: JHTDB/raft_jax/piv_dataset_class1_eval_original.yaml/train_raft/0/good_one.pkl}

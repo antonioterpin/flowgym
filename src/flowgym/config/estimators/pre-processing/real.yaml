@@ -1,0 +1,11 @@
+preprocessing_steps:
+    - name: crop_special
+      target_height: 832
+      target_width: 1024
+      fraction_v: 0.5
+      fraction_h: 1.0
+    - name: resize_image
+      target_height: 256
+      target_width: 256
+    - name: intensity_capping
+      n: 1.1

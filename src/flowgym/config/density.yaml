@@ -1,0 +1,37 @@
+# Dataset parameters
+seed: 0
+batch_size: 128
+flow_fields_per_batch: 1
+batches_per_flow_batch: 128
+loop: false
+randomize: false
+dt: 1
+
+image_shape: [512, 512]
+seeding_density_range: [0.001, 0.06]
+p_hide_img1: 0.0001
+p_hide_img2: 0.0001
+diameter_ranges: [[1.5, 2.5]]
+diameter_var: 0.03
+intensity_ranges: [[200, 230]]
+intensity_var: 0.01
+rho_ranges: [[-0.1, 0.1]]
+rho_var: 0.1
+noise_uniform: 0.0
+noise_gaussian_mean: 0.0
+noise_gaussian_std: 0.0
+
+velocities_per_pixel: 1.0
+resolution: 1
+
+flow_field_size: [512, 512]
+img_offset: [0, 0]
+min_speed_x: 0
+max_speed_x: 0
+min_speed_y: 0
+max_speed_y: 0
+output_units: "pixels"
+
+scheduler_files:
+    - /shared/fluids/fluids-estimation/piv_dataset_final/test/
+scheduler_class: ".mat"

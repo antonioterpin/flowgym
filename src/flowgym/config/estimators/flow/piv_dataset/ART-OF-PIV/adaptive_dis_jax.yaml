@@ -1,0 +1,19 @@
+estimator: adaptive_dis_jax
+estimate_type: flow
+config:
+    jit: true
+    features: [32, 64, 64]
+    kernel_sizes: [8, 4, 3]
+    strides: [4, 2, 1]
+    mlp_hidden_dim: 512
+    use_bn: false
+    # use_mean_normalization: false #not yet implemented
+    # use_spatial_propagation: false #not yet implemented
+    use_temporal_propagation: true
+    output_full_res: true
+    random_choice: false #put to false after training
+    epsilon: 0.1
+    gamma: 0 #discount factor
+    use_last_estimate: false #use last estimate as input to the network
+    dis_algorithms_path: src/flowgym/config/estimators/flow/piv_dataset/ART-OF-PIV/dis_params_list_test.yaml
+    load_from: /shared/fluids/fluids-estimation/models/adaptive_dis_jax_piv_dataset_art_of_piv_2024-06-11_12-30-00/model_best.pkl # TODO: change path

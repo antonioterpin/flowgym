@@ -1,0 +1,31 @@
+# Dataset parameters
+seed: 0 # Random seed for reproducibility
+batch_size: 10 # Number of (img1, img2, flow, density) tuples per batch
+flow_fields_per_batch: 10 # Number of flow fields per batch
+include_images: true # Whether to include images in the dataset
+loop: false # Whether to loop the dataset
+randomize: false # Whether to randomize the order of the batches
+buffer_size: 150
+# Image parameters
+image_shape: [256, 256] # Shape of the images
+
+# Min and max speed bounds in the flow field, used for constrainat violations
+min_speed_x: 0 # Minimum speed in the x direction
+max_speed_x: 0 # Maximum speed in the x direction
+min_speed_y: 0 # Minimum speed in the y direction
+max_speed_y: 0 # Maximum speed in the y direction
+
+output_units: "pixels" # Units of the output flow field. Can be "measure units per second" or "pixels"
+
+# Flows files
+file_list:
+    - /shared/fluids/fluids-estimation/piv_dataset_class1_256/train
+scheduler_class: ".mat"
+
+
+# Train specific parameters
+n_episodes: 10000 # Number of episodes
+save_every: 1000 # How often to save the model
+episode_length: 30
+out_dir: "./output/piv_dataset_class1_original_train/"
+log_every: 100 # How often to log the training stats
