@@ -2,7 +2,7 @@
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![GitHub stars](https://img.shields.io/github/stars/antonioterpin/flowgym?style=social)](https://github.com/antonioterpin/flowgym/stargazers)
-[![PyPI version](https://img.shields.io/pypi/v/flow-gym.svg)](https://pypi.org/project/flow-gym)
+[![PyPI version](https://img.shields.io/pypi/v/flow-gym.svg)](https://pypi.org/project/flow-gym-suite)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 
