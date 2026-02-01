@@ -5,6 +5,7 @@ import importlib
 from pathlib import Path
 from types import ModuleType
 from typing import Literal, overload
+from matplotlib.figure import Figure
 
 import goggles as gg
 import jax
@@ -216,6 +217,66 @@ def viz(
     plt.tight_layout()
     return fig
 
+def visualize_flow_vorticity(flow_field, step=2, cmap="RdBu") -> Figure:
+    """Visualize a flow field with vorticity overlay.
+
+    Args:
+        flow_field: Flow field of shape (H, W, 2) with u and v components.
+        step: Step size for quiver plot.
+        cmap: Colormap for vorticity visualization.
+
+    Returns:
+        fig: The figure object containing the plot.
+    """
+    u = flow_field[..., 0]
+    v = flow_field[..., 1]
+    H, W = u.shape
+
+    # compute spatial gradients
+    dv_dx = np.gradient(v, axis=1)
+    du_dy = np.gradient(u, axis=0)
+    vorticity = dv_dx - du_dy
+
+    # auto color limits
+    mag = np.max(np.abs(vorticity))
+    vmin, vmax = -mag, mag
+
+    # grid for quiver
+    y, x = np.mgrid[0:H, 0:W]
+
+    fig, ax = plt.subplots(figsize=(7, 7))
+    ax.imshow(
+        vorticity,
+        origin="lower",
+        cmap=cmap,
+        vmin=vmin,
+        vmax=vmax,
+        interpolation="bilinear",
+    )
+
+    # overlay quiver
+    ax.quiver(
+        x[::step, ::step],
+        y[::step, ::step],
+        u[::step, ::step],
+        v[::step, ::step],
+        pivot="mid",
+        color="black",
+        scale=None,
+        scale_units="xy",
+        angles="xy",
+        width=0.002,
+    )
+
+    ax.set_aspect("equal")
+    ax.set_xlim(0, W - 1)
+    ax.set_ylim(0, H - 1)
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    ax.set_title("Flow field and vorticity")
+    plt.tight_layout()
+
+    return fig
 
 def flow_magnitude_heatmap(
     flow: np.ndarray, maxrad: float | None = None, minrad: float | None = None

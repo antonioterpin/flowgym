@@ -40,6 +40,7 @@ There you can also find help if you have any issues installing Flow Gym.
 
 ```python
 from flowgym.make import make_estimator
+import jax
 # Define the config (or load from YAML)
 model_config = {
     "estimator": "dis_jax",
@@ -53,8 +54,11 @@ trained_state, create_state_fn, compute_estimate_fn, model = make_estimator(
     image_shape=image_shape
 )
 
+# Create a key 
+key = jax.random.PRNGKey(0)
+
 # Compute an estimate for an image pair
-est_state = create_state_fn(prev)
+est_state = create_state_fn(prev, key)
 new_est_state, metrics = compute_estimate_fn(curr, est_state)
 ```
 
@@ -62,13 +66,18 @@ new_est_state, metrics = compute_estimate_fn(curr, est_state)
 
 ```python
 from flowgym.environment.fluid_env import FluidEnv
+import jax
 
 # Create the environment
 env, env_state = FluidEnv.make(env_config)
 
+# Create a key
+key = jax.random.PRNGKey(0)
+
 for episode in range(num_episodes):
     obs, env_state, done = env.reset(env_state)
-    est_state = create_state_fn(obs)
+    key, subkey = jax.random.split(key)
+    est_state = create_state_fn(obs, subkey)
     train_step_fn = model.create_train_step()
 
     while not done.any():
