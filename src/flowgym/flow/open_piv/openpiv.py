@@ -28,7 +28,6 @@ class OpenPIVEstimator(FlowFieldEstimator):
             overlap: Overlap between consecutive windows.
             kwargs: Additional keyword arguments for the base class.
         """
-
         if not isinstance(window_size, int) or window_size <= 0:
             raise ValueError("window_size must be a positive integer.")
         self.window_size = window_size

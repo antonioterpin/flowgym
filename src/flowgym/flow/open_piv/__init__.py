@@ -1,4 +1,5 @@
 """Initialization module for OpenPIV flow estimators."""
+
 from flowgym.utils import optional_import, MissingDependency
 
 openpiv_mod = optional_import("flowgym.flow.open_piv.openpiv")

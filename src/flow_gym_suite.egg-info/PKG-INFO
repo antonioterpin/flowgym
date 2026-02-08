@@ -3,38 +3,20 @@ Name: flow-gym-suite
 Version: 0.1.0
 Summary: Flow Gym is a toolkit for research and deployment in flow quantification inspired by OpenAI Gym and Stable-Baselines3.
 Author-email: Antonio Terpin <aterpin@ethz.ch>, Francesco Banelli <fbanelli@ethz.ch>, Alan Bonomi <abonomi@ethz.ch>
-License: MIT License
-        
-        Copyright (c) 2025 Antonio Terpin
-        
-        Permission is hereby granted, free of charge, to any person obtaining a copy
-        of this software and associated documentation files (the "Software"), to deal
-        in the Software without restriction, including without limitation the rights
-        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-        copies of the Software, and to permit persons to whom the Software is
-        furnished to do so, subject to the following conditions:
-        
-        The above copyright notice and this permission notice shall be included in all
-        copies or substantial portions of the Software.
-        
-        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-        SOFTWARE.
-        
 Project-URL: Homepage, https://github.com/antonioterpin/flowgym
 Project-URL: Repository, https://github.com/antonioterpin/flowgym
 Project-URL: Documentation, https://github.com/antonioterpin/flowgym#readme
 Project-URL: Issues, https://github.com/antonioterpin/flowgym/issues
+Keywords: PIV,machine learning,fluid dynamics,jax,flax
 Classifier: Development Status :: 4 - Beta
 Classifier: Intended Audience :: Science/Research
 Classifier: Intended Audience :: Developers
 Classifier: License :: OSI Approved :: MIT License
 Classifier: Operating System :: OS Independent
 Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
 Requires-Python: >=3.10
 Description-Content-Type: text/markdown
 License-File: LICENSE
@@ -57,7 +39,7 @@ Dynamic: license-file
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![GitHub stars](https://img.shields.io/github/stars/antonioterpin/flowgym?style=social)](https://github.com/antonioterpin/flowgym/stargazers)
-[![PyPI version](https://img.shields.io/pypi/v/flow-gym.svg)](https://pypi.org/project/flow-gym)
+[![PyPI version](https://img.shields.io/pypi/v/flow-gym.svg)](https://pypi.org/project/flow-gym-suite)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 
@@ -95,6 +77,7 @@ There you can also find help if you have any issues installing Flow Gym.
 
 ```python
 from flowgym.make import make_estimator
+import jax
 # Define the config (or load from YAML)
 model_config = {
     "estimator": "dis_jax",
@@ -108,8 +91,11 @@ trained_state, create_state_fn, compute_estimate_fn, model = make_estimator(
     image_shape=image_shape
 )
 
+# Create a key
+key = jax.random.PRNGKey(0)
+
 # Compute an estimate for an image pair
-est_state = create_state_fn(prev)
+est_state = create_state_fn(prev, key)
 new_est_state, metrics = compute_estimate_fn(curr, est_state)
 ```
 
@@ -117,13 +103,18 @@ new_est_state, metrics = compute_estimate_fn(curr, est_state)
 
 ```python
 from flowgym.environment.fluid_env import FluidEnv
+import jax
 
 # Create the environment
 env, env_state = FluidEnv.make(env_config)
 
+# Create a key
+key = jax.random.PRNGKey(0)
+
 for episode in range(num_episodes):
     obs, env_state, done = env.reset(env_state)
-    est_state = create_state_fn(obs)
+    key, subkey = jax.random.split(key)
+    est_state = create_state_fn(obs, subkey)
     train_step_fn = model.create_train_step()
 
     while not done.any():

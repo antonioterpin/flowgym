@@ -5,14 +5,16 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "flow-gym-suite"
 version = "0.1.0"
-description = "Flow Gym is a toolkit for research and deployment in flow quantification inspired by OpenAI Gym and Stable-Baselines3."
-readme = "README.md"
-license = { file = "LICENSE" }
 authors = [
     { name = "Antonio Terpin", email = "aterpin@ethz.ch" },
     { name = "Francesco Banelli", email = "fbanelli@ethz.ch" },
     { name = "Alan Bonomi", email = "abonomi@ethz.ch" }
 ]
+description = "Flow Gym is a toolkit for research and deployment in flow quantification inspired by OpenAI Gym and Stable-Baselines3."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+keywords = ["PIV", "machine learning", "fluid dynamics", "jax", "flax"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
@@ -20,8 +22,10 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
-requires-python = ">=3.10"
 
 # Core dependencies
 dependencies = [
@@ -207,4 +211,3 @@ version = {attr = "flowgym.__version__"}
 
 [tool.uv]
 default-groups = []
- 

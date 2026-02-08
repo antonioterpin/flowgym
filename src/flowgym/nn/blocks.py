@@ -416,6 +416,7 @@ class ScanBodyBlock(nn.Module):
                 and the updated coordinates tensor.
         """
         from flowgym.flow.raft.process import correlation_block
+
         net, coords1 = carry
 
         # Detach gradients to prevent backprop through time

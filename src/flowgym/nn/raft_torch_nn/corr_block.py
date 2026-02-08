@@ -1,3 +1,5 @@
+"""PyTorch-based RAFT implementation for optical flow estimation."""
+
 import torch
 import torch.nn.functional as F
 
@@ -5,7 +7,10 @@ from flowgym.nn.raft_torch_nn.flowNetsRAFT import bilinear_sampler
 
 
 class CorrBlock:
+    """Correlation block for RAFT optical flow estimation."""
+
     def __init__(self, fmap1, fmap2, num_levels=4, radius=4):
+        """Initialize the correlation block with feature maps and parameters."""
         self.num_levels = num_levels
         self.radius = radius
         self.corr_pyramid = []
@@ -22,6 +27,7 @@ class CorrBlock:
             self.corr_pyramid.append(corr)
 
     def __call__(self, coords):
+        """Index correlation volume."""
         r = self.radius
         coords = coords.permute(0, 2, 3, 1)
         batch, h1, w1, _ = coords.shape
@@ -45,7 +51,8 @@ class CorrBlock:
         return out.permute(0, 3, 1, 2).contiguous().float()
 
     @staticmethod
-    def corr(fmap1, fmap2):
+    def corr(fmap1: torch.Tensor, fmap2: torch.Tensor) -> torch.Tensor:
+        """Compute the correlation between two feature maps."""
         batch, dim, ht, wd = fmap1.shape
         fmap1 = fmap1.view(batch, dim, ht * wd)
         fmap2 = fmap2.view(batch, dim, ht * wd)
