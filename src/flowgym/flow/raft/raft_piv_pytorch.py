@@ -16,18 +16,24 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 from flowgym.flow.base import FlowFieldEstimator
 from goggles.history.types import History
+
 try:
     autocast = torch.cuda.amp.autocast
 except:
     # dummy autocast for PyTorch < 1.6
     class autocast:
+        """Class to mimic torch.cuda.amp.autocast for older PyTorch versions."""
+
         def __init__(self, enabled):
+            """Initialize the dummy autocast context manager."""
             pass
 
         def __enter__(self):
+            """Enter the dummy autocast context manager."""
             pass
 
         def __exit__(self, *args):
+            """Exit the dummy autocast context manager."""
             pass
 
 
@@ -62,9 +68,7 @@ class RaftTorchEstimator(FlowFieldEstimator):
         """
         self.raft.eval()
         # Convert to pytorch for RAFT
-        prev = torch.utils.dlpack.from_dlpack(
-            state["images"][:, 0, ...]
-        )  # (B, H, W)
+        prev = torch.utils.dlpack.from_dlpack(state["images"][:, 0, ...])  # (B, H, W)
         curr = torch.utils.dlpack.from_dlpack(images)  # (B, H, W)
         prev = prev.unsqueeze(1).to(device) / 256  # (B, 1, H, W)
         curr = curr.unsqueeze(1).to(device) / 256  # (B, 1, H, W)
@@ -186,7 +190,7 @@ class RaftTorchEstimator(FlowFieldEstimator):
             predicted_flows += predicted_flows_iter / folding_mask
 
         # PyTorch tensor device
-        torch_device = predicted_flows.device.type   # "cuda" or "cpu"
+        torch_device = predicted_flows.device.type  # "cuda" or "cpu"
 
         # Choose matching JAX device if available
         if torch_device == "cuda" and any(d.platform == "gpu" for d in jax.devices()):
@@ -208,6 +212,7 @@ class RaftTorchEstimator(FlowFieldEstimator):
 
     def _window_2D(self, window_size, power=2):
         """Make a 1D window function, then infer and return a 2D window function.
+
         Done with an augmentation, and self multiplication with its transpose.
         Could be generalized to more dimensions.
         """
@@ -239,5 +244,3 @@ class RaftTorchEstimator(FlowFieldEstimator):
         wind = wind_inner + wind_outer
         wind = wind / np.average(wind)
         return wind
-
-

@@ -153,8 +153,11 @@ def viz(
     try:
         import cv2
     except ImportError:
-        raise ImportError("OpenCV is required for viz function."
-        "Please install it with: uv sync --extra extra")
+        raise ImportError(
+            "OpenCV is required for viz function."
+            "Please install it with: uv sync --extra extra"
+        )
+
     def _downsample(arr, factor):
         """Downsample an array by a given factor."""
         if bilinear:
@@ -217,6 +220,7 @@ def viz(
     plt.tight_layout()
     return fig
 
+
 def visualize_flow_vorticity(flow_field, step=2, cmap="RdBu") -> Figure:
     """Visualize a flow field with vorticity overlay.
 
@@ -278,6 +282,7 @@ def visualize_flow_vorticity(flow_field, step=2, cmap="RdBu") -> Figure:
 
     return fig
 
+
 def flow_magnitude_heatmap(
     flow: np.ndarray, maxrad: float | None = None, minrad: float | None = None
 ) -> np.ndarray:
@@ -313,9 +318,7 @@ def flow_magnitude_heatmap(
     )  # Normalize to [0, 1]
 
     # Use a colormap: 'jet' (blue to red)
-    cmap = plt.get_cmap(
-        "jet"
-    )  # alternative: 'plasma', 'inferno', 'coolwarm', etc.
+    cmap = plt.get_cmap("jet")  # alternative: 'plasma', 'inferno', 'coolwarm', etc.
     rgb = cmap(norm_mag)[..., :3]  # Discard alpha
 
     return rgb.astype(np.float32)

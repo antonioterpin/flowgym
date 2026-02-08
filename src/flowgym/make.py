@@ -12,6 +12,7 @@ from flowgym.common.base.trainable_states import EstimatorTrainableState
 from flowgym.utils import DEBUG, MissingDependency
 from goggles import get_logger
 from goggles.history.types import History
+
 try:
     from synthpix.types import SynthpixBatch
 except ImportError:
@@ -100,17 +101,18 @@ def load_model(
     Args:
         trainable_state_path: Path to the saved model.
         template_state: A template trainable state for restoring.
-    
+
     Returns:
         The loaded trainable state of the model.
     """
     checkpointer = ocp.StandardCheckpointHandler()
-    
+
     restored_state = checkpointer.restore(
-        Path(trainable_state_path), template_state # type: ignore
+        Path(trainable_state_path), template_state  # type: ignore
     )
     logger.info(f"Model loaded from {trainable_state_path}.")
     return restored_state
+
 
 def make_estimator(
     model_config: dict,
@@ -152,13 +154,13 @@ def make_estimator(
         raise ValueError(f"Estimator {model_config['estimator']} not found.")
     elif isinstance(model_class, MissingDependency):
         model_class()
-        
+
     # Create the model instance
-    model = model_class.from_config( # type: ignore
+    model = model_class.from_config(  # type: ignore
         model_config["config"] | {"estimate_shape": estimate_shape}
     )
     logger.info("Model created successfully.")
-    
+
     # Load or create the trainable state
     if load_from:
         if model_config["estimator"] == "raft_torch":

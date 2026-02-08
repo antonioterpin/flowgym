@@ -1,0 +1,43 @@
+repos:
+  - repo: https://github.com/psf/black
+    rev: 25.9.0
+    hooks:
+      - id: black
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.1
+    hooks:
+      - id: ruff
+        stages: [pre-commit, pre-push]
+        # Use hook-level exclude so it actually skips in pre-commit
+        exclude: ^(tests/|examples/)
+        args:
+          [
+            "--fix",
+            "--line-length=80",
+            # Docstring & pandas rules; D includes D419 so this is enough.
+            "--select=D,PD",
+            # Keep D211 (no-blank-line-before-class) by ignoring conflicts:
+          ]
+      - id: ruff
+        name: ruff-typing-modernizer
+        stages: [pre-commit, pre-push]
+        args:
+          [
+            "--fix",
+            "--select=UP,F401,F811",  # UP = pyupgrade rules for modern typing, F401 = unused imports, F811 = redefined unused
+            "--line-length=80",
+          ]
+
+  - repo: https://github.com/asottile/pyupgrade
+    rev: v3.19.0
+    hooks:
+      - id: pyupgrade
+        args: [--py310-plus]  # Enforce Python 3.10+ syntax
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace

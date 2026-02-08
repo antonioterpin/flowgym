@@ -22,7 +22,7 @@ if deepflow_mod is not None:
     DeepFlowEstimator = deepflow_mod.DeepFlowEstimator
 else:
     DeepFlowEstimator = MissingDependency("deepflow", ["other_methods"])
-    
+
 openpiv_mod = optional_import("flowgym.flow.open_piv.openpiv")
 if openpiv_mod is not None:
     OpenPIVEstimator = openpiv_mod.OpenPIVEstimator

@@ -8,15 +8,16 @@ import numpy as np
 
 from flowgym.types import PRNGKey
 
+
 @jax.tree_util.register_pytree_node_class
 @dataclass
 class Experience:
     """Dataclass to hold a batch of experiences.
-    
+
     NOTE: When adding experiences to the buffer, each attribute should have shape
     corresponding to a single experience. When sampling a batch, each attribute will
     have an additional leading batch dimension, as shown in the example below.
-    
+
     Attributes:
         next_flow: The flow field after taking the action.
         action: The action taken.
@@ -24,7 +25,7 @@ class Experience:
         images: The current images.
         old_images: The previous images.
         old_flow: The flow field before taking the action.
-        
+
     Example:
     >>>     exp = Experience(
             next_flow=jnp.array([[0.1, 0.2], [0.3, 0.4]]),  # Shape (H, W, 2)
@@ -36,20 +37,20 @@ class Experience:
             )
     >>>     buffer.push(exp)
     >>>     batch = buffer.sample(batch_size=32)
-    >>>     print(batch.next_flow.shape)  
+    >>>     print(batch.next_flow.shape)
             (32, H, W, 2)
     """
 
-    next_flow: jnp.ndarray            # (H, W, 2)
-    action: jnp.ndarray               # (1, )
-    reward: jnp.ndarray               # (1, )
-    images: jnp.ndarray               # (H, W, 2)
-    old_images: jnp.ndarray           # (H, W, 2)
-    old_flow: jnp.ndarray             # (H, W, 2)
+    next_flow: jnp.ndarray  # (H, W, 2)
+    action: jnp.ndarray  # (1, )
+    reward: jnp.ndarray  # (1, )
+    images: jnp.ndarray  # (H, W, 2)
+    old_images: jnp.ndarray  # (H, W, 2)
+    old_flow: jnp.ndarray  # (H, W, 2)
 
     def tree_flatten(self) -> tuple[list[jnp.ndarray], None]:
         """Flattens the Experience dataclass into its fields for JAX PyTree compatibility.
-        
+
         Returns:
             A tuple containing a list of the dataclass fields and None (no auxiliary data).
         """
@@ -60,16 +61,16 @@ class Experience:
     @classmethod
     def tree_unflatten(cls, aux, children: list[jnp.ndarray]) -> "Experience":
         """Reconstructs the Experience dataclass from its flattened fields.
-        
+
         Args:
             aux: Auxiliary data (not used here).
             children: List of fields to reconstruct the dataclass.
-            
+
         Returns:
             An instance of Experience reconstructed from the fields.
         """
         return cls(*children)
-    
+
 
 class ReplayBuffer:
     """A simple replay buffer for storing and sampling experiences."""
@@ -77,8 +78,8 @@ class ReplayBuffer:
     def __init__(
         self,
         capacity: int,
-        key: PRNGKey = jax.device_put(jax.random.PRNGKey(0), jax.devices("cpu")[0])
-        ) -> None:
+        key: PRNGKey = jax.device_put(jax.random.PRNGKey(0), jax.devices("cpu")[0]),
+    ) -> None:
         """Initializes the ReplayBuffer.
 
         Args:
@@ -91,10 +92,11 @@ class ReplayBuffer:
 
     def push(self, experience: Experience) -> None:
         """Adds a new experience to the buffer.
-        
+
         Args:
             experience: The experience to add.
         """
+
         def to_cpu(x):
             """Moves a JAX array to CPU device."""
             if isinstance(x, jnp.ndarray):
@@ -108,10 +110,10 @@ class ReplayBuffer:
 
     def sample(self, batch_size: int) -> Experience:
         """Randomly samples a batch of experiences.
-        
+
         Args:
             batch_size: Number of experiences to sample.
-            
+
         Returns:
             stacked Experience object.
         """
@@ -122,15 +124,12 @@ class ReplayBuffer:
 
         self.key, subkey = jax.random.split(self.key)
         with jax.default_device(self.cpu_device):
-                    indices = jax.random.choice(
-                        subkey,
-                        a=len(self.buffer),
-                        shape=(batch_size,),
-                        replace=False
-                    )
-                    
+            indices = jax.random.choice(
+                subkey, a=len(self.buffer), shape=(batch_size,), replace=False
+            )
+
         batch = [self.buffer[i.item()] for i in indices]
-        
+
         return self._process_batch(batch)
 
     def sample_at(self, indices: int | list[int] | np.ndarray) -> Experience:
@@ -159,10 +158,10 @@ class ReplayBuffer:
 
     def _process_batch(self, batch: list[Experience]) -> Experience:
         """Helper function to unpack and stack a batch of experiences.
-        
+
         Args:
             batch: List of Experience objects.
-        
+
         Returns:
             stacked Experience object.
         """
