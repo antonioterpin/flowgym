@@ -1,3 +1,5 @@
+"""PyTorch-based RAFT implementation for optical flow estimation."""
+
 try:
     import torch  # noqa: F401
 except ImportError:

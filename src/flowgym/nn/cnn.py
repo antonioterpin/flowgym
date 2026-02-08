@@ -87,4 +87,3 @@ class CNNFlowFieldModel(nn.Module):
             features=2,
             norm_fn=self.norm_fn,
         )(x)
-        

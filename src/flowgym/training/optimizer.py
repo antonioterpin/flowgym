@@ -23,10 +23,10 @@ TRANSFORM_REGISTRY: dict[str, Any] = {
 
 def _build_hyperparams(hcfg: Mapping[str, Any]) -> dict[str, Any]:
     """Build hyperparams dict: scalars or schedules for inject_hyperparams.
-    
+
     Args:
         hcfg: Hyperparameter config mapping.
-        
+
     Returns:
         A dictionary of hyperparameters with schedules built where specified.
     """
@@ -64,7 +64,7 @@ def build_optimizer_from_config(
 
     Args:
         config: Configuration dictionary for the optimizer.
-        
+
     Returns:
         An Optax GradientTransformation instance.
     """

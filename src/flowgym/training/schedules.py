@@ -1,4 +1,5 @@
 """Optax learning rate schedules registry and builder."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -26,7 +27,7 @@ SCHEDULE_REGISTRY: dict[str, Any] = {
     "warmup_cosine_decay": opt_schedules.warmup_cosine_decay_schedule,
     "warmup_exponential_decay": opt_schedules.warmup_exponential_decay_schedule,
     "join_schedules": opt_schedules.join_schedules,
-    }
+}
 
 
 def _build_schedule_from_config(config: dict[str, Any]) -> optax.Schedule:
@@ -35,17 +36,16 @@ def _build_schedule_from_config(config: dict[str, Any]) -> optax.Schedule:
     Config forms:
         - {name: ..., kwargs: {...}} where name is in SCHEDULE_REGISTRY
         - special case for join_schedules with nested schedules.
-    
+
     Args:
         config: Configuration dictionary for the schedule.
-        
+
     Returns:
         An Optax Schedule instance.
     """
     if not isinstance(config, dict):
         raise ValueError(
-            "Schedule config must be a dictionary; "
-            f"got {type(config).__name__}"
+            "Schedule config must be a dictionary; " f"got {type(config).__name__}"
         )
 
     if "name" not in config:
@@ -71,9 +71,7 @@ def _build_schedule_from_config(config: dict[str, Any]) -> optax.Schedule:
         if not isinstance(sub_cfgs, (list, tuple)):
             raise ValueError("join_schedules.schedules must be a list.")
 
-        sub_schedules = [
-            _build_schedule_from_config(c) for c in sub_cfgs
-        ]
+        sub_schedules = [_build_schedule_from_config(c) for c in sub_cfgs]
         return opt_schedules.join_schedules(sub_schedules, boundaries)
 
     fn = SCHEDULE_REGISTRY.get(name_key)

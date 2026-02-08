@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from jax import tree_util, numpy as jnp
 from flax.core.frozen_dict import FrozenDict
@@ -29,8 +30,8 @@ class EstimatorTrainableState:
     def tree_unflatten(cls, aux_data, children):
         """Unflatten the state from JAX tree utilities."""
         return cls(*children)
-    
-    
+
+
 @tree_util.register_pytree_node_class
 @dataclass
 class NNEstimatorTrainableState(EstimatorTrainableState):
@@ -43,16 +44,17 @@ class NNEstimatorTrainableState(EstimatorTrainableState):
 
     @classmethod
     def create(
-        cls, 
+        cls,
         params: FrozenDict[str, jnp.ndarray],
-        tx: optax.GradientTransformation, 
-        extras: Mapping[str, jnp.ndarray] | None = None
+        tx: optax.GradientTransformation,
+        extras: Mapping[str, jnp.ndarray] | None = None,
     ) -> NNEstimatorTrainableState:
         """Create a new trainable state with initialized optimizer state.
 
         Args:
             params: Parameters of the model.
             tx: Optimizer transformation.
+            extras: Optional extras to include in the state.
 
         Returns:
             A new instance of NNEstimatorTrainableState.
@@ -74,13 +76,13 @@ class NNEstimatorTrainableState(EstimatorTrainableState):
         )
 
     def tree_flatten(
-        self
-        ) -> tuple[
-            tuple[
-                FrozenDict[str, jnp.ndarray],
-                optax.OptState,
-                FrozenDict[str, jnp.ndarray]
-                ], optax.GradientTransformation]:
+        self,
+    ) -> tuple[
+        tuple[
+            FrozenDict[str, jnp.ndarray], optax.OptState, FrozenDict[str, jnp.ndarray]
+        ],
+        optax.GradientTransformation,
+    ]:
         """Flatten the state for JAX tree utilities.
 
         Returns:
@@ -96,8 +98,9 @@ class NNEstimatorTrainableState(EstimatorTrainableState):
         cls,
         aux_data: optax.GradientTransformation,
         children: tuple[
-            FrozenDict[str, jnp.ndarray], optax.OptState, FrozenDict[str, jnp.ndarray]]
-        ) -> NNEstimatorTrainableState:
+            FrozenDict[str, jnp.ndarray], optax.OptState, FrozenDict[str, jnp.ndarray]
+        ],
+    ) -> NNEstimatorTrainableState:
         """Unflatten the state from JAX tree utilities.
 
         Args:
@@ -118,21 +121,21 @@ class NNEstimatorTrainableState(EstimatorTrainableState):
         new_params = optax.apply_updates(self.params, updates)
         # Use replace to keep tx static and update params + opt_state
         return self.replace(params=new_params, opt_state=new_opt_state)
-    
+
     @classmethod
     def from_config(
         cls,
         params: FrozenDict,
         optimizer_config: dict[str, Any],
         extras: Mapping[str, jnp.ndarray] | None = None,
-    ) -> "NNEstimatorTrainableState":
+    ) -> NNEstimatorTrainableState:
         """Create a new trainable state from an optimizer configuration.
-        
+
         Args:
             params: Model parameters.
             optimizer_config: Configuration dictionary for the optimizer.
             extras: Optional extras to include in the state.
-            
+
         Returns:
             An instance of NNEstimatorTrainableState with initialized optimizer state.
         """

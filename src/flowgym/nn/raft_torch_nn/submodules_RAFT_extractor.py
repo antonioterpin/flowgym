@@ -1,4 +1,4 @@
-"""Copyright (c) 2020-2021, Christian Lagemann
+"""Copyright (c) 2020-2021, Christian Lagemann.
 
 Portions of this code copyright 2020, princeton-vl
 In the framework of:
@@ -11,7 +11,10 @@ import torch.nn as nn
 
 
 class ResidualBlock(nn.Module):
+    """Residual block for RAFT optical flow estimation."""
+
     def __init__(self, in_planes, planes, norm_fn="group", stride=1):
+        """Initialize the residual block."""
         super().__init__()
 
         self.conv1 = nn.Conv2d(
@@ -51,6 +54,7 @@ class ResidualBlock(nn.Module):
         )
 
     def forward(self, x):
+        """Forward pass through the residual block."""
         y = x
         y = self.relu(self.norm1(self.conv1(y)))
         y = self.relu(self.norm2(self.conv2(y)))
@@ -62,7 +66,10 @@ class ResidualBlock(nn.Module):
 
 
 class BottleneckBlock(nn.Module):
+    """Bottleneck block for RAFT optical flow estimation."""
+
     def __init__(self, in_planes, planes, norm_fn="group", stride=1):
+        """Initialize the bottleneck block."""
         super().__init__()
 
         self.conv1 = nn.Conv2d(in_planes, planes // 4, kernel_size=1, padding=0)
@@ -111,6 +118,7 @@ class BottleneckBlock(nn.Module):
             )
 
     def forward(self, x):
+        """Forward pass through the bottleneck block."""
         y = x
         y = self.relu(self.norm1(self.conv1(y)))
         y = self.relu(self.norm2(self.conv2(y)))
@@ -123,7 +131,10 @@ class BottleneckBlock(nn.Module):
 
 
 class BasicEncoder(nn.Module):
+    """Basic encoder for RAFT optical flow estimation."""
+
     def __init__(self, output_dim=128, norm_fn="batch", dropout=0.0):
+        """Initialize the basic encoder with output dimension, normalization function, and dropout."""
         super().__init__()
         self.norm_fn = norm_fn
 
@@ -171,8 +182,10 @@ class BasicEncoder(nn.Module):
         self.in_planes = dim
         return nn.Sequential(*layers)
 
-    def forward(self, x):
-
+    def forward(
+        self, x: torch.Tensor | list[torch.Tensor] | tuple[torch.Tensor, ...]
+    ) -> torch.Tensor | list[torch.Tensor]:
+        """Forward pass through the basic encoder."""
         # if input is list, combine batch dimension
         is_list = isinstance(x, tuple) or isinstance(x, list)
         if is_list:
@@ -199,7 +212,10 @@ class BasicEncoder(nn.Module):
 
 
 class SmallEncoder(nn.Module):
+    """Small encoder for RAFT optical flow estimation."""
+
     def __init__(self, output_dim=128, norm_fn="batch", dropout=0.0):
+        """Initialize the small encoder with output dimension, normalization function, and dropout."""
         super().__init__()
         self.norm_fn = norm_fn
 
@@ -246,8 +262,10 @@ class SmallEncoder(nn.Module):
         self.in_planes = dim
         return nn.Sequential(*layers)
 
-    def forward(self, x):
-
+    def forward(
+        self, x: torch.Tensor | list[torch.Tensor] | tuple[torch.Tensor, ...]
+    ) -> torch.Tensor | list[torch.Tensor]:
+        """Forward pass through the small encoder."""
         # if input is list, combine batch dimension
         is_list = isinstance(x, tuple) or isinstance(x, list)
         if is_list:

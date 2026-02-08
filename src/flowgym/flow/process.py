@@ -61,7 +61,7 @@ def img_resize(image: jnp.ndarray, new_shape: tuple[int, int]) -> jnp.ndarray:
 def bilinear_interpolate(
     image: jnp.ndarray | np.ndarray,
     x_f: jnp.ndarray | np.ndarray,
-    y_f: jnp.ndarray | np.ndarray
+    y_f: jnp.ndarray | np.ndarray,
 ) -> jnp.ndarray | np.ndarray:
     """Perform bilinear interpolation at floating-point pixel coordinates.
 
@@ -81,9 +81,7 @@ def bilinear_interpolate(
     has_jnp = any(isinstance(a, jnp.ndarray) for a in (image, x_f, y_f))
 
     if has_np and has_jnp:
-        raise TypeError(
-            "image, x_f, and y_f must not mix NumPy and JAX arrays"
-        )
+        raise TypeError("image, x_f, and y_f must not mix NumPy and JAX arrays")
 
     if isinstance(image, jnp.ndarray):
         xp = jnp
@@ -91,7 +89,7 @@ def bilinear_interpolate(
     elif isinstance(image, np.ndarray):
         xp = np
         int_dtype = np.int32
-        
+
     H, W = image.shape
 
     # Clamp x_f and y_f to be within the image bounds
@@ -121,6 +119,7 @@ def bilinear_interpolate(
         + (1 - wx) * wy * I01
         + wx * wy * I11
     )
+
 
 def apply_flow_to_image_backward(
     image: jnp.ndarray,
@@ -162,6 +161,7 @@ def apply_flow_to_image_backward(
         x_f,
         y_f,
     )
+
 
 def apply_flow_to_image_forward(
     image: jnp.ndarray,

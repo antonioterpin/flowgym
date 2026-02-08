@@ -54,7 +54,7 @@ trained_state, create_state_fn, compute_estimate_fn, model = make_estimator(
     image_shape=image_shape
 )
 
-# Create a key 
+# Create a key
 key = jax.random.PRNGKey(0)
 
 # Compute an estimate for an image pair

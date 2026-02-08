@@ -1,7 +1,6 @@
 import pytest
 import jax
 import jax.numpy as jnp
-import numpy as np
 
 from flowgym.training.utils import ReplayBuffer, Experience
 
@@ -31,6 +30,7 @@ def make_experience(seed=0):
 # Basic push and len
 # ---------------------------------------------------------------------------
 
+
 def test_push_and_length():
     buf = ReplayBuffer(capacity=10)
     assert len(buf) == 0
@@ -44,6 +44,7 @@ def test_push_and_length():
 # ---------------------------------------------------------------------------
 # Sampling random batches
 # ---------------------------------------------------------------------------
+
 
 def test_sample_batch_shapes():
     buf = ReplayBuffer(capacity=10)
@@ -64,6 +65,7 @@ def test_sample_batch_shapes():
 # Sampling deterministically by index
 # ---------------------------------------------------------------------------
 
+
 def test_sample_at_indices():
     buf = ReplayBuffer(capacity=5)
     for i in range(5):
@@ -81,6 +83,7 @@ def test_sample_at_indices():
 # Error: sampling too large batch
 # ---------------------------------------------------------------------------
 
+
 def test_sample_too_large_batch_raises():
     buf = ReplayBuffer(capacity=3)
     buf.push(make_experience(0))
@@ -93,11 +96,15 @@ def test_sample_too_large_batch_raises():
 # Error: sample_at invalid indices
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("bad_indices", [
-    [-1],          # negative index
-    [0, 5],        # out of range
-    7,             # scalar invalid
-])
+
+@pytest.mark.parametrize(
+    "bad_indices",
+    [
+        [-1],  # negative index
+        [0, 5],  # out of range
+        7,  # scalar invalid
+    ],
+)
 def test_sample_at_invalid_indices_raises(bad_indices):
     buf = ReplayBuffer(capacity=3)
     for i in range(3):
@@ -110,6 +117,7 @@ def test_sample_at_invalid_indices_raises(bad_indices):
 # ---------------------------------------------------------------------------
 # Clearing the buffer
 # ---------------------------------------------------------------------------
+
 
 def test_clear_buffer():
     buf = ReplayBuffer(capacity=10)
@@ -124,6 +132,7 @@ def test_clear_buffer():
 # ---------------------------------------------------------------------------
 # CPU device check
 # ---------------------------------------------------------------------------
+
 
 def test_arrays_are_on_cpu_after_push():
     buf = ReplayBuffer(capacity=4)

@@ -1,4 +1,4 @@
-"""Copyright (c) 2020-2021, Christian Lagemann
+"""Copyright (c) 2020-2021, Christian Lagemann.
 
 Portions of this code copyright 2020, princeton-vl
 In the framework of:
@@ -18,18 +18,23 @@ try:
 except:
     # dummy autocast for PyTorch < 1.6
     class autocast:
+        """Context manager for autocasting."""
+
         def __init__(self, enabled):
+            """Initialize the autocast context manager with enabled flag."""
             pass
 
         def __enter__(self):
+            """Enter the autocast context manager."""
             pass
 
         def __exit__(self, *args):
+            """Exit the autocast context manager."""
             pass
 
 
 def bilinear_sampler(img, coords, mode="bilinear", mask=False):
-    """Wrapper for grid_sample, uses pixel coordinates"""
+    """Wrapper for grid_sample, uses pixel coordinates."""
     H, W = img.shape[-2:]
     xgrid, ygrid = coords.split([1, 1], dim=-1)
     xgrid = 2 * xgrid / (W - 1) - 1
@@ -46,18 +51,23 @@ def bilinear_sampler(img, coords, mode="bilinear", mask=False):
 
 
 def coords_grid(batch, ht, wd):
+    """Utility function to create a coordinate grid."""
     coords = torch.meshgrid(torch.arange(ht), torch.arange(wd))
     coords = torch.stack(coords[::-1], dim=0).float()
     return coords[None].repeat(batch, 1, 1, 1)
 
 
 def upflow8(flow, mode="bilinear"):
+    """Upsample flow by a factor of 8 using bilinear interpolation."""
     new_size = (8 * flow.shape[2], 8 * flow.shape[3])
     return 8 * F.interpolate(flow, size=new_size, mode=mode, align_corners=True)
 
 
 class CorrBlock:
+    """Correlation block for RAFT optical flow estimation."""
+
     def __init__(self, fmap1, fmap2, num_levels=4, radius=4):
+        """Initialize the correlation block with feature maps, number of levels, and radius."""
         self.num_levels = num_levels
         self.radius = radius
         self.corr_pyramid = []
@@ -74,6 +84,7 @@ class CorrBlock:
             self.corr_pyramid.append(corr)
 
     def __call__(self, coords):
+        """Index correlation volume."""
         r = self.radius
         coords = coords.permute(0, 2, 3, 1)
         batch, h1, w1, _ = coords.shape
@@ -98,6 +109,7 @@ class CorrBlock:
 
     @staticmethod
     def corr(fmap1, fmap2):
+        """Compute correlation between feature maps."""
         batch, dim, ht, wd = fmap1.shape
         fmap1 = fmap1.view(batch, dim, ht * wd)
         fmap2 = fmap2.view(batch, dim, ht * wd)
@@ -108,7 +120,7 @@ class CorrBlock:
 
 
 def sequence_loss(flow_preds, flow_gt):
-    """Loss function defined over sequence of flow predictions"""
+    """Loss function defined over sequence of flow predictions."""
     n_predictions = len(flow_preds)
     flow_loss = 0.0
 
@@ -131,9 +143,10 @@ def sequence_loss(flow_preds, flow_gt):
 
 
 class RAFT(nn.Module):
-    """RAFT"""
+    """RAFT model for optical flow estimation."""
 
     def __init__(self):
+        """Initialize the RAFT model."""
         super().__init__()
 
         self.hidden_dim = 128
@@ -154,7 +167,7 @@ class RAFT(nn.Module):
         )
 
     def initialize_flow(self, img):
-        """Flow is represented as difference between two coordinate grids flow = coords1 - coords0"""
+        """Flow is represented as difference between two coordinate grids flow = coords1 - coords0."""
         N, _, H, W = img.shape
         coords0 = coords_grid(N, H, W).to(img.device)
         coords1 = coords_grid(N, H, W).to(img.device)
@@ -163,6 +176,7 @@ class RAFT(nn.Module):
         return coords0, coords1
 
     def forward(self, input, flowl0, args, flow_init=None, upsample=True):
+        """Estimate optical flow between input image pair and compute loss with respect to ground truth flow."""
         img1 = torch.unsqueeze(input[:, 0, :, :], dim=1)
         img2 = torch.unsqueeze(input[:, 1, :, :], dim=1)
 

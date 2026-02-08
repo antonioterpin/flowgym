@@ -137,6 +137,7 @@ def clahe(
         Processed images with enhanced contrast.
     """
     from skimage import exposure
+
     # stretch contrast first
     images = stretch_contrast(images)
     # move to NumPy
