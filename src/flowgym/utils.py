@@ -307,11 +307,11 @@ def flow_magnitude_heatmap(
     if minrad is None:
         minrad = np.min(mag) + 1e-6  # avoid divide-by-zero
 
-    if not isinstance(maxrad, (float, int)):
-        raise ValueError("maxrad must be a float or None.")
+    if not isinstance(maxrad, (float, int, np.number)):
+        raise ValueError(f"maxrad must be a float or None, got {type(maxrad)}.")
 
-    if not isinstance(minrad, (float, int)):
-        raise ValueError("minrad must be a float or None.")
+    if not isinstance(minrad, (float, int, np.number)):
+        raise ValueError(f"minrad must be a float or None, got {type(minrad)}.")
 
     norm_mag = np.clip(
         (mag - minrad) / (maxrad - minrad), 0.0, 1.0
