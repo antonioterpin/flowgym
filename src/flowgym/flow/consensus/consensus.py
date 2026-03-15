@@ -2,32 +2,32 @@
 
 import csv
 import os
-from typing import Any
+from collections.abc import Callable
+from typing import Any, cast
+
 import jax
 import jax.numpy as jnp
-from jax import lax
-from collections.abc import Callable
-
 import numpy as np
-
-from flowgym.common.base.trainable_states import EstimatorTrainableState
-from flowgym.flow.consensus.consensus_algorithms import validate_experimental_params
-from flowgym.flow.base import FlowFieldEstimator
-
-from flowgym.types import ExperimentParams
-from flowgym.utils import load_configuration
-from flowgym.flow.consensus.consensus_algorithms import CONSENSUS_REGISTRY
-from flowgym.flow.consensus.objectives import make_weights
-
+from goggles import Metrics, get_logger
 from goggles.history.types import History
+from jax import lax
 
-from goggles import get_logger, Metrics
+from flowgym.common.base.trainable_state import EstimatorTrainableState
+from flowgym.flow.base import FlowFieldEstimator
+from flowgym.flow.consensus.consensus_algorithms import (
+    CONSENSUS_REGISTRY,
+    validate_experimental_params,
+)
+from flowgym.flow.consensus.objectives import make_weights
+from flowgym.make import make_estimator
+from flowgym.types import ExperimentParams, PRNGKey
+from flowgym.utils import load_configuration
 
 logger = get_logger(__name__)
 
 
 class ConsensusFlowEstimator(FlowFieldEstimator):
-    """Alternating Direction Method of Multipliers (ADMM) flow field estimator."""
+    """ADMM-based flow field estimator."""
 
     def __init__(
         self,
@@ -36,6 +36,7 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
         consensus_config: dict | None = None,
         use_temporal_propagation: bool = False,
         experiment_params: dict | None = None,
+        rng: PRNGKey | int | None = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the Distributed DIS estimator.
@@ -46,8 +47,14 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
             consensus_config: Configuration for the consensus algorithm.
             use_temporal_propagation: Whether to use temporal propagation.
             experiment_params: Experimental parameters.
-            oracle: Whether to use the oracle mode.
+            rng: Random number generator key or seed.
             **kwargs: Additional keyword arguments for the base class.
+
+        Raises:
+            TypeError: If use_temporal_propagation is not a boolean or
+                estimators_list_path is not a string.
+            ValueError: If estimators_list_path doesn't end with .yaml,
+                no estimators are found, or invalid consensus algorithm.
         """
         if not isinstance(use_temporal_propagation, bool):
             raise TypeError(
@@ -58,18 +65,23 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
 
         # Load the DIS algorithms from the specified path
         if not isinstance(estimators_list_path, str):
-            raise TypeError(
-                f"estimators_list_path must be a string, got {estimators_list_path}."
-            )
+            msg = "estimators_list_path must be str, "
+            msg += f"got {type(estimators_list_path)}."
+            raise TypeError(msg)
         if not estimators_list_path.endswith(".yaml"):
-            raise ValueError(
-                f"estimators_list_path must be a .yaml file, got {estimators_list_path}."
-            )
+            msg = "estimators_list_path must be .yaml, "
+            msg += f"got {estimators_list_path}."
+            raise ValueError(msg)
         estimators_list_config = load_configuration(estimators_list_path)
+
+        if isinstance(rng, int):
+            rng = jax.random.PRNGKey(rng)
 
         # The estimators should take as input the tuple (image, state)
         self.estimator_fns = tuple(
-            self._create_estimators(estimators_list_config["estimators"])
+            self._create_estimators(
+                estimators_list_config["estimators"], rng=rng
+            )
         )
 
         # Check if the number of estimators is valid
@@ -96,12 +108,14 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
 
         for key in self.experiment_params:
             logger.info(
-                f"Using experimental parameter: {key} = {self.experiment_params[key]}"
+                f"Experimental parameter: {key}={self.experiment_params[key]}"
             )
 
         super().__init__(**kwargs)
 
-    def _create_estimators(self, configs: list[dict]) -> list[Callable]:
+    def _create_estimators(
+        self, configs: list[dict], rng: PRNGKey | None = None
+    ) -> list[Callable]:
         """Create the list of estimators based on the configurations.
 
         Each estimator should specify a name and the required parameters.
@@ -109,22 +123,28 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
         should be jittable as well.
 
         Args:
-            configs (list[dict]): List of configurations for each estimator
+            configs: List of configurations for each estimator
+            rng: Random number generator key.
 
         Returns:
-            list[Callable]: List of estimator callables.
+            List of estimator callables.
         """
-        # Import here to avoid circular imports
-        from flowgym.make import make_estimator
-
         estimators: list[Callable] = []
         for cfg in configs:
+            if rng is not None:
+                rng, subkey = jax.random.split(rng)
+            else:
+                subkey = None
             (trainable_state, _, compute_estimate_fn, _) = make_estimator(
                 model_config=cfg,
                 load_from=cfg.get("load_from"),
+                rng=subkey,
             )
+            trainable_state = cast(EstimatorTrainableState, trainable_state)
 
-            def estimator_fn(input, estimator=compute_estimate_fn, ts=trainable_state):
+            def estimator_fn(
+                input, estimator=compute_estimate_fn, ts=trainable_state
+            ) -> tuple[History, dict]:
                 image, state = input
                 state, metrics = estimator(image, state, ts)
                 return state, metrics
@@ -142,16 +162,19 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
         """Compute the flow field between the two most recent frames.
 
         Args:
-            images (jnp.ndarray): Current batch of frames, shape (B, H, W).
-            state (EstimatorState): Contains keys "images" and "estimates",
-            each with shape (B, T, H, W).
-            trainable_state (EstimatorTrainableState): Unused argument.
-            extras (dict): Additional information.
+            images: Current batch of frames, shape (B, H, W).
+            state: Contains keys "images" and "estimates",
+                each with shape (B, T, H, W).
+            trainable_state: Unused argument.
+            extras: Additional information.
 
         Returns:
-            jnp.ndarray: Flow field of shape (B, H, W, 2)
-            dict: placeholder for additional output.
-            dict: Metrics from the estimation process.
+            Tuple containing flow field of shape (B, H, W, 2),
+            placeholder dict for additional output, and metrics dict
+            from the estimation process.
+
+        Raises:
+            ValueError: If oracle masking is requested without oracle=True.
         """
         # Get the most recent images from the state
         prev = state["images"][:, -1, ...]
@@ -170,11 +193,11 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
         input_state["keys"] = state["keys"][:, jnp.newaxis, :]
 
         # Compute the flow fields using all available algorithms
-        def single_estimator(idx):
+        def single_estimator(idx: int):
             """Compute the flow field batch for a single estimator.
 
             Args:
-                idx (int): Index of the estimator.
+                idx: Index of the estimator.
 
             Returns:
                 state, metrics: The computed flow field for the estimator.
@@ -186,10 +209,14 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
 
             return new_state, metrics
 
-        states, metrices = lax.map(single_estimator, jnp.arange(self.num_estimators))
+        states, metrices = lax.map(
+            single_estimator, jnp.arange(self.num_estimators)
+        )
 
         # Extract the flow fields from the states
-        flows = states["estimates"][:, :, -1, ...]  # Shape (num_estimators, B, H, W, 2)
+        flows = states["estimates"][
+            :, :, -1, ...
+        ]  # Shape (num_estimators, B, H, W, 2)
         flows = jnp.transpose(
             flows, (1, 0, 2, 3, 4)
         )  # Shape (B, num_estimators, H, W, 2)
@@ -198,10 +225,7 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
         epe_limit = self.experiment_params.get("epe_limit", None)
         if epe_limit is not None:
             if not self.is_oracle():
-                raise ValueError(
-                    "Oracle-based masking requires the estimator to be an oracle."
-                    "Set oracle=True when initializing the ConsensusFlowEstimator."
-                )
+                raise ValueError("Oracle masking requires oracle=True.")
             flow_gt = state["estimates"][:, -1, ...]
             # Compute the EPE for each estimator
             epe = jnp.linalg.norm(
@@ -214,7 +238,9 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
         else:
             mask = None
 
-        weights = make_weights(flows, prev, curr, self.consensus_config, mask=mask)
+        weights = make_weights(
+            flows, prev, curr, self.consensus_config, mask=mask
+        )
 
         # Apply the consensus function to combine the flow estimates
         def map_fn(args):
@@ -234,7 +260,9 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
             valid = jnp.logical_not(jnp.all(curr == 0, axis=(1, 2)))
             metrics["valid_images"] = valid
             epe = (
-                jnp.linalg.norm(new_flow - state["estimates"][:, -1, ...], axis=-1)
+                jnp.linalg.norm(
+                    new_flow - state["estimates"][:, -1, ...], axis=-1
+                )
                 * valid[:, jnp.newaxis, jnp.newaxis]
             )
             mean_epes = jnp.mean(epe, axis=(1, 2))
@@ -246,13 +274,16 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
         """Process and format metrics dictionary.
 
         Args:
-            metrics (dict): Raw metrics dictionary.
+            metrics: Raw metrics dictionary.
 
         Note:
             Assumption: only the last batch has invalid images.
 
         Returns:
-            Metrics: Processed metrics object.
+            Processed metrics object.
+
+        Raises:
+            ValueError: If batch size cannot be inferred from metrics.
         """
         # Try to extract the batch size B from any array in metrics
         B = None
@@ -264,7 +295,8 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
             raise ValueError("Could not infer batch size from metrics.")
 
         self.total_valid_images = (
-            getattr(self, "total_valid_images", 0) + np.sum(metrics["valid_images"])
+            getattr(self, "total_valid_images", 0)
+            + np.sum(metrics["valid_images"])
             if "valid_images" in metrics
             else B
         )
@@ -273,22 +305,26 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
         processed_metrics = Metrics()
         for key, value in metrics.items():
             if key != "valid_images":
-                value = (
+                filtered_value = (
                     value[metrics["valid_images"]]
                     if "valid_images" in metrics
                     else value
                 )
+            else:
+                filtered_value = value
             if key == "oracle_mask":
                 # Calculate the coverage of the oracle mask
                 coverage_map = jnp.any(
-                    value > 0, axis=1
+                    filtered_value > 0, axis=1
                 )  # Shape (jnp.sum(valid), H, W)
                 coverage = jnp.mean(
                     coverage_map, axis=(1, 2)
                 )  # Shape (jnp.sum(valid),)
 
                 # Update running mean coverage
-                running_mean_coverage = getattr(self, "running_mean_coverage", 0.0)
+                running_mean_coverage = getattr(
+                    self, "running_mean_coverage", 0.0
+                )
                 running_mean_coverage = (
                     running_mean_coverage
                     * (self.total_valid_images - coverage.shape[0])
@@ -297,13 +333,21 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
                 self.running_mean_coverage = running_mean_coverage
 
                 # Update running max coverage
-                running_max_coverage = getattr(self, "running_max_coverage", 0.0)
-                running_max_coverage = max(running_max_coverage, jnp.max(coverage))
+                running_max_coverage = getattr(
+                    self, "running_max_coverage", 0.0
+                )
+                running_max_coverage = max(
+                    running_max_coverage, jnp.max(coverage)
+                )
                 self.running_max_coverage = running_max_coverage
 
                 # Update running min coverage
-                running_min_coverage = getattr(self, "running_min_coverage", 0.0)
-                running_min_coverage = min(running_min_coverage, jnp.min(coverage))
+                running_min_coverage = getattr(
+                    self, "running_min_coverage", 0.0
+                )
+                running_min_coverage = min(
+                    running_min_coverage, jnp.min(coverage)
+                )
                 self.running_min_coverage = running_min_coverage
 
                 # Store the coverage in the processed metrics
@@ -313,19 +357,20 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
                 # Update running mean EPE
                 running_mean_epe = getattr(self, "running_mean_epe", 0.0)
                 running_mean_epe = (
-                    running_mean_epe * (self.total_valid_images - value.shape[0])
-                    + jnp.sum(value)
+                    running_mean_epe
+                    * (self.total_valid_images - filtered_value.shape[0])
+                    + jnp.sum(filtered_value)
                 ) / (self.total_valid_images)
                 self.running_mean_epe = running_mean_epe
 
                 # Update running max EPE
                 running_max_epe = getattr(self, "running_max_epe", 0.0)
-                running_max_epe = max(running_max_epe, jnp.max(value))
+                running_max_epe = max(running_max_epe, jnp.max(filtered_value))
                 self.running_max_epe = running_max_epe
 
                 # Update running min EPE
                 running_min_epe = getattr(self, "running_min_epe", 0.0)
-                running_min_epe = min(running_min_epe, jnp.min(value))
+                running_min_epe = min(running_min_epe, jnp.min(filtered_value))
                 self.running_min_epe = running_min_epe
         return processed_metrics
 
@@ -333,7 +378,11 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
         """Finalize metrics at the end of evaluation.
 
         Returns:
-            Metrics: Finalized metrics object.
+            Finalized metrics object.
+
+        Raises:
+            TypeError: If log_path is not a string or None.
+            ValueError: If log_path doesn't end with .csv.
         """
         finalized_metrics = Metrics()
         if hasattr(self, "running_mean_coverage"):
@@ -345,10 +394,14 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
 
         log_path = self.experiment_params.get("log_path", None)
         if not isinstance(log_path, (type(None), str)):
-            raise TypeError(f"log_path must be a string or None, got {log_path}.")
+            raise TypeError(
+                f"log_path must be a string or None, got {log_path}."
+            )
         if log_path is not None:
             if not log_path.endswith(".csv"):
-                raise ValueError(f"log_path must be a .csv file, got {log_path}.")
+                raise ValueError(
+                    f"log_path must be a .csv file, got {log_path}."
+                )
             # Define the row data (use getattr to avoid AttributeError)
             row_data = {
                 "num_estimators": getattr(self, "num_estimators", None),

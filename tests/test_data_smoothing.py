@@ -1,11 +1,14 @@
-import numpy as np
-import pytest
-import jax.numpy as jnp
-import jax.random as jrandom
-import jax
-from jax import jit
+"""Tests for data_smoothing module."""
+
 import timeit
 from functools import partial
+
+import jax
+import jax.numpy as jnp
+import jax.random as jrandom
+import numpy as np
+import pytest
+from jax import jit
 
 from flowgym.flow.postprocess import average_smoothing, median_smoothing
 from flowgym.utils import load_configuration
@@ -80,7 +83,13 @@ def _numpy_median_smoothing(flow: np.ndarray, radius: int) -> np.ndarray:
 )
 @pytest.mark.parametrize(
     "shape",
-    [(1, 5, 5, 2), (2, 7, 8, 2), (3, 64, 64, 2), (4, 128, 128, 2), (5, 256, 256, 2)],
+    [
+        (1, 5, 5, 2),
+        (2, 7, 8, 2),
+        (3, 64, 64, 2),
+        (4, 128, 128, 2),
+        (5, 256, 256, 2),
+    ],
 )
 @pytest.mark.parametrize("seed", [0, 42, 123])
 def test_methods_match_naive_version(seed, shape, method, method_naive, kwargs):
@@ -137,9 +146,9 @@ def test_average_time(B, H, W, radius, limit_time):
     average_time_jit = min(total_time_jit) / NUMBER_OF_EXECUTIONS
 
     # Check if the time is less than the limit
-    assert (
-        average_time_jit < limit_time
-    ), f"The average time is {average_time_jit}, time limit: {limit_time}"
+    assert average_time_jit < limit_time, (
+        f"The average time is {average_time_jit}, time limit: {limit_time}"
+    )
 
 
 @pytest.mark.skipif(
@@ -186,6 +195,6 @@ def test_median_time(B, H, W, radius, limit_time):
     average_time_jit = min(total_time_jit) / NUMBER_OF_EXECUTIONS
 
     # Check if the time is less than the limit
-    assert (
-        average_time_jit < limit_time
-    ), f"The average time is {average_time_jit}, time limit: {limit_time}"
+    assert average_time_jit < limit_time, (
+        f"The average time is {average_time_jit}, time limit: {limit_time}"
+    )

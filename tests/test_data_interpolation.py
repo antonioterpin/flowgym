@@ -1,8 +1,12 @@
-import pytest
+"""Tests for data_interpolation module."""
+
+import timeit
+
+import jax
 import jax.numpy as jnp
 import numpy as np
-import jax
-import timeit
+import pytest
+
 import flowgym.flow.postprocess as ip  # module under test
 from flowgym.utils import load_configuration
 
@@ -48,7 +52,7 @@ def tile_average_interpolation_naive(
     """Pure-NumPy baseline: triple-nested loops, easy to read, slow."""
     flow_out = flow.copy()
     valid_out = valid.copy()
-    B, H, W, C = flow.shape
+    B, H, W, _C = flow.shape
     for b in range(B):
         for y in range(H):
             for x in range(W):
@@ -100,9 +104,21 @@ def laplace_interpolation_naive(flow, valid, num_iter):
             tile_average_interpolation_naive,
             {"radius": 3},
         ),
-        (ip.laplace_interpolation, laplace_interpolation_naive, {"num_iter": 4}),
-        (ip.laplace_interpolation, laplace_interpolation_naive, {"num_iter": 32}),
-        (ip.laplace_interpolation, laplace_interpolation_naive, {"num_iter": 256}),
+        (
+            ip.laplace_interpolation,
+            laplace_interpolation_naive,
+            {"num_iter": 4},
+        ),
+        (
+            ip.laplace_interpolation,
+            laplace_interpolation_naive,
+            {"num_iter": 32},
+        ),
+        (
+            ip.laplace_interpolation,
+            laplace_interpolation_naive,
+            {"num_iter": 256},
+        ),
     ],
 )
 @pytest.mark.parametrize(
@@ -119,14 +135,20 @@ def test_algorithms_naive(method, method_naive, kwargs, B, H, W, p, seed):
     valid = jax.random.bernoulli(key, p, (B, H, W))
     flow = jax.random.normal(key, (B, H, W, 2))
     out, new_valid, _ = method(flow, valid=valid, state=None, **kwargs)
-    out2, new_valid2 = method_naive(np.asarray(flow), np.asarray(valid), **kwargs)
+    out2, new_valid2 = method_naive(
+        np.asarray(flow), np.asarray(valid), **kwargs
+    )
     assert new_valid.shape == (B, H, W), "Output validity mask shape mismatch."
-    assert new_valid2.shape == (B, H, W), "Naive output validity mask shape mismatch."
+    assert new_valid2.shape == (B, H, W), (
+        "Naive output validity mask shape mismatch."
+    )
     assert jnp.all(new_valid == new_valid2), "Validity masks do not match."
     out = out * new_valid[..., None]
     out2 = jnp.asarray(out2 * new_valid2[..., None])
     delta = jnp.mean(jnp.linalg.norm(out - out2, axis=-1))
-    assert delta < 1e-5, f"Mean discrepancy from reference {delta:.6f} is too high."
+    assert delta < 1e-5, (
+        f"Mean discrepancy from reference {delta:.6f} is too high."
+    )
 
 
 @pytest.mark.skipif(
@@ -172,4 +194,7 @@ def test_algorithms_speed(method, kwargs, B, H, W, time_limit, seed, p):
     )
     jax_time = min(time_jit) / NUMBER_OF_EXECUTIONS
 
-    assert jax_time < time_limit, f"{method.__name__} took too long: {jax_time:.6f}s"
+    assert jax_time < time_limit, (
+        f"{method.__name__} took too long: {jax_time:.6f}s. "
+        f"Expected {time_limit:.6f}s."
+    )

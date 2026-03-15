@@ -15,14 +15,4 @@ config:
   train: false
   gamma: 0.8
   use_temporal_propagation: false
-  optimizer_config:
-    name: adam
-    learning_rate:
-        schedule:
-            name: constant
-            value: 0.0001
-    chain:
-        - name: clip_by_global_norm
-          kwargs: {max_norm: 1.0}
-  out_dir: output
-load_from: output/RaftJaxEstimator-from-torch.pkl
+# load_from: output/RaftJaxEstimator-from-torch.pkl

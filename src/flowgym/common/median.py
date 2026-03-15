@@ -1,7 +1,7 @@
 """Comparator-network medians for JAX."""
 
 import functools
-from collections.abc import Sequence, Callable
+from collections.abc import Callable, Sequence
 
 import jax
 import jax.numpy as jnp
@@ -15,6 +15,9 @@ def _bitonic_pairs(n: int) -> tuple[tuple[int, int], ...]:
 
     Returns:
         Tuple of (i, j) index pairs representing compare-swap operations.
+
+    Raises:
+        ValueError: If `n` is odd.
     """
     pairs: list[tuple[int, int]] = []
 
@@ -47,7 +50,14 @@ def _bitonic_pairs(n: int) -> tuple[tuple[int, int], ...]:
 
 @functools.cache
 def _pairs_for(n: int) -> tuple[tuple[int, int], ...]:
-    """Memoises comparator networks per length."""
+    """Memoises comparator networks per length.
+
+    Args:
+        n: Length of the sequence to sort.
+
+    Returns:
+        Tuple of (i, j) index pairs representing compare-swap operations.
+    """
     return _bitonic_pairs(n)
 
 
@@ -311,7 +321,7 @@ median24 = from_comparator_pairs(
         (15, 16),
         (17, 20),
         (21, 22),
-        # ── layer 10 ───────────────────────────────────────────────────────────
+        # ── layer 10 ──────────────────────────────────────────────────────────
         (2, 3),
         (5, 10),
         (6, 7),
@@ -320,21 +330,21 @@ median24 = from_comparator_pairs(
         (14, 15),
         (16, 17),
         (20, 21),
-        # ── layer 11 ───────────────────────────────────────────────────────────
+        # ── layer 11 ──────────────────────────────────────────────────────────
         (3, 4),
         (5, 7),
         (10, 12),
         (11, 13),
         (16, 18),
         (19, 20),
-        # ── layer 12 ───────────────────────────────────────────────────────────
+        # ── layer 12 ──────────────────────────────────────────────────────────
         (4, 6),
         (8, 10),
         (9, 12),
         (11, 14),
         (13, 15),
         (17, 19),
-        # ── layer 13 ───────────────────────────────────────────────────────────
+        # ── layer 13 ──────────────────────────────────────────────────────────
         (5, 6),
         (7, 8),
         (9, 10),
@@ -1256,6 +1266,16 @@ median49 = from_comparator_pairs(
 )
 
 
+_SPECIAL_MEDIAN_FNS: dict[int, Callable[[jnp.ndarray], jnp.ndarray]] = {
+    8: median8,
+    9: median9,
+    24: median24,
+    25: median25,
+    48: median48,
+    49: median49,
+}
+
+
 def median(v: jnp.ndarray) -> jnp.ndarray:
     """Computes the median of a vector.
 
@@ -1266,18 +1286,9 @@ def median(v: jnp.ndarray) -> jnp.ndarray:
         Median value of the last axis, shape (...).
     """
     dim = v.shape[-1]
-    if dim == 8:
-        return median8(v)
-    if dim == 9:
-        return median9(v)
-    if dim == 24:
-        return median24(v)
-    if dim == 25:
-        return median25(v)
-    if dim == 48:
-        return median48(v)
-    if dim == 49:
-        return median49(v)
+    median_fn = _SPECIAL_MEDIAN_FNS.get(dim)
+    if median_fn is not None:
+        return median_fn(v)
 
     center = dim // 2
     part = jnp.partition(v, center, axis=-1)

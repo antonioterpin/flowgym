@@ -1,15 +1,16 @@
 """Module that implements DeepFlow for use in the Estimator framework."""
 
-from typing import Any
-from jax import lax, vmap
-from jax.scipy.signal import convolve as jax_convolve
+from typing import Any, ClassVar
+
 import jax.numpy as jnp
 from goggles import get_logger
 from goggles.history.types import History
+from jax import lax, vmap
+from jax.scipy.signal import convolve as jax_convolve
 
-from flowgym.flow.open_piv import process
-from flowgym.flow.base import FlowFieldEstimator
 from flowgym.common.filters import uniform_kernel
+from flowgym.flow.base import FlowFieldEstimator
+from flowgym.flow.open_piv import process
 from flowgym.utils import DEBUG
 
 logger = get_logger(__name__)
@@ -37,9 +38,9 @@ def replace_invalid_single(
             + f" Got {field.shape} and {flags.shape}."
         )
         assert kernel.ndim == 3, "Kernel must be 3D (height, width, channels)."
-        assert (
-            kernel.shape[-1] == field.shape[-1]
-        ), "Kernel channels must match field channels."
+        assert kernel.shape[-1] == field.shape[-1], (
+            "Kernel channels must match field channels."
+        )
 
     def body_fun(_, field):
         average_neighbors = jax_convolve(field, kernel, mode="same")
@@ -65,24 +66,32 @@ def replace_outliers(
     """
     if DEBUG:
         assert isinstance(field, jnp.ndarray), "Field must be a jnp.ndarray."
-        assert (
-            field.ndim == 4
-        ), "Field must be 4D (batch_size, height, width, channels)."
+        assert field.ndim == 4, (
+            "Field must be 4D (batch_size, height, width, channels)."
+        )
         assert field.shape[:-1] == flags.shape, (
             "Field and flags must have the same spatial dimensions."
             + f" Got {field.shape} and {flags.shape}."
         )
         assert kernel_size > 0, "Kernel size must be positive."
-        assert isinstance(n_iter, int), "Number of iterations must be an integer."
+        assert isinstance(n_iter, int), (
+            "Number of iterations must be an integer."
+        )
         assert n_iter > 0, "Number of iterations must be positive."
     kernel = uniform_kernel(kernel_size, n_channels=field.shape[-1])
-    return vmap(lambda x, y: replace_invalid_single(x, y, kernel, n_iter))(field, flags)
+    return vmap(lambda x, y: replace_invalid_single(x, y, kernel, n_iter))(
+        field, flags
+    )
 
 
 class OpenPIVJAXEstimator(FlowFieldEstimator):
-    """OpenPIV flow field estimator implemented in JAX."""
+    """OpenPIV flow field estimator implemented in JAX.
 
-    velocity_filters: list = ["Manual", "Adaptive", "None"]
+    Attributes:
+        velocity_filters: Available velocity filter types.
+    """
+
+    velocity_filters: ClassVar[list] = ["Manual", "Adaptive", "None"]
 
     def __init__(
         self,
@@ -117,7 +126,8 @@ class OpenPIVJAXEstimator(FlowFieldEstimator):
             or openpiv_outlier_replacement_n_iter is None
         ):
             raise ValueError(
-                "OpenPIVJAXEstimator requires outlier_replacement_kernel_size and "
+                "OpenPIVJAXEstimator requires "
+                "outlier_replacement_kernel_size and "
                 "outlier_replacement_n_iter to be set."
             )
 
@@ -126,7 +136,8 @@ class OpenPIVJAXEstimator(FlowFieldEstimator):
             or openpiv_outlier_replacement_kernel_size <= 0
         ):
             raise ValueError(
-                "openpiv_outlier_replacement_kernel_size must be a positive integer."
+                "openpiv_outlier_replacement_kernel_size must be a "
+                "positive integer."
             )
         if (
             not isinstance(openpiv_outlier_replacement_n_iter, int)
@@ -138,7 +149,9 @@ class OpenPIVJAXEstimator(FlowFieldEstimator):
         self.openpiv_outlier_replacement_kernel_size = (
             openpiv_outlier_replacement_kernel_size
         )
-        self.openpiv_outlier_replacement_n_iter = openpiv_outlier_replacement_n_iter
+        self.openpiv_outlier_replacement_n_iter = (
+            openpiv_outlier_replacement_n_iter
+        )
 
         if not isinstance(window_size, int) or window_size <= 0:
             raise ValueError("window_size must be a positive integer.")
@@ -168,8 +181,6 @@ class OpenPIVJAXEstimator(FlowFieldEstimator):
         Args:
             images: The input images.
             state: Current state of the estimator.
-            _: Unused parameter.
-            __: Unused parameter.
 
         Returns:
             The computed flow field.
@@ -179,7 +190,9 @@ class OpenPIVJAXEstimator(FlowFieldEstimator):
         image1 = state["images"][:, -1, ...]
 
         if DEBUG:
-            logger.debug(f"image1 shape: {image1.shape}, images shape: {images.shape}")
+            logger.debug(
+                f"image1 shape: {image1.shape}, images shape: {images.shape}"
+            )
 
         flow_field = process.extended_search_area_piv(
             image1,
@@ -192,7 +205,9 @@ class OpenPIVJAXEstimator(FlowFieldEstimator):
         if DEBUG:
             logger.debug(f"Flow field shape: {flow_field.shape}")
             n_outliers = jnp.sum(jnp.isnan(flow_field).any(axis=-1))
-            logger.debug(f"Number of outliers before post-processing: {n_outliers}")
+            logger.debug(
+                f"Number of outliers before post-processing: {n_outliers}"
+            )
 
         flow_field = replace_outliers(
             flow_field,
@@ -202,7 +217,9 @@ class OpenPIVJAXEstimator(FlowFieldEstimator):
         )
 
         if DEBUG:
-            logger.debug(f"Flow field shape after filling NaNs: {flow_field.shape}")
+            logger.debug(
+                f"Flow field shape after filling NaNs: {flow_field.shape}"
+            )
             n_outliers = jnp.sum(jnp.isnan(flow_field).any(axis=-1))
             logger.debug(f"Number of remaining outliers: {n_outliers}")
 
@@ -210,6 +227,8 @@ class OpenPIVJAXEstimator(FlowFieldEstimator):
             flow_field, (images.shape[1], images.shape[2])
         )
         if DEBUG:
-            logger.debug(f"Flow field shape after upsampling: {flow_field.shape}")
+            logger.debug(
+                f"Flow field shape after upsampling: {flow_field.shape}"
+            )
 
         return flow_field, {}, {}

@@ -1,31 +1,27 @@
 """Comparison script for the different samplers."""
 
-from collections.abc import Callable
-import time
 import sys
-from synthpix import SynthpixBatch
+import time
+from collections.abc import Callable
 
-
-import numpy as np
 import jax.numpy as jnp
-import jax
-import flowgym
+import numpy as np
 from goggles import get_logger
 from goggles.types import Metrics
-from flowgym.utils import (
-    write_dicts_to_csv,
-)
-from synthpix.sampler import SyntheticImageSampler, RealImageSampler
+from synthpix import SynthpixBatch
+from synthpix.sampler import RealImageSampler, SyntheticImageSampler
+
+import flowgym
 
 # Models
-from flowgym.common.base import EstimatorTrainableState
-from flowgym.common.base import Estimator
-from flowgym.types import PRNGKey
+from flowgym.common.base import Estimator, EstimatorTrainableState
 
 # Utils
 from flowgym.common.evaluation import compute_stats
+from flowgym.types import PRNGKey
 from flowgym.utils import (
     GracefulShutdown,
+    write_dicts_to_csv,
 )
 
 sys.modules["estimator"] = flowgym
@@ -40,9 +36,12 @@ def compare_performances_on_batches(
     compute_flow_fn: Callable,
     batch1: SynthpixBatch,
     batch2: SynthpixBatch,
-    key: PRNGKey = jax.random.PRNGKey(0),
+    key: PRNGKey | None = None,
 ) -> Metrics:
     """Compare the estimator on two batches using the provided estimator.
+
+    if key is None:
+        key = jax.random.PRNGKey(0)
 
     Args:
         model: The model to evaluate.
@@ -55,6 +54,9 @@ def compare_performances_on_batches(
 
     Returns:
         Metrics: The metrics containing the comparison results.
+
+    Raises:
+        ValueError: If ground truth flow fields are not equal.
     """
     img1_1 = batch1.images1
     img2_1 = batch1.images2
@@ -66,10 +68,11 @@ def compare_performances_on_batches(
 
     # Check if the gt are the same
     if not jnp.isclose(flow_field_gt_1, flow_field_gt_2, atol=1e-4).all():
+        max_diff = jnp.max(jnp.abs(flow_field_gt_1 - flow_field_gt_2))
         raise ValueError(
-            "The ground truth flow fields from the two batches are not equal. "
-            "This is not supported in this comparison script."
-            f"Max difference: {jnp.max(jnp.abs(flow_field_gt_1 - flow_field_gt_2))}"
+            "The ground truth flow fields from the two batches are not "
+            "equal. This is not supported in this comparison script. "
+            f"Max difference: {max_diff}"
         )
 
     # Create the estimation state
@@ -127,10 +130,13 @@ def comparison(
     model: Estimator,
     create_state_fn: Callable,
     compute_estimate_fn: Callable,
-    trainable_state: EstimatorTrainableState | None,
-    key: PRNGKey = jax.random.PRNGKey(0),
+    trainable_state: EstimatorTrainableState,
+    key: PRNGKey | None = None,
 ) -> None:
     """Compare the flow field between real and synthetic images.
+
+    if key is None:
+        key = jax.random.PRNGKey(0)
 
     Args:
         model_config: Configuration of the model.
@@ -141,6 +147,9 @@ def comparison(
         compute_estimate_fn: Function to compute the estimate.
         trainable_state: The trained state of the model.
         key: Random key for JAX operations.
+
+    Raises:
+        ValueError: If estimate_type is not 'flow'.
     """
     if model_config["estimate_type"] != "flow":
         raise ValueError(
@@ -148,7 +157,9 @@ def comparison(
             "Only 'flow' is supported for full comparison."
         )
 
-    with (GracefulShutdown("Stop detected, finishing batch...") as g,):
+    with (
+        GracefulShutdown("Stop detected, finishing batch...") as g,
+    ):
         epe_list = []
         for i, batch1 in enumerate(sampler1):
             try:
@@ -156,7 +167,8 @@ def comparison(
                 batch2 = next(sampler2)
             except StopIteration:
                 logger.warning(
-                    f"Sampler2 has no more batches while sampler1 has {i + 1} batches."
+                    f"Sampler2 has no more batches while sampler1 has "
+                    f"{i + 1} batches."
                 )
                 break
 
@@ -174,9 +186,14 @@ def comparison(
             if isinstance(metrics["epe_between_batches"], np.ndarray):
                 errors = metrics["epe_between_batches"][batch1.mask]
             for k, v in metrics.items():
-                if isinstance(v, np.ndarray) and v.shape[0] == batch1.images1.shape[0]:
-                    v = v[batch1.mask]
-                if k != "epe_between_batches":
+                if (
+                    isinstance(v, np.ndarray)
+                    and v.shape[0] == batch1.images1.shape[0]
+                ):
+                    masked_v = v[batch1.mask]
+                    if k != "epe_between_batches":
+                        logger.info(f"Batch {i + 1} - {k}: {masked_v}")
+                elif k != "epe_between_batches":
                     logger.info(f"Batch {i + 1} - {k}: {v}")
             logger.push(metrics=metrics, step=i)
 

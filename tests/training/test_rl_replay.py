@@ -1,28 +1,31 @@
-import pytest
+"""Tests for training_utils module."""
+
 import jax
 import jax.numpy as jnp
+import pytest
 
-from flowgym.training.utils import ReplayBuffer, Experience
+from flowgym.training.replay import ReplayBuffer
+from flowgym.types import RLExperience
 
 
 def make_experience(seed=0):
-    """Utility to generate a minimal deterministic Experience."""
-    key = jax.random.PRNGKey(seed)
+    """Utility to generate a minimal deterministic RLExperience."""
     H, W = 4, 4
-    next_flow = jax.random.normal(key, (H, W, 2))
-    old_flow = next_flow * 0.5
-    images = jax.random.uniform(key, (H, W, 2))
-    old_images = images * 0.5
-    action = jnp.array([seed])
+    state = {
+        "images": jnp.zeros((1, 2, H, W)),
+        "estimates": jnp.zeros((1, 1, H, W, 2)),
+    }
     reward = jnp.array([float(seed)])
+    obs = (jnp.ones((1, H, W)) * seed, jnp.ones((1, H, W)) * (seed + 1))
+    old_obs = (jnp.ones((1, H, W)) * (seed - 1), jnp.ones((1, H, W)) * seed)
+    old_flow_estimate = jnp.zeros((1, H, W, 2))
 
-    return Experience(
-        next_flow=next_flow,
-        action=action,
+    return RLExperience(
+        state=state,
         reward=reward,
-        images=images,
-        old_images=old_images,
-        old_flow=old_flow,
+        obs=obs,
+        old_obs=old_obs,
+        old_flow_estimate=old_flow_estimate,
     )
 
 
@@ -54,11 +57,10 @@ def test_sample_batch_shapes():
     batch = buf.sample(batch_size=3)
 
     # Check batch shapes
-    assert batch.next_flow.shape[0] == 3
-    assert batch.images.shape[0] == 3
-    assert batch.old_flow.shape[0] == 3
-    assert batch.action.shape == (3, 1)
+    assert batch.state["images"].shape == (3, 1, 2, 4, 4)
     assert batch.reward.shape == (3, 1)
+    assert batch.obs[0].shape == (3, 1, 4, 4)
+    assert batch.old_flow_estimate.shape == (3, 1, 4, 4, 2)
 
 
 # ---------------------------------------------------------------------------
@@ -72,11 +74,11 @@ def test_sample_at_indices():
         buf.push(make_experience(i))
 
     batch = buf.sample_at([0, 3])
-    assert batch.action.shape == (2, 1)
+    assert batch.reward.shape == (2, 1)
 
-    # Ensure deterministic: actions equal seeds
-    assert int(batch.action[0, 0]) == 0
-    assert int(batch.action[1, 0]) == 3
+    # Ensure deterministic: rewards equal seeds
+    assert float(batch.reward[0, 0]) == 0.0
+    assert float(batch.reward[1, 0]) == 3.0
 
 
 # ---------------------------------------------------------------------------

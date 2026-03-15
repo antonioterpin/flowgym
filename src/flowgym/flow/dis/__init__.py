@@ -1,7 +1,7 @@
 """Initialization module for DIS flow estimators."""
 
 from flowgym.flow.dis.dis_jax import DISJAXFlowFieldEstimator
-from flowgym.utils import optional_import, MissingDependency
+from flowgym.utils import MissingDependency, optional_import
 
 dis_mod = optional_import("flowgym.flow.dis.dis")
 

@@ -1,39 +1,43 @@
-# tests/test_trainable_state.py
+"""Tests for TrainableState."""
 
 import os
+import shutil
 from typing import Any
 
 import jax.numpy as jnp
-from jax import tree_util
 import numpy as np
 import optax
 from flax.core import FrozenDict
+from jax import tree_util
 
-from flowgym.common.base.trainable_states import (
+from flowgym.common.base.trainable_state import (
     EstimatorTrainableState,
     NNEstimatorTrainableState,
 )
 from flowgym.make import (
-    save_model,
     load_model,
+    save_model,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-def _trees_allclose(tree_a: Any, tree_b: Any, atol: float = 1e-6, rtol: float = 1e-6):
+def _trees_allclose(
+    tree_a: Any, tree_b: Any, atol: float = 1e-6, rtol: float = 1e-6
+):
     """Assert that two PyTrees of arrays are equal up to tolerance."""
     leaves_a, treedef_a = tree_util.tree_flatten(tree_a)
     leaves_b, treedef_b = tree_util.tree_flatten(tree_b)
     assert treedef_a == treedef_b, "PyTree structures differ"
     assert len(leaves_a) == len(leaves_b), "Leaf counts differ"
 
-    for a, b in zip(leaves_a, leaves_b):
+    for a, b in zip(leaves_a, leaves_b, strict=True):
         if isinstance(a, (jnp.ndarray, np.ndarray)):
-            np.testing.assert_allclose(np.array(a), np.array(b), atol=atol, rtol=rtol)
+            np.testing.assert_allclose(
+                np.array(a), np.array(b), atol=atol, rtol=rtol
+            )
         else:
             assert a == b
 
@@ -50,13 +54,17 @@ def _make_dummy_state(
         )
 
     params = FrozenDict({"w": jnp.array([1.0, 2.0], dtype=jnp.float32)})
-    extras = FrozenDict({"global_step": jnp.array(global_step, dtype=jnp.int32)})
+    extras = FrozenDict(
+        {"global_step": jnp.array(global_step, dtype=jnp.int32)}
+    )
     opt_state = tx.init(params)
     return NNEstimatorTrainableState(
         params=params,
         opt_state=opt_state,
         tx=tx,
         extras=extras,
+        step=global_step,
+        apply_fn=lambda params, x: params["w"] @ x,
     )
 
 
@@ -66,12 +74,15 @@ def _make_dummy_state(
 
 
 def test_estimator_trainable_state_is_trivial_pytree():
-    state = EstimatorTrainableState()
-    children, aux = state.tree_flatten()
-    assert children == ()
-    assert aux is None
+    state = EstimatorTrainableState(
+        step=0,
+        apply_fn=None,
+        params=FrozenDict(),
+    )
+    children, aux = tree_util.tree_flatten(state)
+    assert len(children) > 0
 
-    restored = EstimatorTrainableState.tree_unflatten(aux, children)
+    restored = tree_util.tree_unflatten(aux, children)
     assert isinstance(restored, EstimatorTrainableState)
 
 
@@ -85,7 +96,12 @@ def test_nn_estimator_create_initializes_opt_state_and_extras():
     tx = optax.sgd(learning_rate=0.1)
     extras = {"global_step": jnp.array(0, dtype=jnp.int32)}
 
-    state = NNEstimatorTrainableState.create(params=params, tx=tx, extras=extras)
+    state = NNEstimatorTrainableState.create(
+        params=params,
+        tx=tx,
+        extras=extras,
+        apply_fn=lambda params, x: params["w"] @ x,  # type: ignore
+    )
 
     assert isinstance(state, NNEstimatorTrainableState)
     assert isinstance(state.params, FrozenDict)
@@ -106,19 +122,21 @@ def test_nn_estimator_create_initializes_opt_state_and_extras():
 
 def test_nn_estimator_tree_flatten_unflatten_roundtrip():
     state = _make_dummy_state(global_step=3)
-    children, aux = state.tree_flatten()
+    children, aux = tree_util.tree_flatten(state)
 
-    assert len(children) == 3  # params, opt_state, extras
-    assert isinstance(aux, optax.GradientTransformation)
+    # Valid check: we can reconstruct it
+    # Note: len(children) depends on optimization state complexity.
 
-    restored = NNEstimatorTrainableState.tree_unflatten(aux, children)
+    restored = tree_util.tree_unflatten(aux, children)
     assert isinstance(restored, NNEstimatorTrainableState)
 
     _trees_allclose(restored.params, state.params)
     _trees_allclose(restored.opt_state, state.opt_state)
     _trees_allclose(restored.extras, state.extras)
     # tx should be the same object we passed as aux
-    assert restored.tx is aux
+    # tx should be the same object we passed as aux (or rather, the original tx)
+    # aux is opaque metadata from TrainState flattening
+    assert restored.tx is state.tx
 
 
 def test_apply_gradients_updates_params_and_preserves_tx_and_extras():
@@ -126,11 +144,16 @@ def test_apply_gradients_updates_params_and_preserves_tx_and_extras():
     params = FrozenDict({"w": jnp.array(1.0)})
     tx = optax.sgd(learning_rate=0.1)
     extras = {"global_step": jnp.array(5, dtype=jnp.int32)}
-    state = NNEstimatorTrainableState.create(params=params, tx=tx, extras=extras)
+    state = NNEstimatorTrainableState.create(
+        params=params,
+        tx=tx,
+        extras=extras,
+        apply_fn=lambda params, x: params["w"] @ x,  # type: ignore
+    )
 
     grads = FrozenDict({"w": jnp.array(2.0)})  # dL/dw = 2
 
-    new_state = state.apply_gradients(grads)
+    new_state = state.apply_gradients(grads=grads)
 
     # SGD: w_new = w - lr * grad = 1.0 - 0.1 * 2.0 = 0.8
     assert jnp.allclose(new_state.params["w"], jnp.array(0.8))  # type: ignore
@@ -142,8 +165,7 @@ def test_apply_gradients_updates_params_and_preserves_tx_and_extras():
     assert new_state.extras == state.extras
     assert new_state.extras is state.extras
 
-    # We *don't* assert anything about opt_state here, because for SGD it is EmptyState()
-    # and has no leaves, so there's nothing to change.
+    # Don't assert opt_state: for SGD it is EmptyState() with no leaves.
 
 
 # ---------------------------------------------------------------------------
@@ -156,11 +178,12 @@ def test_save_and_load_roundtrip_resumable(tmp_path):
 
     out_dir = tmp_path
     model_name = "dummy_model"
-    ckpt_path = out_dir / model_name
+    ckpt_path = out_dir / "checkpoints" / model_name
 
     # Original state we want to resume later
     original_state = _make_dummy_state(global_step=7)
 
+    # Save
     # Save
     save_model(original_state, out_dir=str(out_dir), model_name=model_name)
     assert ckpt_path.exists(), "Checkpoint directory should be created"
@@ -168,8 +191,7 @@ def test_save_and_load_roundtrip_resumable(tmp_path):
     # Build a fresh template_state (as if in a new process)
     template_state = _make_dummy_state(global_step=0)
 
-    # Load
-    loaded_state = load_model(str(ckpt_path), template_state)
+    loaded_state = load_model(str(ckpt_path), template_state, mode="resume")
 
     assert isinstance(loaded_state, NNEstimatorTrainableState)
 
@@ -180,10 +202,10 @@ def test_save_and_load_roundtrip_resumable(tmp_path):
 
 
 def test_save_and_load_supports_training_resumption(tmp_path):
-    """Simulate training, save, load, continue training with identical results."""
+    """Simulate training, save, load, continue training identically."""
     out_dir = tmp_path
     model_name = "resumable_model"
-    ckpt_path = out_dir / model_name
+    ckpt_path = out_dir / "checkpoints" / model_name
 
     # Initial state
     init_state = _make_dummy_state(global_step=0)
@@ -193,21 +215,21 @@ def test_save_and_load_supports_training_resumption(tmp_path):
     grads2 = FrozenDict({"w": jnp.array([-0.1, 0.4], dtype=jnp.float32)})
 
     # Path A: train for 2 steps continuously
-    s1 = init_state.apply_gradients(grads1)
-    s2_direct = s1.apply_gradients(grads2)
+    s1 = init_state.apply_gradients(grads=grads1)
+    s2_direct = s1.apply_gradients(grads=grads2)
 
     # Path B: train 1 step, save, load, train another step
-    s1_b = init_state.apply_gradients(grads1)
+    s1_b = init_state.apply_gradients(grads=grads1)
     save_model(s1_b, out_dir=str(out_dir), model_name=model_name)
     assert ckpt_path.exists()
 
     # Fresh template to simulate new process
     template_state = _make_dummy_state(global_step=0)
-    s1_loaded = load_model(str(ckpt_path), template_state)
+    s1_loaded = load_model(str(ckpt_path), template_state, mode="resume")
 
     assert isinstance(s1_loaded, NNEstimatorTrainableState)
 
-    s2_resumed = s1_loaded.apply_gradients(grads2)
+    s2_resumed = s1_loaded.apply_gradients(grads=grads2)
 
     # Final states should be numerically identical
     _trees_allclose(s2_direct.params, s2_resumed.params)
@@ -224,7 +246,7 @@ def test_load_model_uses_template_static_tx_not_checkpoint(tmp_path):
     """
     out_dir = tmp_path
     model_name = "dummy_model"
-    ckpt_path = out_dir / model_name
+    ckpt_path = out_dir / "checkpoints" / model_name
 
     # First state uses tx1 (e.g., Adam with lr=1e-3)
     tx1 = optax.adam(learning_rate=1e-3)
@@ -237,7 +259,7 @@ def test_load_model_uses_template_static_tx_not_checkpoint(tmp_path):
     tx2 = optax.adam(learning_rate=5e-4)
     template_state = _make_dummy_state(tx=tx2, global_step=0)
 
-    loaded_state = load_model(str(ckpt_path), template_state)
+    loaded_state = load_model(str(ckpt_path), template_state, mode="resume")
 
     assert isinstance(loaded_state, NNEstimatorTrainableState)
 
@@ -255,7 +277,13 @@ def test_save_model_turns_relative_directory_into_absolute(tmp_path):
     """save_model should convert relative out_dir to absolute path."""
     relative_out_dir = "relative_dir"
     model_name = "test_model"
-    ckpt_path = os.path.abspath(os.path.join(relative_out_dir, model_name))
+    # Expected: relative_out_dir/checkpoints/model_name/step_0...
+    # But save_model places it in relative_out_dir/checkpoints/model_name
+    # Return value of save_model is the full step path.
+    # Test checks if directory exists.
+    ckpt_path = os.path.abspath(
+        os.path.join(relative_out_dir, "checkpoints", model_name)
+    )
 
     state = _make_dummy_state(global_step=0)
 
@@ -263,12 +291,10 @@ def test_save_model_turns_relative_directory_into_absolute(tmp_path):
     save_model(state, out_dir=relative_out_dir, model_name=model_name)
 
     # Check that the checkpoint directory was created at the absolute path
-    assert os.path.exists(
-        ckpt_path
-    ), "Checkpoint directory should be created at absolute path"
+    assert os.path.exists(ckpt_path), (
+        "Checkpoint directory should be created at absolute path"
+    )
 
     # Clean up created directory
     if os.path.exists(relative_out_dir):
-        import shutil
-
         shutil.rmtree(relative_out_dir)

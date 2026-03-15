@@ -3,8 +3,11 @@
 import jax
 import jax.numpy as jnp
 import pytest
-from synthpix.data_generate import generate_images_from_flow
-from synthpix.data_generate import ImageGenerationSpecification
+from synthpix.data_generate import (
+    ImageGenerationSpecification,
+    generate_images_from_flow,
+)
+
 from flowgym.density.simple import SimpleDensityEstimator
 
 
@@ -75,7 +78,7 @@ def test_density_simple_synthetic_image(image_shape, density, intensity_range):
         seeding_density_range=(density, density),
     )
     # Generate a synthetic image with a given density
-    image1, image2, params = generate_images_from_flow(
+    image1, _, _ = generate_images_from_flow(
         key=key,
         flow_field=jnp.zeros((1, *image_shape, 2)),
         parameters=image_generation_parameters,
@@ -92,6 +95,7 @@ def test_density_simple_synthetic_image(image_shape, density, intensity_range):
     state, _ = estimator(img, state, None)
     estimated_density = state["estimates"][:, -1]
     # Call the function and check the result
-    assert jnp.isclose(
-        (estimated_density - density) / density, 0, atol=5e-1
-    ), f"Estimated density {estimated_density} does not match expected density {density}."
+    assert jnp.isclose((estimated_density - density) / density, 0, atol=5e-1), (
+        f"Estimated density {estimated_density} does not match expected "
+        f"density {density}."
+    )

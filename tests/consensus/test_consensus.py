@@ -1,20 +1,24 @@
-import pytest
+"""Tests for consensus module."""
+
 import re
-import jax.numpy as jnp
+
 import jax
-from jax import random
+import jax.numpy as jnp
 import numpy as np
-from flowgym.utils import load_configuration
+import pytest
+from jax import random
+
 from flowgym.flow.consensus.consensus_algorithms import (
+    admm_consensus,
     mean_consensus,
     median_consensus,
-    admm_consensus,
 )
 
 # Import functions under test
 from flowgym.flow.dis.process import (
     photometric_error_with_patches,
 )
+from flowgym.utils import load_configuration
 
 config = load_configuration("src/flowgym/config/testing.yaml")
 
@@ -84,7 +88,9 @@ def test_mean_consensus_weights_are_normalized(flows, weights_list, expected):
 
 @pytest.mark.parametrize("flows", [jnp.ones((1, 2, 2, 2))])
 @pytest.mark.parametrize("expected", [jnp.ones((2, 2, 2))])
-@pytest.mark.parametrize("weights", [jnp.ones((1, 2, 2)) * 0.5, jnp.ones((1, 2, 2))])
+@pytest.mark.parametrize(
+    "weights", [jnp.ones((1, 2, 2)) * 0.5, jnp.ones((1, 2, 2))]
+)
 def test_mean_consensus_single_estimate(flows, expected, weights):
     """Test mean consensus with a single estimate."""
     result, _ = mean_consensus(flows, weights)
@@ -162,7 +168,9 @@ def test_median_consensus_even_n(flows, expected):
     assert jnp.allclose(result, expected)
 
 
-@pytest.mark.parametrize("flows", [jnp.ones((5, 1, 1, 2))])  # shape (5, 1, 1, 2)
+@pytest.mark.parametrize(
+    "flows", [jnp.ones((5, 1, 1, 2))]
+)  # shape (5, 1, 1, 2)
 @pytest.mark.parametrize(
     "weights", [jnp.ones((5, 1, 1, 2)) * 0.5, jnp.ones((5, 1, 1, 2))]
 )
@@ -208,7 +216,9 @@ def test_median_consensus_large():
         )
     ],
 )  # shape (3, 2, 2, 2)
-@pytest.mark.parametrize("expected", [jnp.zeros((2, 2, 2))])  # Median is 0 everywhere
+@pytest.mark.parametrize(
+    "expected", [jnp.zeros((2, 2, 2))]
+)  # Median is 0 everywhere
 def test_median_consensus_multiple_dimensions(flows, expected):
     """Test median consensus with multiple dimensions."""
     result, _ = median_consensus(flows)
@@ -216,7 +226,8 @@ def test_median_consensus_multiple_dimensions(flows, expected):
 
 
 @pytest.mark.parametrize(
-    "flows", [jnp.array([[[[[1], [3]], [[5], [7]], [[9], [11]]]]], dtype=jnp.int32)]
+    "flows",
+    [jnp.array([[[[[1], [3]], [[5], [7]], [[9], [11]]]]], dtype=jnp.int32)],
 )  # shape (1, 3, 2, 1, 1)
 def test_median_consensus_dtype_preserved(flows):
     """Test median consensus preserves dtype."""
@@ -269,8 +280,8 @@ def test_invalid_weights_shape(weights):
     with pytest.raises(
         ValueError,
         match=re.escape(
-            f"Weights must have the same shape as flows except for the last dimension, "
-            f"got {weights.shape} and {flows.shape[:-1]}."
+            f"Weights must have the same shape as flows except for the "
+            f"last dimension, got {weights.shape} and {flows.shape[:-1]}."
         ),
     ):
         admm_consensus(flows, weights, config)
@@ -290,7 +301,7 @@ def test_invalid_flow_weights_type(weights):
     config = {}
     with pytest.raises(
         ValueError,
-        match=f"Invalid weights type: {type(weights)}. " "Expected jnp.ndarray.",
+        match=f"Invalid weights type: {type(weights)}. Expected jnp.ndarray.",
     ):
         admm_consensus(flows, weights, config)
 
@@ -310,7 +321,10 @@ def test_invalid_regularizer_weights_type(regularizer_weights):
     """Test ADMM consensus with invalid regularizer_weights type."""
     flows = jnp.zeros((2, 3, 4, 4, 2))
     weights = jnp.ones((2, 3, 4, 4))  # Dummy weights
-    config = {"regularizer_list": ["tv"], "regularizer_weights": regularizer_weights}
+    config = {
+        "regularizer_list": ["tv"],
+        "regularizer_weights": regularizer_weights,
+    }
     with pytest.raises(ValueError, match="Invalid regularizer_weights type"):
         admm_consensus(flows, weights, config)
 
@@ -322,9 +336,13 @@ def test_invalid_regularizer_weights_values(regularizer_weights):
     """Test ADMM consensus with invalid regularizer_weights values."""
     flows = jnp.zeros((2, 3, 4, 4, 2))
     weights = jnp.ones((2, 3, 4, 4))  # Dummy weights
-    config = {"regularizer_list": ["tv"], "regularizer_weights": regularizer_weights}
+    config = {
+        "regularizer_list": ["tv"],
+        "regularizer_weights": regularizer_weights,
+    }
     with pytest.raises(
-        ValueError, match="All values in regularizer_weights must be float or int"
+        ValueError,
+        match="All values in regularizer_weights must be float or int",
     ):
         admm_consensus(flows, weights, config)
 
@@ -381,7 +399,9 @@ def test_output_shapes_and_types(img_shape, patch_size, patch_stride):
     curr = random.uniform(key, shape=img_shape, dtype=jnp.float32)
     flow = jnp.zeros((*img_shape, 2), dtype=jnp.float32)
 
-    errors = photometric_error_with_patches(prev, curr, flow, patch_size, patch_stride)
+    errors = photometric_error_with_patches(
+        prev, curr, flow, patch_size, patch_stride
+    )
     H, W = img_shape
     half = patch_size // 2
 
@@ -389,7 +409,7 @@ def test_output_shapes_and_types(img_shape, patch_size, patch_stride):
         (H - 2 * half) // patch_stride,
         (W - 2 * half) // patch_stride,
     )
-    assert errors.dtype == jnp.float32 or errors.dtype == jnp.float64
+    assert errors.dtype in (jnp.float32, jnp.float64)
 
 
 def test_identity_zero_flow():
@@ -403,7 +423,9 @@ def test_identity_zero_flow():
     curr = jnp.ones(img_shape) * value
     flow = jnp.zeros((*img_shape, 2), dtype=jnp.float32)
 
-    errors = photometric_error_with_patches(prev, curr, flow, patch_size, patch_stride)
+    errors = photometric_error_with_patches(
+        prev, curr, flow, patch_size, patch_stride
+    )
 
     assert jnp.allclose(errors, 0.0, atol=1e-6)
 
@@ -423,9 +445,12 @@ def test_shift_and_flow_cancel(shift_y, shift_x):
     # Shift prev by (shift_y, shift_x) to get curr
     curr = jnp.roll(prev, shift=(shift_y, shift_x), axis=(0, 1))
 
-    errors = photometric_error_with_patches(prev, curr, flow, patch_size, patch_stride)
-    # Ignore patches on the image edge (where roll causes wraparound, not real shift)
-    # Only test patches whose center stays in bounds after shifting
+    errors = photometric_error_with_patches(
+        prev, curr, flow, patch_size, patch_stride
+    )
+    # Ignore patches on the image edge (where roll causes wraparound, not
+    # real shift). Only test patches whose center stays in bounds after
+    # shifting
     half = patch_size // 2
     ys = jnp.arange(half, img_shape[0] - half, patch_stride)
     xs = jnp.arange(half, img_shape[1] - half, patch_stride)
@@ -455,7 +480,9 @@ def test_random_input_robustness():
     curr = jnp.array(rng.uniform(0, 1, img_shape), dtype=jnp.float32)
     flow = jnp.array(rng.normal(0, 2, (*img_shape, 2)), dtype=jnp.float32)
 
-    errors = photometric_error_with_patches(prev, curr, flow, patch_size, patch_stride)
+    errors = photometric_error_with_patches(
+        prev, curr, flow, patch_size, patch_stride
+    )
 
     assert jnp.all(jnp.isfinite(errors))
     assert jnp.all(errors >= 0)
@@ -472,17 +499,24 @@ def test_random_input_robustness():
 def test_patch_edge_cases(img_shape, patch_size, patch_stride):
     """Test that the function handles edge cases with patches correctly."""
     rng = random.PRNGKey(123)
-    prev = random.uniform(rng, img_shape, minval=-1, maxval=2, dtype=jnp.float32)
-    curr = random.uniform(rng, img_shape, minval=-1, maxval=2, dtype=jnp.float32)
+    prev = random.uniform(
+        rng, img_shape, minval=-1, maxval=2, dtype=jnp.float32
+    )
+    curr = random.uniform(
+        rng, img_shape, minval=-1, maxval=2, dtype=jnp.float32
+    )
     flow = jnp.zeros((*img_shape, 2), dtype=jnp.float32)
 
-    errors = photometric_error_with_patches(prev, curr, flow, patch_size, patch_stride)
+    errors = photometric_error_with_patches(
+        prev, curr, flow, patch_size, patch_stride
+    )
 
     half = patch_size // 2
 
     number_of_patches_y = (img_shape[0] - 1 - 2 * half) // patch_stride + 1
     number_of_patches_x = (img_shape[1] - 1 - 2 * half) // patch_stride + 1
-    # No shape asserts here, just ensure we didn't crash and outputs are reasonable
+    # No shape asserts here, just ensure we didn't crash and outputs are
+    # reasonable
     assert errors.ndim == 2
     assert errors.shape == (number_of_patches_y, number_of_patches_x)
 

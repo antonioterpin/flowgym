@@ -1,11 +1,13 @@
-"""Module that implements Farneback for use in the Estimator framework."""
+"""Module that implements HornSchunck for use in the Estimator framework."""
 
-from pyoptflow import HornSchunck
-import numpy as np
-import jax.numpy as jnp
+from typing import Any
+
 import cv2
-
+import jax.numpy as jnp
+import numpy as np
 from goggles.history.types import History
+from pyoptflow import HornSchunck
+
 from flowgym.flow.base import FlowFieldEstimator
 
 
@@ -38,7 +40,7 @@ def _hs_multiscale(
 
     u = np.zeros(img1.shape, np.float32)
     v = np.zeros(img2.shape, np.float32)
-    for A, B in zip(Pyr0, Pyr1):
+    for A, B in zip(Pyr0, Pyr1, strict=True):
         H, W = A.shape
         u = cv2.resize(u * 2, (W, H), interpolation=cv2.INTER_LINEAR)
         v = cv2.resize(v * 2, (W, H), interpolation=cv2.INTER_LINEAR)
@@ -65,8 +67,8 @@ class HornSchunckEstimator(FlowFieldEstimator):
         n_iterations: int = 200,
         levels: int = 8,
         sigma: float = 0.1,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> None:
         """Initialize the HornSchunck estimator.
 
         Args:
@@ -75,12 +77,17 @@ class HornSchunckEstimator(FlowFieldEstimator):
             levels: Number of pyramid levels to use.
             sigma: Standard deviation for Gaussian smoothing.
             **kwargs: Additional keyword arguments for the base class.
+
+        Raises:
+            ValueError: If parameters are out of valid range.
         """
         if alpha <= 0.0:
             raise ValueError(f"alpha {alpha} must be > 0.0.")
 
         if n_iterations <= 0 or not isinstance(n_iterations, int):
-            raise ValueError(f"n_iterations {n_iterations} must be a positive integer.")
+            raise ValueError(
+                f"n_iterations {n_iterations} must be a positive integer."
+            )
 
         if levels <= 0 or not isinstance(levels, int):
             raise ValueError(f"levels {levels} must be a positive integer.")
@@ -98,24 +105,19 @@ class HornSchunckEstimator(FlowFieldEstimator):
     def _estimate(
         self, image: jnp.ndarray, state: History, _, __
     ) -> tuple[jnp.ndarray, dict, dict]:
-        """Compute the flow field using Farneback.
+        """Compute the flow field using HornSchunck.
 
         Args:
             image: Input image.
             state: Current state of the estimator.
-            _: Unused parameter.
-            __: Unused parameter.
 
         Returns:
-            Computed flow field.
-            placeholder for additional outputs.
-            placeholder for metrics.
+            Tuple of computed flow field, additional outputs, and metrics.
         """
-        # Note: Host callbacks, pure_functions calls, etc. seem
-        # to be not particularly more efficient and also they are not as supported.
-        # The support depends on the version of JAX, on the GPUs, etc.
-        # After experimenting with them, I think it is ok to stick to a for loop...
-        flows = np.zeros(image.shape + (2,), dtype=np.float32)
+        # Note: Host callbacks, pure_functions calls, etc. are not as
+        # efficient and not as well supported. The support depends on the
+        # JAX version, GPUs, etc. After experimentation, a for loop is used.
+        flows = np.zeros((*image.shape, 2), dtype=np.float32)
         for i in range(image.shape[0]):
             img1 = state["images"][i, -1, ...]
             img2 = image[i, ...]

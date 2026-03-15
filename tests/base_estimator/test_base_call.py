@@ -1,10 +1,12 @@
-import pytest
+"""Tests for base_call module."""
+
 import jax
 import jax.numpy as jnp
-
-from goggles.history.spec import HistorySpec
+import pytest
 from goggles.history import create_history
+from goggles.history.spec import HistorySpec
 from goggles.history.types import History
+
 from flowgym.common.base import Estimator
 
 
@@ -18,18 +20,22 @@ class DummyEstimator(Estimator):
         trainable_state,
         extras: dict,
     ):
-        """Use RNG keys if present, otherwise deterministic estimate from images.
+        """Use RNG keys if present or deterministic estimate from images.
 
         Returns:
             estimates: (B, 2)
             extras: passed through (unused when there are no extra fields)
             metrics: dict with a simple scalar metric.
         """
-        # If RNG subkeys are provided for this step, use them to generate estimates.
+        # If RNG subkeys are provided for this step, use them to
+        # generate estimates.
         if "keys" in state:
-            # state["keys"] is expected to be shape (B, 2) here
+            # Base __call__ exposes step keys with temporal dim: (B, 1, 2).
+            keys = state["keys"]
+            if keys.ndim == 3:
+                keys = keys[:, -1, :]
             estimates = jax.vmap(jax.random.normal, in_axes=[0, None])(
-                state["keys"], (2,)
+                keys, (2,)
             )  # (B, 2)
         else:
             # Fallback deterministic estimate: use mean over spatial dims
@@ -77,7 +83,7 @@ def estimator():
 
 
 def test_call_rolls_and_appends_without_keys(estimator):
-    """__call__ should roll histories and append new images/estimates when no keys."""
+    """__call__ should roll histories and append new images/estimates."""
     B, H, W = 3, 8, 8
     IMG_T, EST_T = 3, 2
 
@@ -88,7 +94,9 @@ def test_call_rolls_and_appends_without_keys(estimator):
     images_before = jnp.arange(B * IMG_T * H * W, dtype=jnp.float32).reshape(
         B, IMG_T, H, W
     )
-    estimates_before = jnp.arange(B * EST_T * 2, dtype=jnp.float32).reshape(B, EST_T, 2)
+    estimates_before = jnp.arange(B * EST_T * 2, dtype=jnp.float32).reshape(
+        B, EST_T, 2
+    )
     state["images"] = images_before
     state["estimates"] = estimates_before
 
@@ -116,7 +124,7 @@ def test_call_rolls_and_appends_without_keys(estimator):
 
 
 def test_call_splits_keys_and_updates_estimates(estimator):
-    """__call__ should split per-batch keys and use subkeys for stochastic estimates."""
+    """__call__ should split per-batch keys, use subkeys for estimates."""
     B, H, W = 4, 6, 5
     IMG_T, EST_T = 2, 2
 
@@ -135,12 +143,15 @@ def test_call_splits_keys_and_updates_estimates(estimator):
     new_state, metrics = estimator(images, state, trainable_state=None)
 
     # Expected estimates drawn from subkeys: (B, 2)
-    expected_estimates = jax.vmap(jax.random.normal, in_axes=[0, None])(subkeys, (2,))
+    expected_estimates = jax.vmap(jax.random.normal, in_axes=[0, None])(
+        subkeys, (2,)
+    )
 
     # Latest estimates frame equals expected
     assert jnp.allclose(new_state["estimates"][:, -1, :], expected_estimates)
 
-    # Keys stay as a history field with same temporal length (here T=1 → remains 1)
+    # Keys stay as a history field with same temporal length
+    # (here T=1 → remains 1)
     assert "keys" in new_state
     assert new_state["keys"].shape == (B, 1, 2)
 
@@ -152,7 +163,7 @@ def test_call_splits_keys_and_updates_estimates(estimator):
 
 
 def test_preprocessing_pipeline_applied(estimator):
-    """Preprocessing steps must be applied before _estimate and history update."""
+    """Preprocessing steps must be applied before _estimate, history."""
     B, H, W = 2, 4, 4
     IMG_T, EST_T = 3, 3
 
@@ -187,14 +198,20 @@ def test_batch_must_match_images_and_estimates(estimator):
     IMG_T, EST_T = 2, 2
     state = _make_state(B, H, W, IMG_T, EST_T, rng=None)
 
-    # Make estimator produce a mismatched batch on purpose by overriding _estimate
+    # Make estimator produce a mismatched batch on purpose by
+    # overriding _estimate
     def bad_estimate(images, state, trainable_state, extras):
         # Return (B-1, 2) to trigger a shape error inside update_history
-        return jnp.zeros((images.shape[0] - 1, 2), dtype=jnp.float32), extras, {}
+        return (
+            jnp.zeros((images.shape[0] - 1, 2), dtype=jnp.float32),
+            extras,
+            {},
+        )
 
     estimator._estimate = bad_estimate  # type: ignore[assignment]
 
     images = jnp.zeros((B, H, W), dtype=jnp.float32)
-    with pytest.raises(Exception):
-        # Could raise ValueError from update_history, or a downstream shape error
+    with pytest.raises((ValueError, TypeError)):
+        # Could raise ValueError from update_history, or a downstream
+        # shape error
         estimator(images, state, trainable_state=None)

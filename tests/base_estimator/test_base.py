@@ -1,3 +1,5 @@
+"""Tests for base module."""
+
 import jax
 import jax.numpy as jnp
 import pytest
@@ -36,8 +38,15 @@ class NonTrainableEstimator(Estimator):
         # Produce new "extras" slices with shape (B, 1, *shape)
         new_extras = {}
         for name, val in extras.items():
+            # Base __call__ may inject transient, non-history extras
+            # (e.g. cache_payload). Only history-like arrays should be
+            # rolled/persisted by this test estimator.
+            if val is None or not hasattr(val, "shape"):
+                continue
             # val has shape (B, T, *shape); append last step value broadcasted
-            new_extras[name] = jnp.zeros((B, 1) + val.shape[2:], dtype=val.dtype)
+            new_extras[name] = jnp.zeros(
+                (B, 1, *val.shape[2:]), dtype=val.dtype
+            )
 
         return estimates, new_extras, metrics
 
@@ -71,7 +80,9 @@ def test_init_with_no_preprocessing(monkeypatch):
         apply_calls.append(kwargs)
         return images
 
-    monkeypatch.setattr(base_mod.estimator, "validate_params", fake_validate_params)
+    monkeypatch.setattr(
+        base_mod.estimator, "validate_params", fake_validate_params
+    )
     monkeypatch.setattr(
         base_mod.estimator, "apply_preprocessing", fake_apply_preprocessing
     )
@@ -87,9 +98,13 @@ def test_init_with_no_preprocessing(monkeypatch):
 
 def test_init_raises_on_non_dict_preprocessing_step(monkeypatch):
     # Arrange
-    monkeypatch.setattr(base_mod.estimator, "validate_params", lambda *a, **k: None)
     monkeypatch.setattr(
-        base_mod.estimator, "apply_preprocessing", lambda images, **kwargs: images
+        base_mod.estimator, "validate_params", lambda *a, **k: None
+    )
+    monkeypatch.setattr(
+        base_mod.estimator,
+        "apply_preprocessing",
+        lambda images, **kwargs: images,
     )
 
     # Act / Assert
@@ -99,9 +114,13 @@ def test_init_raises_on_non_dict_preprocessing_step(monkeypatch):
 
 def test_init_raises_on_missing_name_key(monkeypatch):
     # Arrange
-    monkeypatch.setattr(base_mod.estimator, "validate_params", lambda *a, **k: None)
     monkeypatch.setattr(
-        base_mod.estimator, "apply_preprocessing", lambda images, **kwargs: images
+        base_mod.estimator, "validate_params", lambda *a, **k: None
+    )
+    monkeypatch.setattr(
+        base_mod.estimator,
+        "apply_preprocessing",
+        lambda images, **kwargs: images,
     )
 
     bad_step = {"sigma": 1.0}
@@ -124,7 +143,9 @@ def test_init_valid_preprocessing_builds_partials_and_validates(monkeypatch):
         # Return a clearly modified tensor to ensure it is used.
         return images + 1.0
 
-    monkeypatch.setattr(base_mod.estimator, "validate_params", fake_validate_params)
+    monkeypatch.setattr(
+        base_mod.estimator, "validate_params", fake_validate_params
+    )
     monkeypatch.setattr(
         base_mod.estimator, "apply_preprocessing", fake_apply_preprocessing
     )
@@ -363,7 +384,9 @@ def test_call_applies_preprocessing_and_updates_history(monkeypatch):
         return images * 2.0
 
     # validate_params is required during __init__, but behavior is simple here.
-    monkeypatch.setattr(base_mod.estimator, "validate_params", lambda *a, **k: None)
+    monkeypatch.setattr(
+        base_mod.estimator, "validate_params", lambda *a, **k: None
+    )
     monkeypatch.setattr(
         base_mod.estimator, "apply_preprocessing", fake_apply_preprocessing
     )
@@ -383,8 +406,8 @@ def test_call_applies_preprocessing_and_updates_history(monkeypatch):
             "init": "zeros",
         }
     }
-    # Use rng=None so that no "keys" field is present; extras field ensures extras dict
-    # is non-empty inside __call__.
+    # Use rng=None so that no "keys" field is present; extras field
+    # ensures extras dict is non-empty inside __call__.
     state = estimator.create_state(
         images,
         init_estimates,
@@ -393,7 +416,9 @@ def test_call_applies_preprocessing_and_updates_history(monkeypatch):
         extras=extras_cfg,
         rng=None,
     )
-    trainable_state = estimator.create_trainable_state(images, jax.random.PRNGKey(0))
+    trainable_state = estimator.create_trainable_state(
+        images, jax.random.PRNGKey(0)
+    )
 
     # Act
     new_state, metrics = estimator(images, state, trainable_state)
@@ -411,7 +436,8 @@ def test_call_applies_preprocessing_and_updates_history(monkeypatch):
     assert new_state["images"].shape[0] == B
     assert jnp.array_equal(new_state["images"][:, -1, ...], preprocessed)
 
-    # Estimates history last entry should be equal to the estimates returned by _estimate.
+    # Estimates history last entry should be equal to the estimates
+    # returned by _estimate.
     expected_estimates = jnp.full((B, 2), 1.0)
     assert jnp.array_equal(new_state["estimates"][:, -1, :], expected_estimates)
 
@@ -421,15 +447,21 @@ def test_call_applies_preprocessing_and_updates_history(monkeypatch):
 
     # Metrics returned by _estimate should be propagated.
     assert "mean_image" in metrics
-    assert pytest.approx(float(metrics["mean_image"])) == float(preprocessed.mean())
+    assert pytest.approx(float(metrics["mean_image"])) == float(
+        preprocessed.mean()
+    )
 
 
 def test_call_uses_state_without_preprocessing(monkeypatch):
     """Sanity check when no preprocessing_steps are defined."""
     # Arrange
-    monkeypatch.setattr(base_mod.estimator, "validate_params", lambda *a, **k: None)
     monkeypatch.setattr(
-        base_mod.estimator, "apply_preprocessing", lambda images, **kwargs: images
+        base_mod.estimator, "validate_params", lambda *a, **k: None
+    )
+    monkeypatch.setattr(
+        base_mod.estimator,
+        "apply_preprocessing",
+        lambda images, **kwargs: images,
     )
 
     estimator = NonTrainableEstimator(preprocessing_steps=[])
@@ -453,7 +485,9 @@ def test_call_uses_state_without_preprocessing(monkeypatch):
         extras=extras_cfg,
         rng=None,
     )
-    trainable_state = estimator.create_trainable_state(images, jax.random.PRNGKey(0))
+    trainable_state = estimator.create_trainable_state(
+        images, jax.random.PRNGKey(0)
+    )
 
     # Act
     new_state, metrics = estimator(images, state, trainable_state)
