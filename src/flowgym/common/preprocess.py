@@ -33,7 +33,15 @@ def stretch_contrast(image: jnp.ndarray) -> jnp.ndarray:
 
 
 def intensity_capping_validate_params(n: float):
-    """Validate parameters for intensity capping."""
+    """Validate parameters for intensity capping.
+
+    Args:
+        n: Number of standard deviations used for capping.
+
+    Raises:
+        TypeError: If `n` is not numeric.
+        ValueError: If `n` is not positive.
+    """
     if not isinstance(n, (int, float)):
         raise TypeError(f"n must be a number, got {type(n)}")
     if n <= 0:
@@ -60,7 +68,15 @@ def intensity_capping(image: jnp.ndarray, n: float = 2.0) -> jnp.ndarray:
 
 
 def intensity_clipping_validate_params(n: float):
-    """Validate parameters for intensity clipping."""
+    """Validate parameters for intensity clipping.
+
+    Args:
+        n: Number of standard deviations used for clipping.
+
+    Raises:
+        TypeError: If `n` is not numeric.
+        ValueError: If `n` is not positive.
+    """
     if not isinstance(n, (int, float)):
         raise TypeError(f"n must be a number, got {type(n)}")
     if n <= 0:
@@ -71,11 +87,11 @@ def intensity_clipping(image: jnp.ndarray, n: float = 2.0) -> jnp.ndarray:
     """Intensity clipping for cross-correlation improvement.
 
     Args:
-        image (jnp.ndarray): Input image.
-        n (float): Number of standard deviations to clip.
+        image: Input image.
+        n: Number of standard deviations to clip.
 
     Returns:
-        jnp.ndarray: Clipped image.
+        Clipped image.
     """
     median_val = jnp.median(image, axis=(1, 2), keepdims=True)
     std_val = jnp.std(image, axis=(1, 2), keepdims=True)
@@ -95,6 +111,10 @@ def clahe_validate_params(
         clip_limit: Threshold for contrast limiting.
         tile_grid_size: Size of the grid for adaptive histogram equalization.
         nbins: Number of bins for the histogram.
+
+    Raises:
+        TypeError: If argument types are invalid.
+        ValueError: If numeric values are outside valid ranges.
     """
     if not isinstance(clip_limit, (int, float)):
         raise TypeError(f"clip_limit must be a number, got {type(clip_limit)}")
@@ -107,11 +127,13 @@ def clahe_validate_params(
             )
         if len(tile_grid_size) != 2:
             raise ValueError(
-                f"tile_grid_size must be a tuple of length 2, got {len(tile_grid_size)}"
+                "tile_grid_size must be a tuple of length 2, got "
+                f"{len(tile_grid_size)}"
             )
         if not all(isinstance(x, int) and x > 0 for x in tile_grid_size):
             raise ValueError(
-                f"tile_grid_size must contain positive integers, got {tile_grid_size}"
+                "tile_grid_size must contain positive integers, got "
+                f"{tile_grid_size}"
             )
     if not isinstance(nbins, int) or nbins <= 0:
         raise ValueError(f"nbins must be a positive integer, got {nbins}")
@@ -123,7 +145,7 @@ def clahe(
     tile_grid_size: tuple[int, int] | None = None,
     nbins: int = 256,
 ) -> jnp.ndarray:
-    """Contrast Limited Adaptive Histogram Equalization (CLAHE) on a batch of 2D images.
+    """Apply CLAHE to a batch of 2D images.
 
     Args:
         images: Input images of shape (B, H, W) or (H, W).
@@ -136,7 +158,7 @@ def clahe(
     Returns:
         Processed images with enhanced contrast.
     """
-    from skimage import exposure
+    from skimage import exposure  # noqa: PLC0415
 
     # stretch contrast first
     images = stretch_contrast(images)
@@ -161,7 +183,16 @@ def clahe(
 
 
 def high_pass_filter_validate_params(sigma: float, truncate: float = 4.0):
-    """Validate parameters for high-pass filter."""
+    """Validate parameters for high-pass filtering.
+
+    Args:
+        sigma: Standard deviation of the Gaussian kernel.
+        truncate: Kernel truncation factor.
+
+    Raises:
+        TypeError: If argument types are invalid.
+        ValueError: If numeric values are outside valid ranges.
+    """
     if not isinstance(sigma, (int, float)):
         raise TypeError(f"sigma must be a number, got {type(sigma)}")
     if sigma <= 0:
@@ -197,7 +228,15 @@ def high_pass_filter(
 def background_suppression_validate_params(
     threshold: float,
 ):
-    """Validate parameters for background suppression."""
+    """Validate parameters for background suppression.
+
+    Args:
+        threshold: Background suppression factor.
+
+    Raises:
+        TypeError: If `threshold` is not numeric.
+        ValueError: If `threshold` is negative.
+    """
     if not isinstance(threshold, (int, float)):
         raise TypeError(f"threshold must be a number, got {type(threshold)}")
     if threshold < 0:
@@ -232,13 +271,25 @@ def crop_special_validate_params(
     fraction_v: float = 0.5,
     fraction_h: float = 0.5,
 ):
-    """Validate parameters for special cropping."""
+    """Validate parameters for special cropping.
+
+    Args:
+        target_height: Desired crop height.
+        target_width: Desired crop width.
+        fraction_v: Vertical crop anchor in `[0, 1]`.
+        fraction_h: Horizontal crop anchor in `[0, 1]`.
+
+    Raises:
+        ValueError: If dimensions are invalid or fractions are outside `[0, 1]`.
+    """
     if not isinstance(target_height, int) or target_height <= 0:
         raise ValueError(
             f"target_height must be a positive integer, got {target_height}"
         )
     if not isinstance(target_width, int) or target_width <= 0:
-        raise ValueError(f"target_width must be a positive integer, got {target_width}")
+        raise ValueError(
+            f"target_width must be a positive integer, got {target_width}"
+        )
     if not (0 <= fraction_v <= 1):
         raise ValueError(f"fraction_v must be in [0, 1], got {fraction_v}")
     if not (0 <= fraction_h <= 1):
@@ -286,13 +337,23 @@ def resize_image_validate_params(
     target_height: int,
     target_width: int,
 ):
-    """Validate parameters for image resizing."""
+    """Validate parameters for image resizing.
+
+    Args:
+        target_height: Desired output height.
+        target_width: Desired output width.
+
+    Raises:
+        ValueError: If target dimensions are not positive integers.
+    """
     if not isinstance(target_height, int) or target_height <= 0:
         raise ValueError(
             f"target_height must be a positive integer, got {target_height}"
         )
     if not isinstance(target_width, int) or target_width <= 0:
-        raise ValueError(f"target_width must be a positive integer, got {target_width}")
+        raise ValueError(
+            f"target_width must be a positive integer, got {target_width}"
+        )
 
 
 def resize_image(
@@ -328,15 +389,17 @@ def validate_params(
         preprocessing_step_name: Name of the preprocessing step.
         **kwargs: Parameters for the preprocessing step.
 
-    Returns:
-        True if parameters are valid, False otherwise.
+    Raises:
+        ValueError: If `preprocessing_step_name` is unknown.
     """
     validate_func_name = f"{preprocessing_step_name}_validate_params"
     if validate_func_name in globals():
         validate_func = globals()[validate_func_name]
         validate_func(**kwargs)
     else:
-        raise ValueError(f"Unknown preprocessing step {preprocessing_step_name}")
+        raise ValueError(
+            f"Unknown preprocessing step {preprocessing_step_name}"
+        )
 
 
 def apply_preprocessing(

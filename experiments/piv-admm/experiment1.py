@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
-"""Run a sweep over a parameter list by editing a config and launching experiments."""
+"""Run a sweep over a parameter list by editing a config.
+
+Modifies a config file and launches experiments for each parameter value.
+"""
 
 import subprocess
-import yaml
 from pathlib import Path
+from typing import Any
+
+import yaml
 
 # === USER SETTINGS ===
-CONFIG_PATH = Path("src/flowgym/config/estimators/flow/piv_dataset/consensus/test.yaml")
+CONFIG_PATH = Path(
+    "src/flowgym/config/estimators/flow/piv_dataset/consensus/test.yaml"
+)
 PARAM_KEY = "config.experiment_params.epe_limit"  # dot notation for nested keys
 PARAM_VALUES = [0.1, 0.25, 0.5, 1.0, 2.0, 10000.0]
 
@@ -27,8 +34,14 @@ CUDA_VISIBLE_DEVICES = "0"
 # ======================
 
 
-def set_nested_value(d: dict, dotted_key: str, value):
-    """Recursively set a value in a nested dictionary given a dotted key path."""
+def set_nested_value(d: dict, dotted_key: str, value: Any) -> None:
+    """Recursively set a value in a nested dictionary.
+
+    Args:
+        d: The dictionary to modify.
+        dotted_key: Dot-separated path to the nested key (e.g., "a.b.c").
+        value: The value to set at the specified key path.
+    """
     keys = dotted_key.split(".")
     for k in keys[:-1]:
         d = d.setdefault(k, {})
@@ -36,7 +49,10 @@ def set_nested_value(d: dict, dotted_key: str, value):
 
 
 def run_sweep():
-    """Run the parameter sweep by modifying the config and launching experiments."""
+    """Run the parameter sweep.
+
+    Modifies the config and launches experiments for each parameter value.
+    """
     with open(CONFIG_PATH) as f:
         base_config = yaml.safe_load(f)
 

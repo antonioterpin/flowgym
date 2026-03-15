@@ -1,26 +1,30 @@
-import pytest
+"""Tests for postprocess_config module."""
+
 import timeit
+
 import jax
-from jax import random as jrandom, numpy as jnp
+import pytest
+from jax import numpy as jnp
+from jax import random as jrandom
+
 from flowgym.flow.base import FlowFieldEstimator
-from flowgym.make import compile_model
 from flowgym.flow.postprocess import (
-    tile_average_interpolation,
-    laplace_interpolation,
-    median_smoothing,
-    average_smoothing,
-    gaussian_smoothing,
-    constant_threshold_filter,
     adaptive_global_filter,
     adaptive_local_filter,
-    universal_median_test,
+    average_smoothing,
+    constant_threshold_filter,
+    gaussian_smoothing,
+    laplace_interpolation,
+    median_smoothing,
     quantize,
     resize_flow,
     resize_flow_validate_params,
-    temporal_smoothing_ema_validate_params,
     temporal_smoothing_ema,
+    temporal_smoothing_ema_validate_params,
+    tile_average_interpolation,
+    universal_median_test,
 )
-
+from flowgym.make import compile_model
 from flowgym.utils import load_configuration
 
 config = load_configuration("src/flowgym/config/testing.yaml")
@@ -59,7 +63,10 @@ all_post = [
     (adaptive_local_filter, {"n_sigma": 1.0, "radius": 2}),
     (adaptive_local_filter, {"n_sigma": 2.0, "radius": 3}),
     (universal_median_test, {"r_threshold": 1.0, "epsilon": 0.01, "radius": 2}),
-    (universal_median_test, {"r_threshold": 2.0, "epsilon": 0.001, "radius": 3}),
+    (
+        universal_median_test,
+        {"r_threshold": 2.0, "epsilon": 0.001, "radius": 3},
+    ),
 ]
 
 bad_params = [
@@ -83,10 +90,19 @@ bad_params = [
     (adaptive_local_filter, {"n_sigma": 0.0, "radius": 2}),
     (adaptive_local_filter, {"n_sigma": 1.0, "radius": -1}),
     (adaptive_local_filter, {"n_sigma": 1.0, "radius": 0}),
-    (universal_median_test, {"r_threshold": -1.0, "epsilon": 0.01, "radius": 2}),
+    (
+        universal_median_test,
+        {"r_threshold": -1.0, "epsilon": 0.01, "radius": 2},
+    ),
     (universal_median_test, {"r_threshold": 0.0, "epsilon": 0.01, "radius": 2}),
-    (universal_median_test, {"r_threshold": 1.0, "epsilon": -0.01, "radius": 2}),
-    (universal_median_test, {"r_threshold": 1.0, "epsilon": 0.01, "radius": -1}),
+    (
+        universal_median_test,
+        {"r_threshold": 1.0, "epsilon": -0.01, "radius": 2},
+    ),
+    (
+        universal_median_test,
+        {"r_threshold": 1.0, "epsilon": 0.01, "radius": -1},
+    ),
     (universal_median_test, {"r_threshold": 1.0, "epsilon": 0.01, "radius": 0}),
     (
         quantize,
@@ -112,7 +128,10 @@ bad_params = [
             "dtype": jnp.float32,
         },
     ),
-    (quantize, {"min_val": jnp.array([-1.0, -1.0]), "max_val": jnp.array([1.0, 1.0])}),
+    (
+        quantize,
+        {"min_val": jnp.array([-1.0, -1.0]), "max_val": jnp.array([1.0, 1.0])},
+    ),
 ]
 
 
@@ -127,13 +146,17 @@ def apply_from_idxs(idxs, flow):
 
 
 @pytest.mark.parametrize("B", [1, 16])
-@pytest.mark.parametrize("N", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])
+@pytest.mark.parametrize(
+    "N", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+)
 @pytest.mark.parametrize("seed", [42, 123, 456, 789, 1, 2, 3, 43, 44, 45])
 def test_postprocess_config(B, N, seed):
     # Sample idxs
     key = jrandom.PRNGKey(seed)
     key, subkey = jrandom.split(key)
-    idxs = jrandom.choice(key, jnp.arange(len(all_post)), shape=(N,), replace=True)
+    idxs = jrandom.choice(
+        key, jnp.arange(len(all_post)), shape=(N,), replace=True
+    )
 
     # Create a random flow
     image = jrandom.uniform(
@@ -147,35 +170,44 @@ def test_postprocess_config(B, N, seed):
     # Create a post_processing configuration
     post_process_config = {
         "postprocessing_steps": [
-            {"name": all_post[idx][0].__name__} | all_post[idx][1] for idx in idxs
+            {"name": all_post[idx][0].__name__} | all_post[idx][1]
+            for idx in idxs
         ]
     }
     # Instantiate the dummy estimator
     model = DummyEstimator.from_config(post_process_config)
     trainable_state = model.create_trainable_state(image, key)
-    create_state_fn, compute_estimate_fn = compile_model(model, flow_reference, False)
+    create_state_fn, compute_estimate_fn = compile_model(
+        model, flow_reference, False
+    )
     # Create the state
     state = create_state_fn(image, key)
     state, _ = compute_estimate_fn(image, state, trainable_state)
     flow = state["estimates"][:, -1, ...]
 
     # Check if the processed image matches the reference
-    assert jnp.allclose(
-        flow, flow_reference, atol=1e-5
-    ), "Processed image does not match reference after applying preprocessing functions"
+    assert jnp.allclose(flow, flow_reference, atol=1e-5), (
+        "Processed image does not match reference after applying "
+        "preprocessing functions"
+    )
 
 
-@pytest.mark.parametrize("N", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])
+@pytest.mark.parametrize(
+    "N", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+)
 @pytest.mark.parametrize("seed", [42, 123, 456, 789, 1, 2, 3, 43, 44, 45])
 def test_preprocess_config_invalid_params(N, seed):
     # Sample idxs
     key = jrandom.PRNGKey(seed)
-    idxs = jrandom.choice(key, jnp.arange(len(bad_params)), shape=(N,), replace=True)
+    idxs = jrandom.choice(
+        key, jnp.arange(len(bad_params)), shape=(N,), replace=True
+    )
 
     # Create a post_processing configuration
     post_process_config = {
         "postprocessing_steps": [
-            {"name": bad_params[idx][0].__name__} | bad_params[idx][1] for idx in idxs
+            {"name": bad_params[idx][0].__name__} | bad_params[idx][1]
+            for idx in idxs
         ]
     }
     with pytest.raises((ValueError, TypeError)):
@@ -206,7 +238,9 @@ def test_postprocess_jit(B, H, time_limit, seed):
     key, subkey = jrandom.split(key)
 
     # Create a random image
-    image = jrandom.uniform(subkey, (B, H, H), minval=0, maxval=255, dtype=jnp.float32)
+    image = jrandom.uniform(
+        subkey, (B, H, H), minval=0, maxval=255, dtype=jnp.float32
+    )
 
     # Create a post_processing configuration
     post_process_config = {
@@ -231,7 +265,7 @@ def test_postprocess_jit(B, H, time_limit, seed):
     model = DummyEstimator.from_config(post_process_config)
     trainable_state = model.create_trainable_state(image, key=key)
     create_state_fn, compute_estimate_fn = compile_model(
-        model, jnp.zeros(image.shape + (2,)), True
+        model, jnp.zeros((*image.shape, 2)), True
     )
     # Warm up
     state = create_state_fn(image, key)
@@ -250,23 +284,26 @@ def test_postprocess_jit(B, H, time_limit, seed):
     )
     runtime = min(runtime) / NUMBER_OF_EXECUTIONS
 
-    assert (
-        runtime < time_limit
-    ), f"JIT preprocessing took too long: {runtime:.6f} seconds per execution"
+    assert runtime < time_limit, (
+        f"JIT preprocessing took too long: {runtime:.6f} seconds per execution"
+    )
 
 
 def test_quantize_basic_range():
     """Test quantization of flow field within expected range."""
     flow_field = jnp.array([[[-1.0, 1.0], [-1.0, -1.0]]])
     quantized, _, _ = quantize(
-        flow_field, min_val=jnp.array([-2.0]), max_val=jnp.array([2.0]), dtype=jnp.uint8
+        flow_field,
+        min_val=jnp.array([-2.0]),
+        max_val=jnp.array([2.0]),
+        dtype=jnp.uint8,
     )
 
     expected = jnp.array([[[63, 191], [63, 63]]], dtype=jnp.uint8)
 
-    assert jnp.allclose(
-        quantized, expected, atol=1
-    ), "Quantization values are incorrect"
+    assert jnp.allclose(quantized, expected, atol=1), (
+        "Quantization values are incorrect"
+    )
     assert quantized.dtype == jnp.uint8, "Output should be uint8"
 
 
@@ -274,13 +311,18 @@ def test_quantize_below_min():
     """Test quantization clips values below -max_speed."""
     flow_field = jnp.array([[[-15.0, -10.0], [-20.0, -12.0]]])
     quantized, _, _ = quantize(
-        flow_field, min_val=jnp.array([-2.0]), max_val=jnp.array([2.0]), dtype=jnp.uint8
+        flow_field,
+        min_val=jnp.array([-2.0]),
+        max_val=jnp.array([2.0]),
+        dtype=jnp.uint8,
     )
 
     # All values below -2 should be clipped to 0
     expected = jnp.array([[[0, 0], [0, 0]]], dtype=jnp.uint8)
 
-    assert jnp.all(quantized == expected), "Values below min_speed should clip to 0"
+    assert jnp.all(quantized == expected), (
+        "Values below min_speed should clip to 0"
+    )
     assert quantized.dtype == jnp.uint8, "Output should be uint8"
 
 
@@ -288,13 +330,18 @@ def test_quantize_above_max():
     """Test quantization clips values above max_speed."""
     flow_field = jnp.array([[[0.0, 20.0], [0.0, 25.0]]])
     quantized, _, _ = quantize(
-        flow_field, min_val=jnp.array([-2.0]), max_val=jnp.array([2.0]), dtype=jnp.uint8
+        flow_field,
+        min_val=jnp.array([-2.0]),
+        max_val=jnp.array([2.0]),
+        dtype=jnp.uint8,
     )
 
     # All values above 10 should be clipped to 255
     expected = jnp.array([[[127, 255], [127, 255]]], dtype=jnp.uint8)
 
-    assert jnp.all(quantized == expected), "Values above max_speed should clip to max"
+    assert jnp.all(quantized == expected), (
+        "Values above max_speed should clip to max"
+    )
     assert quantized.dtype == jnp.uint8, "Output should be uint8"
 
 
@@ -302,12 +349,17 @@ def test_quantize_zero_flow():
     """Test quantization of zero flow field."""
     flow_field = jnp.array([[[0.0, 0.0], [0.0, 0.0]]])
     quantized, _, _ = quantize(
-        flow_field, min_val=jnp.array([-2.0]), max_val=jnp.array([2.0]), dtype=jnp.uint8
+        flow_field,
+        min_val=jnp.array([-2.0]),
+        max_val=jnp.array([2.0]),
+        dtype=jnp.uint8,
     )
 
     expected = 127 * jnp.ones(flow_field.shape, dtype=jnp.uint8)
 
-    assert jnp.all(quantized == expected), "Zero flow should map to middle range"
+    assert jnp.all(quantized == expected), (
+        "Zero flow should map to middle range"
+    )
     assert quantized.dtype == jnp.uint8, "Output should be uint8"
 
 
@@ -331,15 +383,22 @@ def test_quantize_resolution_levels_effect():
     assert quantized_low[0] == 191, "Low resolution quantization incorrect"
     # For uint16, range is 0-65535, so 5 maps to 49151
     assert quantized_high[0] == 49151, "High resolution quantization incorrect"
-    assert quantized_low.dtype == jnp.uint8, "Low resolution output should be uint8"
-    assert quantized_high.dtype == jnp.uint16, "High resolution output should be int16"
+    assert quantized_low.dtype == jnp.uint8, (
+        "Low resolution output should be uint8"
+    )
+    assert quantized_high.dtype == jnp.uint16, (
+        "High resolution output should be int16"
+    )
 
 
 def test_quantize_max_speed_effect():
     """Test different max_speed values affect quantization range."""
     flow_field = jnp.array([5.0])
     quantized_low, _, _ = quantize(
-        flow_field, min_val=jnp.array([-5.0]), max_val=jnp.array([5.0]), dtype=jnp.uint8
+        flow_field,
+        min_val=jnp.array([-5.0]),
+        max_val=jnp.array([5.0]),
+        dtype=jnp.uint8,
     )
     quantized_high, _, _ = quantize(
         flow_field,
@@ -439,16 +498,18 @@ class TestValidateParams:
 class TestTemporalSmoothingEma:
     @pytest.fixture
     def dummy_batch(self):
-        # batch size = 2, image size = 1×1 for simplicity
+        # batch size = 2, image size = 1x1 for simplicity
         flow = jnp.array([[[[1.0]]], [[[2.0]]]])  # shape (2, 1, 1, 1)
         # history_estimates for last time step
         hist = jnp.array([[[[10.0]]], [[[20.0]]]])  # shape (2, 1, 1, 1)
-        state = DummyState(history_estimates=jnp.concatenate([hist, hist], axis=1))
+        state = DummyState(
+            history_estimates=jnp.concatenate([hist, hist], axis=1)
+        )
         valid_mask = jnp.array([[[1]], [[0]]])  # shape (2, 1, 1)
         return flow, state, valid_mask
 
     def test_ema_formula_without_valid(self, dummy_batch):
-        flow, state, valid = dummy_batch
+        flow, state, _ = dummy_batch
         alpha = 0.25
 
         # Call with no valid mask
@@ -486,7 +547,7 @@ class TestTemporalSmoothingEma:
     @pytest.mark.parametrize("alpha", [0.0, 1.0])
     def test_edge_alpha_values(self, dummy_batch, alpha):
         # alpha=0 => smoothed == prev_estimate; alpha=1 => smoothed == flow
-        flow, state, valid = dummy_batch
+        flow, state, _ = dummy_batch
         smoothed, _, _ = temporal_smoothing_ema(flow, alpha, state, valid=None)
         prev = state["estimates"][:, -1]
 

@@ -3,19 +3,22 @@
 __version__ = "0.1.0"
 
 from flowgym.common.base import Estimator
-from flowgym.density.simple import SimpleDensityEstimator
 from flowgym.density.nn import NNDensityEstimator
-from flowgym.flow.open_piv import OpenPIVJAXEstimator
-from flowgym.flow.dis import DISJAXFlowFieldEstimator
+from flowgym.density.simple import SimpleDensityEstimator
 from flowgym.flow.consensus import ConsensusFlowEstimator
+from flowgym.flow.dis import DISJAXFlowFieldEstimator
+from flowgym.flow.dummy import DummyEstimator
+from flowgym.flow.open_piv import OpenPIVJAXEstimator
 from flowgym.flow.raft.raft_jax import RaftJaxEstimator
-from flowgym.utils import optional_import, MissingDependency
+from flowgym.utils import MissingDependency, optional_import
 
 raft_mod = optional_import("flowgym.flow.raft.raft_piv_pytorch")
 if raft_mod is not None:
     RaftTorchEstimator = raft_mod.RaftTorchEstimator
 else:
-    RaftTorchEstimator = MissingDependency("raft_piv_pytorch", ["other_methods"])
+    RaftTorchEstimator = MissingDependency(
+        "raft_piv_pytorch", ["other_methods"]
+    )
 
 deepflow_mod = optional_import("flowgym.flow.deepflow")
 if deepflow_mod is not None:
@@ -60,4 +63,5 @@ ALL_ESTIMATORS: dict[str, type[Estimator] | MissingDependency] = {
     "consensus": ConsensusFlowEstimator,
     "raft_jax": RaftJaxEstimator,
     "raft_torch": RaftTorchEstimator,
+    "dummy": DummyEstimator,
 }

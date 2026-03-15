@@ -2,12 +2,15 @@
 
 import jax
 import jax.numpy as jnp
-import jax.lax as lax
-from flowgym.flow.consensus.regularizers import total_regularization_loss
-from flowgym.common.filters import sobel
-from flowgym.flow.dis.process import extract_patches, photometric_error_with_patches
-
 from goggles import get_logger
+from jax import lax
+
+from flowgym.common.filters import sobel
+from flowgym.flow.consensus.regularizers import total_regularization_loss
+from flowgym.flow.dis.process import (
+    extract_patches,
+    photometric_error_with_patches,
+)
 
 logger = get_logger(__name__)
 
@@ -17,34 +20,40 @@ def z_objective(
     flows: jnp.ndarray,
     consensus_dual: jnp.ndarray,
     rho: float = 1.0,
-    regularizer_list: list = [],
-    regularizer_weights: dict[str, float] = {},
+    regularizer_list: list | None = None,
+    regularizer_weights: dict[str, float] | None = None,
 ) -> jnp.ndarray:
-    r"""Compute the Z objective function for consensus-based flow estimation.
+    r"""Compute the Z objective function for consensus flow estimation.
 
-    In the Boyd et al. notation, this corresponds to the function minimized over z
-    in the second step of the ADMM algorithm. It includes the consensus term
-    and regularization on the consensus flow estimate. It is expressed in the
-    scaled form:
+    In Boyd et al. notation, this is the function minimized over z
+    in the second step of the ADMM algorithm. Includes the consensus term
+    and regularization on the consensus flow. Expressed in scaled form:
 
     .. math::
         reg(z) + \\frac{\\rho}{2} \\| x - z + u \\|^2
 
-    where :math:`x` is the current flow estimate, :math:`u` is the dual variable,
+    where :math:`x` is the current flow estimate and :math:`u` is the
+    dual variable.
 
     Args:
-        flows (jnp.ndarray): Array of flow estimates from different agents.
-        consensus_flow (jnp.ndarray): Current consensus flow estimate.
-        consensus_dual (jnp.ndarray): Dual variable for consensus.
-        rho (float): Penalty parameter for the consensus term.
-        regularizer_list (list): List of regularization functions to apply.
-        regularizer_weights (list): Weights for each regularization term.
+        consensus_flow: Current consensus flow estimate.
+        flows: Array of flow estimates from different agents.
+        consensus_dual: Dual variable for consensus.
+        rho: Penalty parameter for the consensus term.
+        regularizer_list: List of regularization functions to apply.
+        regularizer_weights: Weights for each regularization term.
 
     Returns:
-        jnp.ndarray: Computed Z objective value.
+        Computed Z objective value.
     """
     # Compute the consensus term
-    residuals = flows - consensus_flow[None, ...] + consensus_dual  # (N, H, W, 2)
+    if regularizer_weights is None:
+        regularizer_weights = {}
+    if regularizer_list is None:
+        regularizer_list = []
+    residuals = (
+        flows - consensus_flow[None, ...] + consensus_dual
+    )  # (N, H, W, 2)
 
     # Consensus term scaled by rho / 2
     consensus_term = 0.5 * rho * jnp.sum(residuals**2)
@@ -70,18 +79,16 @@ def flows_objective(
     """Compute the objective function for flow estimates.
 
     Args:
-        flows (jnp.ndarray): Array of flow estimates from different agents.
-        consensus_flow (jnp.ndarray): Current consensus flow estimate.
-        consensus_dual (jnp.ndarray): Dual variable for consensus.
-        regularizer_list (list): List of regularization functions to apply.
-        regularizer_weights (list): Weights for each regularization term.
-        initial_flows (jnp.ndarray): Initial flow estimates for comparison.
-        weights (jnp.ndarray, optional): Weights to apply to the anchor term.
-        objective_type (str): Type of objective function to compute, either "l2" or "l1".
-        rho (float): Penalty parameter for the consensus term.
+        flows: Array of flow estimates from different agents.
+        consensus_flow: Current consensus flow estimate.
+        consensus_dual: Dual variable for consensus.
+        initial_flows: Initial flow estimates for comparison.
+        weights: Optional weights to apply to anchor term.
+        objective_type: Objective function type, "l2" or "l1".
+        rho: Penalty parameter for the consensus term.
 
     Returns:
-        jnp.ndarray: Computed objective value for flow estimates.
+        Computed objective value for flow estimates.
     """
     # Calculate the anchor term
     if objective_type == "l2":
@@ -115,11 +122,11 @@ def weights_and_anchors(
     """Wrapper function to return weights and anchors.
 
     Args:
-        anchor_flows (jnp.ndarray): Array of anchor flow estimates.
-        weights (jnp.ndarray): Array of weights for the flow estimates.
+        anchor_flows: Array of anchor flow estimates.
+        weights: Array of weights for the flow estimates.
 
     Returns:
-        tuple[jnp.ndarray, jnp.ndarray]: A tuple containing the weights and anchors.
+        Weights and anchor flows.
     """
     return weights, anchor_flows
 
@@ -128,32 +135,39 @@ def make_weights(
     flows: jnp.ndarray,
     prevs: jnp.ndarray,
     currs: jnp.ndarray,
-    cfg: dict = {},
+    cfg: dict | None = None,
     mask: jnp.ndarray | None = None,
     epsilon: float = 1e-8,
 ) -> jnp.ndarray:
     """Create weights for the flow estimates based on the specific method.
 
-    This function computes weights according to the method specified in the configuration,
-    which can be one of "list", "photometric", or "none".
+    This function computes weights according to the method specified in
+    the configuration, which can be one of "list", "photometric", or
+    "none".
     If "list" is specified, it uses the provided weights directly.
-    If "photometric" is specified, it computes weights based on the mean squared error of
-    the flow estimates.
+    If "photometric" is specified, it computes weights based on the mean
+    squared error of the flow estimates.
     If "none" is specified, it returns uniform weights.
 
     Args:
-        flows (jnp.ndarray): Array of flow estimates from different agents.
-            shape (B, N, H, W, 2) where B is the batch size, N is the number of agents.
-        prevs (jnp.ndarray): Previous frame images, shape (B, H, W).
-        currs (jnp.ndarray): Current frame images, shape (B, H, W).
-        cfg (dict): Configuration parameters for weight computation.
+        flows: Array of flow estimates from different agents.
+            shape (B, N, H, W, 2) where B is the batch size and N is the
+            number of agents.
+        prevs: Previous frame images, shape (B, H, W).
+        currs: Current frame images, shape (B, H, W).
+        cfg: Configuration parameters for weight computation.
             It should contain the key "weights_type" to specify the method.
-        mask (jnp.ndarray, optional): Mask to apply to the weights.
-        epsilon (float): Small value to avoid division by zero in normalization.
+        mask: Optional mask to apply to the weights.
+        epsilon: Small value to avoid division by zero in normalization.
 
     Returns:
-        jnp.ndarray: Weights for each flow estimate, shape (B, N, H, W).
+        Weights for each flow estimate, shape (B, N, H, W).
+
+    Raises:
+        ValueError: If configuration values are invalid or inconsistent.
     """
+    if cfg is None:
+        cfg = {}
     if "weights_type" not in cfg:
         logger.warning(
             "No weights_type specified in the configuration. "
@@ -173,7 +187,8 @@ def make_weights(
         # Extract patch size and stride from the configuration
         if "patch_size" not in cfg:
             logger.warning(
-                "No patch_size specified in the configuration. " "Using 3 as default."
+                "No patch_size specified in the configuration. "
+                "Using 3 as default."
             )
             patch_size = 3
         else:
@@ -187,7 +202,8 @@ def make_weights(
 
         if "patch_stride" not in cfg:
             logger.warning(
-                "No patch_stride specified in the configuration. " "Using 1 as default."
+                "No patch_stride specified in the configuration. "
+                "Using 1 as default."
             )
             patch_stride = 1
         else:
@@ -215,7 +231,9 @@ def make_weights(
         )  # shape (B*N, H - half, W - half)
 
         # Compute weights based on the inverse of the photometric errors
-        weights = 1.0 / jnp.maximum(photometric_errors, 1)  # Avoid division by zero
+        weights = 1.0 / jnp.maximum(
+            photometric_errors, 1
+        )  # Avoid division by zero
 
         # Pad weights to match the original shape
         weights = jnp.pad(
@@ -241,7 +259,8 @@ def make_weights(
         # Extract patch size and stride from the configuration
         if "patch_size" not in cfg:
             logger.warning(
-                "No patch_size specified in the configuration. " "Using 3 as default."
+                "No patch_size specified in the configuration. "
+                "Using 3 as default."
             )
             patch_size = 3
         else:
@@ -255,7 +274,8 @@ def make_weights(
 
         if "patch_stride" not in cfg:
             logger.warning(
-                "No patch_stride specified in the configuration. " "Using 1 as default."
+                "No patch_stride specified in the configuration. "
+                "Using 1 as default."
             )
             patch_stride = 1
         else:
@@ -335,12 +355,16 @@ def make_weights(
     elif weights_type == "list":
         # Use the provided weights directly
         if "weights" not in cfg:
-            raise ValueError("Weights must be provided when weights_type is 'list'.")
+            raise ValueError(
+                "Weights must be provided when weights_type is 'list'."
+            )
         weights = jnp.array(cfg["weights"])
         if weights.ndim == 1:
             # If weights are 1D, we assume they are for each flow estimate
             weights = weights[None, :, None, None]  # Shape (1, N, 1, 1)
-            weights = jnp.broadcast_to(weights, flows.shape[:-1])  # (B, N, H, W)
+            weights = jnp.broadcast_to(
+                weights, flows.shape[:-1]
+            )  # (B, N, H, W)
         else:
             pass
     elif weights_type == "none" or weights_type is None:
@@ -381,7 +405,9 @@ def make_weights(
     if mask is not None:
         if mask.shape != weights.shape:
             raise ValueError(
-                f"Mask shape {mask.shape} does not match weights shape {weights.shape}."
+                "Mask shape "
+                f"{mask.shape} does not match weights shape "
+                f"{weights.shape}."
             )
         weights = jnp.where(mask, weights, 0.0)
 
@@ -391,7 +417,9 @@ def make_weights(
         )
 
     elif normalization == "per_pixel":
-        weights = weights / (jnp.sum(weights, axis=(1), keepdims=True) + epsilon)
+        weights = weights / (
+            jnp.sum(weights, axis=(1), keepdims=True) + epsilon
+        )
 
     elif normalization == "softmax_per_batch":
         # Flatten (N, H, W) into one axis for each batch
@@ -413,13 +441,17 @@ def make_weights(
         max_mask = (weights == jnp.max(weights, axis=1, keepdims=True)).astype(
             weights.dtype
         )
-        weights = max_mask / (jnp.sum(max_mask, axis=1, keepdims=True) + epsilon)
+        weights = max_mask / (
+            jnp.sum(max_mask, axis=1, keepdims=True) + epsilon
+        )
 
     # apply mask again
     if mask is not None:
         if mask.shape != weights.shape:
             raise ValueError(
-                f"Mask shape {mask.shape} does not match weights shape {weights.shape}."
+                "Mask shape "
+                f"{mask.shape} does not match weights shape "
+                f"{weights.shape}."
             )
         weights = jnp.where(mask, weights, 0.0)
 

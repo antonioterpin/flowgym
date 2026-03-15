@@ -7,14 +7,11 @@ URL: https://github.com/princeton-vl/RAFT
 """
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 
 class ResidualBlock(nn.Module):
-    """Residual block for RAFT optical flow estimation."""
-
     def __init__(self, in_planes, planes, norm_fn="group", stride=1):
-        """Initialize the residual block."""
         super().__init__()
 
         self.conv1 = nn.Conv2d(
@@ -26,10 +23,16 @@ class ResidualBlock(nn.Module):
         num_groups = planes // 8
 
         if norm_fn == "group":
-            self.norm1 = nn.GroupNorm(num_groups=num_groups, num_channels=planes)
-            self.norm2 = nn.GroupNorm(num_groups=num_groups, num_channels=planes)
+            self.norm1 = nn.GroupNorm(
+                num_groups=num_groups, num_channels=planes
+            )
+            self.norm2 = nn.GroupNorm(
+                num_groups=num_groups, num_channels=planes
+            )
             if not stride == 1:
-                self.norm3 = nn.GroupNorm(num_groups=num_groups, num_channels=planes)
+                self.norm3 = nn.GroupNorm(
+                    num_groups=num_groups, num_channels=planes
+                )
 
         elif norm_fn == "batch":
             self.norm1 = nn.BatchNorm2d(planes)
@@ -54,7 +57,6 @@ class ResidualBlock(nn.Module):
         )
 
     def forward(self, x):
-        """Forward pass through the residual block."""
         y = x
         y = self.relu(self.norm1(self.conv1(y)))
         y = self.relu(self.norm2(self.conv2(y)))
@@ -66,10 +68,7 @@ class ResidualBlock(nn.Module):
 
 
 class BottleneckBlock(nn.Module):
-    """Bottleneck block for RAFT optical flow estimation."""
-
     def __init__(self, in_planes, planes, norm_fn="group", stride=1):
-        """Initialize the bottleneck block."""
         super().__init__()
 
         self.conv1 = nn.Conv2d(in_planes, planes // 4, kernel_size=1, padding=0)
@@ -82,11 +81,19 @@ class BottleneckBlock(nn.Module):
         num_groups = planes // 8
 
         if norm_fn == "group":
-            self.norm1 = nn.GroupNorm(num_groups=num_groups, num_channels=planes // 4)
-            self.norm2 = nn.GroupNorm(num_groups=num_groups, num_channels=planes // 4)
-            self.norm3 = nn.GroupNorm(num_groups=num_groups, num_channels=planes)
+            self.norm1 = nn.GroupNorm(
+                num_groups=num_groups, num_channels=planes // 4
+            )
+            self.norm2 = nn.GroupNorm(
+                num_groups=num_groups, num_channels=planes // 4
+            )
+            self.norm3 = nn.GroupNorm(
+                num_groups=num_groups, num_channels=planes
+            )
             if not stride == 1:
-                self.norm4 = nn.GroupNorm(num_groups=num_groups, num_channels=planes)
+                self.norm4 = nn.GroupNorm(
+                    num_groups=num_groups, num_channels=planes
+                )
 
         elif norm_fn == "batch":
             self.norm1 = nn.BatchNorm2d(planes // 4)
@@ -114,11 +121,11 @@ class BottleneckBlock(nn.Module):
 
         else:
             self.downsample = nn.Sequential(
-                nn.Conv2d(in_planes, planes, kernel_size=1, stride=stride), self.norm4
+                nn.Conv2d(in_planes, planes, kernel_size=1, stride=stride),
+                self.norm4,
             )
 
     def forward(self, x):
-        """Forward pass through the bottleneck block."""
         y = x
         y = self.relu(self.norm1(self.conv1(y)))
         y = self.relu(self.norm2(self.conv2(y)))
@@ -131,10 +138,7 @@ class BottleneckBlock(nn.Module):
 
 
 class BasicEncoder(nn.Module):
-    """Basic encoder for RAFT optical flow estimation."""
-
     def __init__(self, output_dim=128, norm_fn="batch", dropout=0.0):
-        """Initialize the basic encoder with output dimension, normalization function, and dropout."""
         super().__init__()
         self.norm_fn = norm_fn
 
@@ -167,8 +171,12 @@ class BasicEncoder(nn.Module):
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
-            elif isinstance(m, (nn.BatchNorm2d, nn.InstanceNorm2d, nn.GroupNorm)):
+                nn.init.kaiming_normal_(
+                    m.weight, mode="fan_out", nonlinearity="relu"
+                )
+            elif isinstance(
+                m, (nn.BatchNorm2d, nn.InstanceNorm2d, nn.GroupNorm)
+            ):
                 if m.weight is not None:
                     nn.init.constant_(m.weight, 1)
                 if m.bias is not None:
@@ -182,10 +190,7 @@ class BasicEncoder(nn.Module):
         self.in_planes = dim
         return nn.Sequential(*layers)
 
-    def forward(
-        self, x: torch.Tensor | list[torch.Tensor] | tuple[torch.Tensor, ...]
-    ) -> torch.Tensor | list[torch.Tensor]:
-        """Forward pass through the basic encoder."""
+    def forward(self, x):
         # if input is list, combine batch dimension
         is_list = isinstance(x, tuple) or isinstance(x, list)
         if is_list:
@@ -212,10 +217,7 @@ class BasicEncoder(nn.Module):
 
 
 class SmallEncoder(nn.Module):
-    """Small encoder for RAFT optical flow estimation."""
-
     def __init__(self, output_dim=128, norm_fn="batch", dropout=0.0):
-        """Initialize the small encoder with output dimension, normalization function, and dropout."""
         super().__init__()
         self.norm_fn = norm_fn
 
@@ -247,26 +249,28 @@ class SmallEncoder(nn.Module):
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
-            elif isinstance(m, (nn.BatchNorm2d, nn.InstanceNorm2d, nn.GroupNorm)):
+                nn.init.kaiming_normal_(
+                    m.weight, mode="fan_out", nonlinearity="relu"
+                )
+            elif isinstance(
+                m, (nn.BatchNorm2d, nn.InstanceNorm2d, nn.GroupNorm)
+            ):
                 if m.weight is not None:
                     nn.init.constant_(m.weight, 1)
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
 
     def _make_layer(self, dim, stride=1):
-        layer1 = BottleneckBlock(self.in_planes, dim, self.norm_fn, stride=stride)
+        layer1 = BottleneckBlock(
+            self.in_planes, dim, self.norm_fn, stride=stride
+        )
         layer2 = BottleneckBlock(dim, dim, self.norm_fn, stride=1)
         layers = (layer1, layer2)
 
         self.in_planes = dim
         return nn.Sequential(*layers)
 
-    def forward(
-        self, x: torch.Tensor | list[torch.Tensor] | tuple[torch.Tensor, ...]
-    ) -> torch.Tensor | list[torch.Tensor]:
-        """Forward pass through the small encoder."""
-        # if input is list, combine batch dimension
+    def forward(self, x):
         is_list = isinstance(x, tuple) or isinstance(x, list)
         if is_list:
             batch_dim = x[0].shape[0]

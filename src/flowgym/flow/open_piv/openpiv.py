@@ -1,13 +1,14 @@
 """Module that implements OpenPIV for use in the Estimator framework."""
 
 from typing import Any
-import numpy as np
-import jax.numpy as jnp
-from openpiv import pyprocess, validation, filters
 
+import jax.numpy as jnp
+import numpy as np
 from goggles.history.types import History
+from openpiv import filters, pyprocess, validation
+
 from flowgym.flow.base import FlowFieldEstimator
-from flowgym.flow.open_piv.process import upsample_flow, get_field_shape
+from flowgym.flow.open_piv.process import get_field_shape, upsample_flow
 
 
 class OpenPIVEstimator(FlowFieldEstimator):
@@ -26,7 +27,10 @@ class OpenPIVEstimator(FlowFieldEstimator):
             window_size: The size of each interrogation window (square).
             search_size: The size of the search area for the flow field.
             overlap: Overlap between consecutive windows.
-            kwargs: Additional keyword arguments for the base class.
+            **kwargs: Additional keyword arguments for the base class.
+
+        Raises:
+            ValueError: If parameters are invalid.
         """
         if not isinstance(window_size, int) or window_size <= 0:
             raise ValueError("window_size must be a positive integer.")
@@ -52,24 +56,24 @@ class OpenPIVEstimator(FlowFieldEstimator):
         Args:
             images: The input images.
             state: The state object containing historical images.
-            _: Unused parameter.
-            __: Unused parameter.
 
         Returns:
             - The computed flow field.
             - Placeholder for additional outputs.
             - Placeholder for metrics.
         """
-        # Note: Host callbacks, pure_functions calls, etc. seem
-        # to be not particularly more efficient and also they are not as supported.
-        # The support depends on the version of JAX, on the GPUs, etc.
-        # After experimenting with them, I think it is ok to stick to a for loop...
+        # Note: Host callbacks, pure_functions calls, etc. seem to be not
+        # particularly more efficient and also they are not as supported. The
+        # support depends on the version of JAX, on the GPUs, etc. After
+        # experimenting with them, I think it is ok to stick to a for loop...
         num_rows, num_cols = get_field_shape(
             (images.shape[1], images.shape[2]),
             (self.search_size, self.search_size),
             (self.overlap, self.overlap),
         )
-        flows = np.zeros((images.shape[0], num_rows, num_cols, 2), dtype=np.float32)
+        flows = np.zeros(
+            (images.shape[0], num_rows, num_cols, 2), dtype=np.float32
+        )
         for i in range(images.shape[0]):
             img1 = state["images"][i, -1, ...]
             img2 = images[i, ...]
@@ -102,8 +106,8 @@ class OpenPIVEstimator(FlowFieldEstimator):
                 kernel_size=3,
             )
 
-            flows[i, ..., 0] = u0.filled()
-            flows[i, ..., 1] = v0.filled()
+            flows[i, ..., 0] = np.ma.filled(u0)
+            flows[i, ..., 1] = np.ma.filled(v0)
 
         flows = jnp.asarray(flows)
         return (

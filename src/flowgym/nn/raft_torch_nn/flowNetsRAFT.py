@@ -7,8 +7,8 @@ URL: https://github.com/princeton-vl/RAFT
 """
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
 from flowgym.nn.raft_torch_nn.submodules_RAFT_extractor import BasicEncoder
 from flowgym.nn.raft_torch_nn.submodules_RAFT_GRU import BasicUpdateBlock
@@ -18,18 +18,13 @@ try:
 except:
     # dummy autocast for PyTorch < 1.6
     class autocast:
-        """Context manager for autocasting."""
-
         def __init__(self, enabled):
-            """Initialize the autocast context manager with enabled flag."""
             pass
 
         def __enter__(self):
-            """Enter the autocast context manager."""
             pass
 
         def __exit__(self, *args):
-            """Exit the autocast context manager."""
             pass
 
 
@@ -51,23 +46,18 @@ def bilinear_sampler(img, coords, mode="bilinear", mask=False):
 
 
 def coords_grid(batch, ht, wd):
-    """Utility function to create a coordinate grid."""
     coords = torch.meshgrid(torch.arange(ht), torch.arange(wd))
     coords = torch.stack(coords[::-1], dim=0).float()
     return coords[None].repeat(batch, 1, 1, 1)
 
 
 def upflow8(flow, mode="bilinear"):
-    """Upsample flow by a factor of 8 using bilinear interpolation."""
     new_size = (8 * flow.shape[2], 8 * flow.shape[3])
     return 8 * F.interpolate(flow, size=new_size, mode=mode, align_corners=True)
 
 
 class CorrBlock:
-    """Correlation block for RAFT optical flow estimation."""
-
     def __init__(self, fmap1, fmap2, num_levels=4, radius=4):
-        """Initialize the correlation block with feature maps, number of levels, and radius."""
         self.num_levels = num_levels
         self.radius = radius
         self.corr_pyramid = []
@@ -79,12 +69,11 @@ class CorrBlock:
         corr = corr.reshape(batch * h1 * w1, dim, h2, w2)
 
         self.corr_pyramid.append(corr)
-        for i in range(self.num_levels - 1):
+        for _i in range(self.num_levels - 1):
             corr = F.avg_pool2d(corr, 2, stride=2)
             self.corr_pyramid.append(corr)
 
     def __call__(self, coords):
-        """Index correlation volume."""
         r = self.radius
         coords = coords.permute(0, 2, 3, 1)
         batch, h1, w1, _ = coords.shape
@@ -94,7 +83,9 @@ class CorrBlock:
             corr = self.corr_pyramid[i]
             dx = torch.linspace(-r, r, 2 * r + 1)
             dy = torch.linspace(-r, r, 2 * r + 1)
-            delta = torch.stack(torch.meshgrid(dy, dx), axis=-1).to(coords.device)
+            delta = torch.stack(torch.meshgrid(dy, dx), axis=-1).to(
+                coords.device
+            )
 
             centroid_lvl = coords.reshape(batch * h1 * w1, 1, 1, 2) / 2**i
             delta_lvl = delta.view(1, 2 * r + 1, 2 * r + 1, 2)
@@ -109,7 +100,6 @@ class CorrBlock:
 
     @staticmethod
     def corr(fmap1, fmap2):
-        """Compute correlation between feature maps."""
         batch, dim, ht, wd = fmap1.shape
         fmap1 = fmap1.view(batch, dim, ht * wd)
         fmap2 = fmap2.view(batch, dim, ht * wd)
@@ -143,10 +133,9 @@ def sequence_loss(flow_preds, flow_gt):
 
 
 class RAFT(nn.Module):
-    """RAFT model for optical flow estimation."""
+    """RAFT."""
 
     def __init__(self):
-        """Initialize the RAFT model."""
         super().__init__()
 
         self.hidden_dim = 128
@@ -154,7 +143,9 @@ class RAFT(nn.Module):
         self.corr_levels = 4
         self.corr_radius = 4
 
-        self.fnet = BasicEncoder(output_dim=256, norm_fn="instance", dropout=0.0)
+        self.fnet = BasicEncoder(
+            output_dim=256, norm_fn="instance", dropout=0.0
+        )
         self.cnet = BasicEncoder(
             output_dim=self.hidden_dim + self.context_dim,
             norm_fn="instance",
@@ -176,7 +167,6 @@ class RAFT(nn.Module):
         return coords0, coords1
 
     def forward(self, input, flowl0, args, flow_init=None, upsample=True):
-        """Estimate optical flow between input image pair and compute loss with respect to ground truth flow."""
         img1 = torch.unsqueeze(input[:, 0, :, :], dim=1)
         img2 = torch.unsqueeze(input[:, 1, :, :], dim=1)
 
@@ -189,7 +179,9 @@ class RAFT(nn.Module):
 
         with autocast(enabled=args.amp):
             cnet = self.cnet(img1)
-            net, inp = torch.split(cnet, [self.hidden_dim, self.context_dim], dim=1)
+            net, inp = torch.split(
+                cnet, [self.hidden_dim, self.context_dim], dim=1
+            )
             net = torch.tanh(net)
             inp = torch.relu(inp)
 

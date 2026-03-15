@@ -1,12 +1,13 @@
 """Module that implements Farneback for use in the Estimator framework."""
 
 from typing import Any
+
 import cv2
-import numpy as np
 import jax.numpy as jnp
+import numpy as np
+from goggles.history.types import History
 
 from flowgym.flow.base import FlowFieldEstimator
-from goggles.history.types import History
 
 
 class FarnebackEstimator(FlowFieldEstimator):
@@ -21,8 +22,22 @@ class FarnebackEstimator(FlowFieldEstimator):
         poly_n: int = 5,
         poly_sigma: float = 1.2,
         **kwargs: Any,
-    ):
-        """Initialize the Farneback estimator."""
+    ) -> None:
+        """Initialize the Farneback estimator.
+
+        Args:
+            pyr_scale: Pyramid scale factor between 0 and 1.
+            levels: Number of pyramid levels.
+            winsize: Size of the averaging window.
+            iterations: Number of iterations per level.
+            poly_n: Size of the polynomial expansion.
+            poly_sigma: Standard deviation of the Gaussian for polynomial.
+            **kwargs: Additional arguments passed to FlowFieldEstimator.
+
+        Raises:
+            ValueError: If parameters are out of valid range.
+            TypeError: If integer parameters are not integers.
+        """
         if pyr_scale < 0.0 or pyr_scale > 1.0:
             raise ValueError(f"pyr_scale {pyr_scale} must be in [0, 1].")
         self.pyr_scale = pyr_scale
@@ -36,7 +51,9 @@ class FarnebackEstimator(FlowFieldEstimator):
         self.winsize = winsize
 
         if iterations < 0 or not isinstance(iterations, int):
-            raise ValueError(f"iterations {iterations} must be a positive integer.")
+            raise ValueError(
+                f"iterations {iterations} must be a positive integer."
+            )
         self.iterations = iterations
 
         if poly_n < 0 or not isinstance(poly_n, int):
@@ -57,29 +74,24 @@ class FarnebackEstimator(FlowFieldEstimator):
         Args:
             image: Input image.
             state: Current state of the estimator.
-            _: Unused parameter.
-            __: Unused parameter.
 
         Returns:
-            - Computed flow field.
-            - placeholder for additional outputs.
-            - placeholder for metrics.
+            Tuple of computed flow field, additional outputs, and metrics.
         """
-        # Note: Host callbacks, pure_functions calls, etc. seem
-        # to be not particularly more efficient and also they are not as supported.
-        # The support depends on the version of JAX, on the GPUs, etc.
-        # After experimenting with them, I think it is ok to stick to a for loop...
-        flows = np.zeros(image.shape + (2,), dtype=np.float32)
+        # Note: Host callbacks, pure_functions calls, etc. are not as
+        # efficient and not as well supported. The support depends on the
+        # JAX version, GPUs, etc. After experimentation, a for loop is used.
+        flows = np.zeros((*image.shape, 2), dtype=np.float32)
         for i in range(image.shape[0]):
             img1 = state["images"][i, -1, ...]
             img2 = image[i, ...]
             # Convert to numpy array
             img1 = np.asarray(img1)
             img2 = np.asarray(img2)
-            flows[i, ...] = cv2.calcOpticalFlowFarneback(  # type: ignore
+            flows[i, ...] = cv2.calcOpticalFlowFarneback(  # pyright: ignore[reportCallIssue]
                 prev=img1,
                 next=img2,
-                flow=None,  # type: ignore
+                flow=None,  # pyright: ignore[reportArgumentType]
                 pyr_scale=self.pyr_scale,
                 levels=self.levels,
                 winsize=self.winsize,

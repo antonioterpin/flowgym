@@ -1,8 +1,8 @@
 """Test the DISFlowFieldEstimator class."""
 
-import pytest
-import numpy as np
 import jax.numpy as jnp
+import numpy as np
+import pytest
 
 from flowgym.flow.dis import DISFlowFieldEstimator
 
@@ -111,7 +111,9 @@ def test_call_on_simple_shift(dis_estimator):
     v = flow_np[..., 1]
 
     # expect a rightward displacement: median u > 0.5
-    assert np.median(u) > 0.9, f"Median horizontal flow too small: {np.median(u)}"
-    assert (
-        np.median(np.abs(v)) < 0.1
-    ), f"Median vertical flow too large: {np.median(np.abs(v))}"
+    assert np.median(u) > 0.9, (
+        f"Median horizontal flow too small: {np.median(u)}"
+    )
+    assert np.median(np.abs(v)) < 0.1, (
+        f"Median vertical flow too large: {np.median(np.abs(v))}"
+    )

@@ -1,13 +1,27 @@
 """Module implementing the RAFT model using Flax."""
 
+from typing import cast
+
 import jax.numpy as jnp
 from flax import linen as nn
-from flowgym.nn.blocks import EncoderBlock, UpdateBlock, ScanBodyBlock
+
 from flowgym.flow.raft.process import build_corr_pyramid
+from flowgym.nn.blocks import EncoderBlock, ScanBodyBlock, UpdateBlock
 
 
 class RaftEstimatorModel(nn.Module):
-    """RAFT flow estimator model."""
+    """RAFT flow estimator model.
+
+    Attributes:
+        hidden_dim: Hidden dimension size.
+        context_dim: Context dimension size.
+        corr_levels: Number of correlation pyramid levels.
+        corr_radius: Correlation radius for lookup.
+        iters: Number of refinement iterations.
+        norm_fn: Normalization type.
+        dropout: Dropout rate.
+        train: Whether in training mode.
+    """
 
     hidden_dim: int
     context_dim: int
@@ -19,15 +33,17 @@ class RaftEstimatorModel(nn.Module):
     train: bool = False
 
     @nn.compact
-    def __call__(self, images: jnp.ndarray, flow_init: jnp.ndarray) -> jnp.ndarray:
+    def __call__(
+        self, images: jnp.ndarray, flow_init: jnp.ndarray
+    ) -> jnp.ndarray:
         """Apply the RAFT estimator model to the input images.
 
         Args:
-            images (jnp.ndarray): Input image tensor of shape (B, H, W, 2).
-            flow_init (jnp.ndarray): Initial flow tensor of shape (B, H, W, 2).
+            images: Input image tensor of shape (B, H, W, 2).
+            flow_init: Initial flow tensor of shape (B, H, W, 2).
 
         Returns:
-            flow (jnp.ndarray): Estimated optical flow tensor of shape (B, H, W, 2).
+            Estimated optical flow of shape (B, H, W, 2).
         """
         # Normalize images to [0, 1]
         images = images / 256.0
@@ -51,7 +67,9 @@ class RaftEstimatorModel(nn.Module):
             dropout=self.dropout,
             train=self.train,
         )(img1)
-        net, inp = jnp.split(cnet, [self.hidden_dim], axis=-1)
+        net, inp = jnp.split(
+            cast(jnp.ndarray, cnet), [self.hidden_dim], axis=-1
+        )
         net = nn.tanh(net)
         inp = nn.relu(inp)  # context
 
@@ -86,12 +104,12 @@ class RaftEstimatorModel(nn.Module):
         """Generate a coordinate grid.
 
         Args:
-            batch (int): Batch size.
-            ht (int): Height of the grid.
-            wd (int): Width of the grid.
+            batch: Batch size.
+            ht: Height of the grid.
+            wd: Width of the grid.
 
         Returns:
-            jnp.ndarray: Coordinate grid tensor.
+            Coordinate grid tensor.
         """
         coords = jnp.meshgrid(jnp.arange(ht), jnp.arange(wd), indexing="ij")
         coords = jnp.stack(coords[::-1], axis=-1).astype(jnp.float32)

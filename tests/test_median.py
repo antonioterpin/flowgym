@@ -1,6 +1,12 @@
+"""Tests for median module."""
+
+import timeit
+from functools import partial
+
 import jax
 import jax.numpy as jnp
-import timeit
+import pytest
+
 from flowgym.common.median import (
     median,
     median8,
@@ -12,9 +18,6 @@ from flowgym.common.median import (
     median49,
     median64,
 )
-import pytest
-from functools import partial
-
 from flowgym.utils import load_configuration
 
 config = load_configuration("src/flowgym/config/testing.yaml")
@@ -32,10 +35,12 @@ def test_median(dim, batch_size, seed):
     res = median(data)
     expected = jnp.median(data, axis=-1)
 
-    assert res.shape == expected.shape, f"Median{dim} {res.shape=}, {expected.shape=}."
-    assert jnp.allclose(
-        res, expected
-    ), f"Median{dim} function did not return expected results."
+    assert res.shape == expected.shape, (
+        f"Median{dim} {res.shape=}, {expected.shape=}."
+    )
+    assert jnp.allclose(res, expected), (
+        f"Median{dim} function did not return expected results."
+    )
 
 
 @pytest.mark.parametrize(
@@ -63,14 +68,16 @@ def test_median(dim, batch_size, seed):
 )
 def test_median_correctness(fn, dim, seed, shape):
     key = jax.random.PRNGKey(seed)
-    data = jax.random.normal(key, shape + (dim,))
+    data = jax.random.normal(key, (*shape, dim))
     res = fn(data)
     expected = jnp.median(data, axis=-1)
 
-    assert res.shape == expected.shape, f"Median{dim} {res.shape=}, {expected.shape=}."
-    assert jnp.allclose(
-        res, expected
-    ), f"Median{dim} function did not return expected results."
+    assert res.shape == expected.shape, (
+        f"Median{dim} {res.shape=}, {expected.shape=}."
+    )
+    assert jnp.allclose(res, expected), (
+        f"Median{dim} function did not return expected results."
+    )
 
 
 @pytest.mark.skipif(
@@ -114,9 +121,9 @@ def test_median_correctness(fn, dim, seed, shape):
 )
 @pytest.mark.parametrize("seed", [0])
 def test_median_time(fn, dim, limit_time, seed, shape, cmp_std):
-    COMPARE_TO_STANDARD = cmp_std
+    compare_to_standard = cmp_std
     key = jax.random.PRNGKey(seed)
-    data = jax.random.normal(key, shape + (dim,))
+    data = jax.random.normal(key, (*shape, dim))
 
     fn_jit = jax.jit(fn)
 
@@ -133,11 +140,11 @@ def test_median_time(fn, dim, limit_time, seed, shape, cmp_std):
     average_time_jit = min(total_time_jit) / NUMBER_OF_EXECUTIONS
 
     # Check if the time is less than the limit
-    assert (
-        average_time_jit < limit_time
-    ), f"The average time is {average_time_jit}, time limit: {limit_time}"
+    assert average_time_jit < limit_time, (
+        f"The average time is {average_time_jit}, time limit: {limit_time}"
+    )
 
-    if COMPARE_TO_STANDARD:
+    if compare_to_standard:
         # unbearably SLOW!
         # measure time for standard median
         median_jit = jax.jit(partial(jnp.median, axis=-1))

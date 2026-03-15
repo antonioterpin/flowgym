@@ -1,13 +1,10 @@
 """Optax learning rate schedules registry and builder."""
 
-from __future__ import annotations
-
 from typing import Any
 
 import optax
-from optax import schedules as opt_schedules
-
 from goggles import get_logger
+from optax import schedules as opt_schedules
 
 logger = get_logger(__name__)
 
@@ -30,11 +27,12 @@ SCHEDULE_REGISTRY: dict[str, Any] = {
 }
 
 
-def _build_schedule_from_config(config: dict[str, Any]) -> optax.Schedule:
+def build_schedule_from_config(config: dict[str, Any]) -> optax.Schedule:
     """Build an Optax Schedule from a config.
 
-    Config forms:
-        - {name: ..., kwargs: {...}} where name is in SCHEDULE_REGISTRY
+    Config forms (both supported, top-level preferred):
+        - {name: ..., init_value: ..., end_value: ...} (top-level keys)
+        - {name: ..., kwargs: {...}} (nested kwargs)
         - special case for join_schedules with nested schedules.
 
     Args:
@@ -42,10 +40,13 @@ def _build_schedule_from_config(config: dict[str, Any]) -> optax.Schedule:
 
     Returns:
         An Optax Schedule instance.
+
+    Raises:
+        ValueError: If config is invalid or schedule name is unknown.
     """
     if not isinstance(config, dict):
         raise ValueError(
-            "Schedule config must be a dictionary; " f"got {type(config).__name__}"
+            f"Schedule config must be a dictionary; got {type(config).__name__}"
         )
 
     if "name" not in config:
@@ -65,18 +66,24 @@ def _build_schedule_from_config(config: dict[str, Any]) -> optax.Schedule:
             boundaries = cfg["boundaries"]
         except KeyError as exc:
             raise ValueError(
-                "join_schedules config must contain 'schedules' and 'boundaries'."
+                "join_schedules config must contain 'schedules' and "
+                "'boundaries'."
             ) from exc
 
         if not isinstance(sub_cfgs, (list, tuple)):
             raise ValueError("join_schedules.schedules must be a list.")
 
-        sub_schedules = [_build_schedule_from_config(c) for c in sub_cfgs]
+        sub_schedules = [build_schedule_from_config(c) for c in sub_cfgs]
         return opt_schedules.join_schedules(sub_schedules, boundaries)
 
     fn = SCHEDULE_REGISTRY.get(name_key)
     if fn is None:
         raise ValueError(f"Unknown schedule name '{name}'.")
 
-    kwargs = dict(cfg.get("kwargs", {}))
+    # Support both nested and top-level keys for cleaner configs
+    if "kwargs" in cfg:
+        kwargs = dict(cfg["kwargs"])
+    else:
+        # Remaining keys after popping "name" are treated as kwargs
+        kwargs = dict(cfg)
     return fn(**kwargs)

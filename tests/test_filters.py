@@ -1,6 +1,9 @@
-import pytest
+"""Tests for filters module."""
+
 import jax.numpy as jnp
+import pytest
 from jax import random
+
 from flowgym.common.filters import (
     gaussian_kernel,
     gaussian_smoothing,
@@ -60,7 +63,11 @@ def test_gaussian_smoothing(small_batch_field):
 @pytest.mark.parametrize("n_channels", [1, 3])
 def test_uniform_kernel(kernel_size, n_channels):
     kernel = uniform_kernel(kernel_size, n_channels=n_channels)
-    assert kernel.shape == (kernel_size * 2 + 1, kernel_size * 2 + 1, n_channels)
+    assert kernel.shape == (
+        kernel_size * 2 + 1,
+        kernel_size * 2 + 1,
+        n_channels,
+    )
     assert jnp.isclose(
         kernel[kernel_size, kernel_size, :], jnp.zeros((n_channels,))
     ).all()
@@ -72,7 +79,9 @@ def test_replace_invalid_single(small_field, small_flags):
     max_iter = 5
     flow_field = small_field
     flow_field = flow_field.at[small_flags].set(jnp.nan)
-    replaced_field = replace_invalid_single(flow_field, small_flags, kernel, max_iter)
+    replaced_field = replace_invalid_single(
+        flow_field, small_flags, kernel, max_iter
+    )
     assert not jnp.isnan(replaced_field).any()
     assert replaced_field.shape == small_field.shape
     # Check if invalid positions have been replaced
@@ -88,16 +97,22 @@ def test_replace_invalid_single(small_field, small_flags):
 
 @pytest.mark.parametrize("kernel_size", [1, 2, 3])
 @pytest.mark.parametrize("n_iter", [5])
-def test_replace_outliers(small_batch_field, small_batch_flags, kernel_size, n_iter):
+def test_replace_outliers(
+    small_batch_field, small_batch_flags, kernel_size, n_iter
+):
     updated_flow = replace_outliers(
-        small_batch_field, small_batch_flags, n_iter=n_iter, kernel_size=kernel_size
+        small_batch_field,
+        small_batch_flags,
+        n_iter=n_iter,
+        kernel_size=kernel_size,
     )
 
     assert updated_flow.shape == small_batch_field.shape
 
     # Verify replacement happened
     assert jnp.all(
-        updated_flow[small_batch_flags, :] != small_batch_field[small_batch_flags, :]
+        updated_flow[small_batch_flags, :]
+        != small_batch_field[small_batch_flags, :]
     )
 
     # Verify that the valid values remain unchanged

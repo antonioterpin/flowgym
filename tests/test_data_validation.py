@@ -1,15 +1,19 @@
-import pytest
+"""Tests for data_validation module."""
+
 import timeit
-import jax
-from jax import jit
 from functools import partial
-import jax.random as jrandom
+
+import jax
 import jax.numpy as jnp
+import jax.random as jrandom
 import numpy as np
+import pytest
+from jax import jit
+
 from flowgym.flow.postprocess import (
-    constant_threshold_filter,
     adaptive_global_filter,
     adaptive_local_filter,
+    constant_threshold_filter,
     universal_median_test,
 )
 from flowgym.utils import load_configuration
@@ -66,18 +70,18 @@ def test_constant_threshold_filter_batch(
         ), f"Mask shape mismatch for batch {b}: {mask[b].shape}"
 
         # check that the mask is boolean
-        assert (
-            mask[b].dtype == jnp.bool_
-        ), f"Mask dtype mismatch for batch {b}: {mask[b].dtype}"
+        assert mask[b].dtype == jnp.bool_, (
+            f"Mask dtype mismatch for batch {b}: {mask[b].dtype}"
+        )
 
         # check that the mask has no NaNs
         assert not jnp.isnan(mask[b]).any(), f"Mask contains NaNs for batch {b}"
 
         # check that all the True values in the mask correspond to outliers
         mag = jnp.linalg.norm(flow_field[b], axis=-1)
-        assert jnp.all(
-            (mag[mask[b]] < vel_min) | (mag[mask[b]] > vel_max)
-        ), f"Mask does not correctly identify outliers for batch {b}"
+        assert jnp.all((mag[mask[b]] < vel_min) | (mag[mask[b]] > vel_max)), (
+            f"Mask does not correctly identify outliers for batch {b}"
+        )
 
         # check that all the False values in the mask correspond to inliers
         assert jnp.all(
@@ -128,9 +132,9 @@ def test_constant_threshold_filter_time(B, H, W, limit_time):
     average_time_jit = min(total_time_jit) / NUMBER_OF_EXECUTIONS
 
     # Check if the time is less than the limit
-    assert (
-        average_time_jit < limit_time
-    ), f"The average time is {average_time_jit}, time limit: {limit_time}"
+    assert average_time_jit < limit_time, (
+        f"The average time is {average_time_jit}, time limit: {limit_time}"
+    )
 
 
 def test_adaptive_global_filter_zero_variance():
@@ -166,7 +170,9 @@ def _naive_local_filter(
                 sigma = patch.std()
                 thr_low, thr_high = mu - n_sigma * sigma, mu + n_sigma * sigma
                 centre_val = magnitudes[b, y, x]
-                outliers[b, y, x] = centre_val < thr_low or centre_val > thr_high
+                outliers[b, y, x] = (
+                    centre_val < thr_low or centre_val > thr_high
+                )
 
     return jnp.asarray(outliers)
 
@@ -184,7 +190,9 @@ def test_local_std_vs_naive(
     flow = jrandom.normal(key, (B, H, W, 2))
 
     expected = _naive_local_filter(flow, n_sigma, radius)
-    flow, got, _ = adaptive_local_filter(flow, n_sigma, radius, valid=None, state=None)
+    flow, got, _ = adaptive_local_filter(
+        flow, n_sigma, radius, valid=None, state=None
+    )
 
     assert got is not None, "Mask is None"
     assert got.shape == expected.shape, "Output shape mismatch"
@@ -215,7 +223,11 @@ def test_adaptive_threshold_local_filter_time(B, H, W, radius, limit_time):
 
     fn = jit(
         partial(
-            adaptive_local_filter, n_sigma=2.0, radius=radius, valid=None, state=None
+            adaptive_local_filter,
+            n_sigma=2.0,
+            radius=radius,
+            valid=None,
+            state=None,
         )
     )
     flow_field, mask, _ = fn(flow_field)  # should compile & run without raising
@@ -239,9 +251,9 @@ def test_adaptive_threshold_local_filter_time(B, H, W, radius, limit_time):
     average_time_jit = min(total_time_jit) / NUMBER_OF_EXECUTIONS
 
     # Check if the time is less than the limit
-    assert (
-        average_time_jit < limit_time
-    ), f"The average time is {average_time_jit}, time limit: {limit_time}"
+    assert average_time_jit < limit_time, (
+        f"The average time is {average_time_jit}, time limit: {limit_time}"
+    )
 
 
 def test_universal_median_test_center_outlier():
@@ -353,7 +365,9 @@ def test_universal_median_time(B, H, W, limit_time, radius):
     flow_field = jrandom.normal(rng, (B, H, W, 2))
 
     fn = jit(
-        partial(universal_median_test, epsilon=0.1, r_threshold=2.0, radius=radius)
+        partial(
+            universal_median_test, epsilon=0.1, r_threshold=2.0, radius=radius
+        )
     )
     flow_field, mask, _ = fn(flow_field)  # should compile & run without raising
     assert mask.shape == (B, H, W)
@@ -376,6 +390,6 @@ def test_universal_median_time(B, H, W, limit_time, radius):
     average_time_jit = max(total_time_jit) / NUMBER_OF_EXECUTIONS
 
     # Check if the time is less than the limit
-    assert (
-        average_time_jit < limit_time
-    ), f"The average time is {average_time_jit}, time limit: {limit_time}"
+    assert average_time_jit < limit_time, (
+        f"The average time is {average_time_jit}, time limit: {limit_time}"
+    )

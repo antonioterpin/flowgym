@@ -1,11 +1,13 @@
-import pytest
+"""Tests for regularizers module."""
+
 import jax.numpy as jnp
+import pytest
 
 from flowgym.flow.consensus.regularizers import (
-    smoothness_regularizer,
     divergence_free_regularizer,
-    tv_regularizer,
     laplacian_regularizer,
+    smoothness_regularizer,
+    tv_regularizer,
 )
 
 
@@ -32,7 +34,7 @@ def test_smoothness_regularizer_valid(batch_shape):
     ],
 )
 def test_smoothness_regularizer_ramp(batch_shape, expected):
-    """Test smoothness regularizer returns the expected value for a ramp flow."""
+    """Test smoothness regularizer returns expected value for ramp flow."""
     _, W, _ = batch_shape
     # Ramp along width, all batches and channels identical
     ramp = jnp.arange(W).reshape(1, W, 1)
@@ -67,7 +69,8 @@ def test_divergence_free_regularizer_zero(batch_shape):
 def test_divergence_free_regularizer_ramp(batch_shape):
     """Test divergence regularizer on a known divergent flow (ramp along x)."""
     H, W, _ = batch_shape
-    # u_x increases along x, u_y = 0. So div = du_x/dx = 1 at all interior points.
+    # u_x increases along x, u_y = 0. So div = du_x/dx = 1 at all
+    # interior points.
     ramp = jnp.arange(W).reshape(1, W, 1)
     ramp = jnp.broadcast_to(ramp, (H, W, 1))
     zeros = jnp.zeros((H, W, 1))
@@ -107,7 +110,10 @@ def test_tv_regularizer_zero(batch_shape):
     ],
 )
 def test_tv_regularizer_ramp(batch_shape):
-    """TV of a ramp flow: only one gradient direction is nonzero (dx=1, dy=0)."""
+    """TV of a ramp flow.
+
+    Only one gradient direction is nonzero (dx=1, dy=0).
+    """
     H, W, C = batch_shape
     eps = 1e-4
     ramp = jnp.arange(W).reshape(1, W, 1)

@@ -2,15 +2,14 @@
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 
 
 def img_resize(image: jnp.ndarray, new_shape: tuple[int, int]) -> jnp.ndarray:
     """Resize an image to a new shape using bilinear interpolation.
 
     Args:
-        image: (H, W) or (H, W, C) image. The channel must be the last dimension, resize will happen on H and W.
-        new_shape: (new_H, new_W) target shape.
+        image: (H, W) or (H, W, C) image. Last dimension is channel.
+        new_shape: Target (new_H, new_W) shape.
 
     Returns:
         Resized image of shape (new_H, new_W) or (new_H, new_W, C).
@@ -41,10 +40,14 @@ def img_resize(image: jnp.ndarray, new_shape: tuple[int, int]) -> jnp.ndarray:
     wy = (y - y0).reshape(-1, 1)
     wx = (x - x0).reshape(1, -1)
 
-    def gather_channel(image):
-        """Gather pixels from the image at the specified coordinates.
+    def gather_channel(image: jnp.ndarray) -> jnp.ndarray:
+        """Gather pixels via bilinear interpolation.
 
-        Note: This function works for both single-channel and multi-channel images.
+        Args:
+            image: Image array to interpolate from.
+
+        Returns:
+            Interpolated values at coordinates.
         """
         top_left = image[y0[:, None], x0]
         top_right = image[y0[:, None], x1]
@@ -59,10 +62,8 @@ def img_resize(image: jnp.ndarray, new_shape: tuple[int, int]) -> jnp.ndarray:
 
 
 def bilinear_interpolate(
-    image: jnp.ndarray | np.ndarray,
-    x_f: jnp.ndarray | np.ndarray,
-    y_f: jnp.ndarray | np.ndarray,
-) -> jnp.ndarray | np.ndarray:
+    image: jnp.ndarray, x_f: jnp.ndarray, y_f: jnp.ndarray
+) -> jnp.ndarray:
     """Perform bilinear interpolation at floating-point pixel coordinates.
 
     NOTE: this is the same implementation as in
@@ -77,30 +78,17 @@ def bilinear_interpolate(
     Returns:
         Interpolated intensities at each (y, x) location, of shape (H, W).
     """
-    has_np = any(isinstance(a, np.ndarray) for a in (image, x_f, y_f))
-    has_jnp = any(isinstance(a, jnp.ndarray) for a in (image, x_f, y_f))
-
-    if has_np and has_jnp:
-        raise TypeError("image, x_f, and y_f must not mix NumPy and JAX arrays")
-
-    if isinstance(image, jnp.ndarray):
-        xp = jnp
-        int_dtype = jnp.int32
-    elif isinstance(image, np.ndarray):
-        xp = np
-        int_dtype = np.int32
-
     H, W = image.shape
 
     # Clamp x_f and y_f to be within the image bounds
-    x_f_clamped = xp.clip(x_f, 0.0, W - 1.0)
-    y_f_clamped = xp.clip(y_f, 0.0, H - 1.0)
+    x_f_clamped = jnp.clip(x_f, 0.0, W - 1.0)
+    y_f_clamped = jnp.clip(y_f, 0.0, H - 1.0)
 
     # Integer neighbors & clamping
-    x0 = xp.clip(xp.floor(x_f).astype(int_dtype), 0, W - 1)
-    x1 = xp.clip(x0 + 1, 0, W - 1)
-    y0 = xp.clip(xp.floor(y_f).astype(int_dtype), 0, H - 1)
-    y1 = xp.clip(y0 + 1, 0, H - 1)
+    x0 = jnp.clip(jnp.floor(x_f).astype(jnp.int32), 0, W - 1)
+    x1 = jnp.clip(x0 + 1, 0, W - 1)
+    y0 = jnp.clip(jnp.floor(y_f).astype(jnp.int32), 0, H - 1)
+    y1 = jnp.clip(y0 + 1, 0, H - 1)
 
     # Fractional weights
     wx = x_f_clamped - x0
@@ -168,11 +156,11 @@ def apply_flow_to_image_forward(
     flow_field: jnp.ndarray,
     dt: float,
 ) -> jnp.ndarray:
-    """Warp a 2D image of particles according to a given flow field using forward mapping.
+    """Warp image using forward mapping with bilinear splatting.
 
-    For each pixel (y, x) in the input image, we compute a velocity (u, v)
-    from `flow_field[y, x]`, then deposit the pixel value at the displaced
-    location (y + v * dt, x + u * dt) in the output image using bilinear splatting.
+    For each pixel (y, x) in the input image, compute velocity (u, v) from
+    `flow_field[y, x]` and deposit the value at (y + v*dt, x + u*dt) using
+    bilinear interpolation.
 
     NOTE: this is the same implementation as in
     synthpix.apply.apply_flow_to_image_forward, but drops the dependency on
@@ -184,7 +172,7 @@ def apply_flow_to_image_forward(
         dt: Time step for the forward mapping.
 
     Returns:
-        A new 2D array of shape (H, W) with the particles displaced using forward mapping.
+        Warped image of shape (H, W).
     """
     H, W = image.shape
     y_grid, x_grid = jnp.indices((H, W))
@@ -219,7 +207,9 @@ def apply_flow_to_image_forward(
             cond = in_bounds(xi, yi)
             new_image = jax.lax.cond(
                 cond,
-                lambda img: img.at[yi, xi].add(val * weight),
+                lambda img, yi=yi, xi=xi, weight=weight, val=val: img.at[
+                    yi, xi
+                ].add(val * weight),
                 lambda img: img,
                 operand=new_image,
             )

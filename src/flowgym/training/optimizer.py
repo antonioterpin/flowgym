@@ -2,15 +2,17 @@
 
 from collections.abc import Mapping
 from typing import Any
+
 import optax
 
-from .schedules import _build_schedule_from_config
+from .schedules import build_schedule_from_config
 
 OPTIMIZER_REGISTRY: dict[str, Any] = {
     "adam": optax.adam,
     "adamw": optax.adamw,
     "sgd": optax.sgd,
     "rmsprop": optax.rmsprop,
+    "set_to_zero": optax.set_to_zero,
 }
 
 TRANSFORM_REGISTRY: dict[str, Any] = {
@@ -18,6 +20,7 @@ TRANSFORM_REGISTRY: dict[str, Any] = {
     "add_decayed_weights": optax.add_decayed_weights,
     "scale": optax.scale,
     "scale_by_schedule": optax.scale_by_schedule,
+    "ema": optax.ema,
 }
 
 
@@ -35,7 +38,7 @@ def _build_hyperparams(hcfg: Mapping[str, Any]) -> dict[str, Any]:
     for name, value in hcfg.items():
         # If it looks like a schedule config, build a schedule
         if isinstance(value, Mapping) and "schedule" in value:
-            hyperparams[name] = _build_schedule_from_config(value["schedule"])
+            hyperparams[name] = build_schedule_from_config(value["schedule"])
         else:
             hyperparams[name] = value
 
@@ -67,6 +70,9 @@ def build_optimizer_from_config(
 
     Returns:
         An Optax GradientTransformation instance.
+
+    Raises:
+        ValueError: If config is invalid or optimizer name is unknown.
     """
     cfg = config.copy()
     if "name" not in cfg:
@@ -78,6 +84,13 @@ def build_optimizer_from_config(
         raise ValueError(f"Unsupported optimizer name '{opt_name}'.")
 
     hyper_cfg = cfg.get("hyperparams", {}) or {}
+    # Handle top-level keys as hyperparameters for backward compatibility.
+    # Avoid known configuration keys.
+    reserved_keys = {"name", "hyperparams", "chain"}
+    for k, v in cfg.items():
+        if k not in reserved_keys and k not in hyper_cfg:
+            hyper_cfg[k] = v
+
     hyperparams = _build_hyperparams(hyper_cfg)
 
     # inject_hyperparams
