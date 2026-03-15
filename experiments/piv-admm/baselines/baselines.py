@@ -1,4 +1,4 @@
-"""Script to replicate the baselines in # TODO: add link to paper.
+"""Script to replicate the baselines in https://arxiv.org/abs/2512.11695.
 
 To run it:
     uv run python experiments/piv-admm/baselines/baselines.py
@@ -9,11 +9,11 @@ You can select which GPU to use by setting the CUDA_VISIBLE_DEVICES environment 
 To run this experiment, we suggest to first run 'uv sync --all-groups' to install all dependencies.
 """
 
-import os
 import csv
+import os
 import re
 from pathlib import Path
-from subprocess import Popen, PIPE, STDOUT
+from subprocess import PIPE, STDOUT, Popen
 
 # === SETTINGS ===
 ALGORITHMS_PATH = Path("experiments/piv-admm/baselines/algorithms/")
@@ -47,8 +47,15 @@ PATTERNS = {
 }
 
 
-def extract_metrics(lines):
-    """Extract the required metrics from a list of lines."""
+def extract_metrics(lines: list[str]) -> dict[str, float]:
+    """Extract the required metrics from a list of lines.
+
+    Args:
+        lines: List of output lines to parse for metrics.
+
+    Returns:
+        Dictionary mapping metric names to their float values.
+    """
     metrics = {}
     for line in lines:
         for key, pattern in PATTERNS.items():
@@ -104,9 +111,10 @@ def run_baselines():
             output_lines = []
 
             # Stream logs in real time
-            for line in process.stdout:  # type: ignore
-                print(line, end="")  # Live print
-                output_lines.append(line)
+            if process.stdout is not None:
+                for line in process.stdout:
+                    print(line, end="")  # Live print
+                    output_lines.append(line)
 
             process.wait()
 

@@ -1,4 +1,4 @@
-"""Script to replicate experiment 3.2 in # TODO: add link to paper.
+"""Script to replicate experiment 3.2 in https://arxiv.org/abs/2512.11695.
 
 This script runs an ablation study over the norms of the flow weights,
 in particular between L1, L2 and Huber.
@@ -9,9 +9,11 @@ To run:
 Results are stored in results/experiment3_2.csv
 """
 
+import copy
 import subprocess
-import yaml
 from pathlib import Path
+
+import yaml
 
 # === USER SETTINGS ===
 CONFIG_PATH = Path("experiments/piv-admm/experiment3_2/base_model.yaml")
@@ -70,8 +72,16 @@ CUDA_VISIBLE_DEVICES = "1"
 # ======================
 
 
-def set_nested_value(d: dict, dotted_key: str, value):
-    """Recursively set a value in a nested dictionary given a dotted key path."""
+def set_nested_value(
+    d: dict, dotted_key: str, value: str | int | float
+) -> None:
+    """Recursively set a value in a nested dictionary given a dotted key path.
+
+    Args:
+        d: The dictionary to modify.
+        dotted_key: Dot-separated key path (e.g., "parent.child.key").
+        value: The value to set at the specified path.
+    """
     keys = dotted_key.split(".")
     for k in keys[:-1]:
         d = d.setdefault(k, {})
@@ -87,7 +97,9 @@ def run_sweep():
         objective = config["config.consensus_config.flows_objective_type"]
         solver = config["config.consensus_config.solver_flows"]
         transformation = config["config.consensus_config.transformation"]
-        regularizer_weights = config["config.consensus_config.regularizer_weights"]
+        regularizer_weights = config[
+            "config.consensus_config.regularizer_weights"
+        ]
         print(
             f"\n=== Running sweep for objective={objective}, solver={solver}, transformation={transformation} ==="
         )
@@ -95,8 +107,6 @@ def run_sweep():
             print(f"\n=== {PARAM_KEY} = {val} ===")
 
             # Deep copy config
-            import copy
-
             cfg = copy.deepcopy(base_config)
 
             # Update required fields
@@ -107,15 +117,20 @@ def run_sweep():
             set_nested_value(
                 cfg, "config.consensus_config.flows_objective_type", objective
             )
-            set_nested_value(cfg, "config.consensus_config.solver_flows", solver)
             set_nested_value(
-                cfg, "config.consensus_config.regularizer_weights", regularizer_weights
+                cfg, "config.consensus_config.solver_flows", solver
+            )
+            set_nested_value(
+                cfg,
+                "config.consensus_config.regularizer_weights",
+                regularizer_weights,
             )
 
             # Write temp config
             trans_str = transformation if transformation is not None else "none"
             temp_path = (
-                CONFIG_PATH.parent / f"temp_{objective}_{solver}_{trans_str}_{val}.yaml"
+                CONFIG_PATH.parent
+                / f"temp_{objective}_{solver}_{trans_str}_{val}.yaml"
             )
             with open(temp_path, "w") as f:
                 yaml.safe_dump(cfg, f)
