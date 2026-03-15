@@ -11,7 +11,7 @@ Flow Gym is a **toolkit for research and deployment in flow quantification**, in
 It leverages **SynthPix** for synthetic image generation and provides a **unified interface** for testing, training, and deploying learning-based algorithms that estimate fluid flow from sequences of tracer-particle images.
 The framework also includes a growing collection of **integrated algorithms** and **stable JAX re-implementations** of state-of-the-art methods.
 
-![The Flow Gym environment](docs/flowgym.jpg)
+![The Flow Gym environment](https://github.com/antonioterpin/flowgym/blob/main/docs/flowgym.jpg)
 
 ## ✨ Features
 
@@ -37,7 +37,7 @@ uv add flow-gym-suite # or pip install flow-gym-suite
 uv add "flow-gym-suite[cuda12]"
 ```
 
-If you also want to use Flow Gym for training an evaluation, please clone the repository and install the development dependencies as outlined in the [CONTRIBUTING.md](./CONTRIBUTING.md) page.
+If you also want to use Flow Gym for training an evaluation, please clone the repository and install the development dependencies as outlined in the [CONTRIBUTING.md](docs/guides/contributing.md) page.
 There you can also find help if you have any issues installing Flow Gym.
 
 ### Basic usage / Deployment  🧭
@@ -161,7 +161,7 @@ For more examples, please check our [training](src/train.py) and [evaluation](sr
 
 ## Contributing 🤗
 
-Contributions are more than welcome! 🙏 Please check out our [how to contribute page](CONTRIBUTING.md), and feel free to open an issue for problems and feature requests⚠️.
+Contributions are more than welcome! 🙏 Please check out our [how to contribute page](docs/guides/contributing.md), and feel free to open an issue for problems and feature requests⚠️.
 
 If you have developed a new method integrating with Flow Gym, please do open a PR! New methods should come with reproducible experiments showcasing the features. We collect these experiments in the folder `experiments/your-method`.
 

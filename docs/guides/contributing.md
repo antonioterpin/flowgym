@@ -4,7 +4,7 @@ This page summarizes the development workflow and software engineering practices
 - [Development workflow](#development-workflow)
 - [Testing a feature](#testing-a-feature)
 - [Preparing for a PR](#preparing-for-a-pr)
-### 📁 Project Structure
+### 📁 Project structure
 
 ```
 ├── .github/
@@ -42,7 +42,7 @@ To provision the local environment with CUDA support only:
 ```sh
 uv sync --extra cuda12
 ```
-Run the application with (see the [README.md](README.md) for details on the usage):
+Run the application with (see the [README.md](../../README.md) for details on the usage):
 ```sh
 uv run python main.py
 ```
@@ -59,9 +59,9 @@ pre-commit install --hook-type pre-commit
 
 Our pre-commit configuration includes several automated checks:
 
-- **Black**: Code formatting
 - **Ruff**: Linting, docstring checks, modern typing enforcement, and unused import detection
-- **PyUpgrade**: Automatic modernization of Python syntax (Python 3.10+)
+- **Pydoclint**: Docstring validation and documentation checks
+- **Basedpyright**: A static type checker for Python, ensuring type correctness and adherence to type hints
 - **Standard hooks**: YAML validation, trailing whitespace, end-of-file fixes
 
 To run the pre-commit checks on specific files:
