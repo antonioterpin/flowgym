@@ -119,6 +119,7 @@ def test_methods_match_naive_version(seed, shape, method, method_naive, kwargs):
         (32, 1024, 1024, 2, 1.3e-3),
     ],
 )
+@pytest.mark.speed
 def test_average_time(B, H, W, radius, limit_time):
     """Just makes sure compilation/shape handling hold for >1M voxels."""
     rng = jrandom.PRNGKey(0)
@@ -168,6 +169,7 @@ def test_average_time(B, H, W, radius, limit_time):
         (16, 1024, 1024, 2, 9e-3),
     ],
 )
+@pytest.mark.speed
 def test_median_time(B, H, W, radius, limit_time):
     """Just makes sure compilation/shape handling hold for >1M voxels."""
     rng = jrandom.PRNGKey(0)

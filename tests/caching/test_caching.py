@@ -172,7 +172,7 @@ def test_lookup_disk_prefers_newest_part_for_duplicate_keys():
         cm.flush()
 
         files = sorted((Path(tmp_dir) / cache_id / "data").glob("*.parquet"))
-        assert len(files) == 2
+        assert len(files) == 2, "Expected two parquet files for two flushes"
         os.utime(files[0], (1, 1))
         os.utime(files[1], (2, 2))
 
@@ -180,7 +180,7 @@ def test_lookup_disk_prefers_newest_part_for_duplicate_keys():
             tmp_dir, cache_id, spec={"values": (np.float32, (1,))}
         )
         payload, hit = cm_read.lookup(np.array([7], dtype=np.uint64))
-        assert np.all(hit)
+        assert np.all(hit), "Expected a hit for key 7"
         np.testing.assert_allclose(payload["values"], [[2.0]])
 
 

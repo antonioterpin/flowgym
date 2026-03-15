@@ -122,6 +122,7 @@ pythonpath = ["."]
 markers = [
         "run_explicitly: marks tests that are only run with -m run_explicitly",
         "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+        "speed: marks performance tests (deselect with '-m \"not speed\"')",
 ]
 filterwarnings = [
         "error",

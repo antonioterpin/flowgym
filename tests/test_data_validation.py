@@ -105,6 +105,7 @@ def test_constant_threshold_filter_batch(
         (512, 1024, 1024, 0.019),
     ],
 )
+@pytest.mark.speed
 def test_constant_threshold_filter_time(B, H, W, limit_time):
     """Just makes sure compilation/shape handling hold for >1M voxels."""
     rng = jrandom.PRNGKey(0)
@@ -216,6 +217,7 @@ def test_local_std_vs_naive(
         (32, 1024, 1024, 2, 1.4e-2),
     ],
 )
+@pytest.mark.speed
 def test_adaptive_threshold_local_filter_time(B, H, W, radius, limit_time):
     """Just makes sure compilation/shape handling hold for >1M voxels."""
     rng = jrandom.PRNGKey(0)
@@ -359,6 +361,7 @@ def test_universal_vs_naive(batch, height, width, radius, r_threshold):
         (8, 1024, 1024, 1.5e-2, 3),
     ],
 )
+@pytest.mark.speed
 def test_universal_median_time(B, H, W, limit_time, radius):
     """Just makes sure compilation/shape handling hold for >1M voxels."""
     rng = jrandom.PRNGKey(0)

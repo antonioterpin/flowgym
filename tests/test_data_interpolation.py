@@ -174,6 +174,7 @@ def test_algorithms_naive(method, method_naive, kwargs, B, H, W, p, seed):
 )
 @pytest.mark.parametrize("seed", [0, 42])
 @pytest.mark.parametrize("p", [0.1, 0.2, 0.5])
+@pytest.mark.speed
 def test_algorithms_speed(method, kwargs, B, H, W, time_limit, seed, p):
     # Generate random flow field with a single outlier
     key = jax.random.PRNGKey(seed)

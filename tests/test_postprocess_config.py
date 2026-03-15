@@ -232,6 +232,7 @@ def test_preprocess_config_invalid_params(N, seed):
     ],
 )
 @pytest.mark.parametrize("seed", [42])
+@pytest.mark.speed
 def test_postprocess_jit(B, H, time_limit, seed):
     # Sample idxs
     key = jrandom.PRNGKey(seed)
