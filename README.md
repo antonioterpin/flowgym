@@ -1,8 +1,9 @@
 # 🌊 Flow Gym : A Research Toolkit for Fluid Flow Estimation
 
+[![arXiv](https://img.shields.io/badge/arXiv-2512.20642-b31b1b.svg)](https://arxiv.org/abs/2512.20642)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![GitHub stars](https://img.shields.io/github/stars/antonioterpin/flowgym?style=social)](https://github.com/antonioterpin/flowgym/stargazers)
-[![PyPI version](https://img.shields.io/pypi/v/flow-gym.svg)](https://pypi.org/project/flow-gym-suite)
+[![PyPI version](https://img.shields.io/pypi/v/flow-gym-suite.svg)](https://pypi.org/project/flow-gym-suite)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 
@@ -10,7 +11,7 @@ Flow Gym is a **toolkit for research and deployment in flow quantification**, in
 It leverages **SynthPix** for synthetic image generation and provides a **unified interface** for testing, training, and deploying learning-based algorithms that estimate fluid flow from sequences of tracer-particle images.
 The framework also includes a growing collection of **integrated algorithms** and **stable JAX re-implementations** of state-of-the-art methods.
 
-![The Flow Gym environment](https://raw.githubusercontent.com/antonioterpin/flowgym/main/docs/flowgym.jpg)
+![The Flow Gym environment](docs/flowgym.jpg)
 
 ## ✨ Features
 
@@ -22,6 +23,9 @@ The framework also includes a growing collection of **integrated algorithms** an
 
 - **Ready for real-world deployment**
   Flow Gym includes efficient **JAX implementations** of state-of-the-art flow estimation methods, optimized for real-time performance and suitable for **closed-loop control** or other **fluid-sensing** applications.
+
+- **Fast Dataset Caching**
+  Avoid redundant computations with a read-through on-disk cache. The **CacheManager** allows storing expensive derived data (like EPEs or model predictions) in Parquet format, drastically reducing evaluation and training time for repetitive data passes. See integration examples for [DIS](examples/10_caching.py) and [RAFT](examples/11_caching.py).
 
 ## Getting Started 🚀
 
@@ -40,7 +44,6 @@ There you can also find help if you have any issues installing Flow Gym.
 
 ```python
 from flowgym.make import make_estimator
-import jax
 # Define the config (or load from YAML)
 model_config = {
     "estimator": "dis_jax",
@@ -54,11 +57,8 @@ trained_state, create_state_fn, compute_estimate_fn, model = make_estimator(
     image_shape=image_shape
 )
 
-# Create a key
-key = jax.random.PRNGKey(0)
-
 # Compute an estimate for an image pair
-est_state = create_state_fn(prev, key)
+est_state = create_state_fn(prev)
 new_est_state, metrics = compute_estimate_fn(curr, est_state)
 ```
 
@@ -66,18 +66,13 @@ new_est_state, metrics = compute_estimate_fn(curr, est_state)
 
 ```python
 from flowgym.environment.fluid_env import FluidEnv
-import jax
 
 # Create the environment
 env, env_state = FluidEnv.make(env_config)
 
-# Create a key
-key = jax.random.PRNGKey(0)
-
 for episode in range(num_episodes):
     obs, env_state, done = env.reset(env_state)
-    key, subkey = jax.random.split(key)
-    est_state = create_state_fn(obs, subkey)
+    est_state = create_state_fn(obs)
     train_step_fn = model.create_train_step()
 
     while not done.any():
@@ -162,11 +157,11 @@ __all__ = [
 
 ## Examples 📚
 
-For more examples, please check our [training](https://raw.githubusercontent.com/antonioterpin/flowgym/main/src/flowgym/train.py) and [evaluation](https://raw.githubusercontent.com/antonioterpin/flowgym/main/src/flowgym/eval.py) scripts.
+For more examples, please check our [training](src/train.py) and [evaluation](src/eval.py) scripts.
 
 ## Contributing 🤗
 
-Contributions are more than welcome! 🙏 Please check out our [how to contribute page](https://raw.githubusercontent.com/antonioterpin/flowgym/main/CONTRIBUTING.md), and feel free to open an issue for problems and feature requests⚠️.
+Contributions are more than welcome! 🙏 Please check out our [how to contribute page](CONTRIBUTING.md), and feel free to open an issue for problems and feature requests⚠️.
 
 If you have developed a new method integrating with Flow Gym, please do open a PR! New methods should come with reproducible experiments showcasing the features. We collect these experiments in the folder `experiments/your-method`.
 
@@ -178,10 +173,45 @@ If you use this code in your research, please cite our paper:
    @article{banelli2025flowgym,
       title={Flow Gym},
       author={Banelli, Francesco and Terpin, Antonio and Bonomi, Alan and D'Andrea, Raffaello},
-      year={2025}
+      year={2025},
+      journal={arXiv preprint arXiv:2512.20642}
    }
 ```
 
+## Agent-Driven Development 🤖
+
+This repository is optimized for agentic workflows. All agent documentation is centralized in the [docs/](docs/) folder:
+
+- **Standards**: Non-negotiable rules in [docs/standards/](docs/standards/)
+- **Workflows**: Common tasks in [docs/workflows/](docs/workflows/) (feature, bugfix, refactor, orientation, api-validation, docs)
+- **Guides**: Architecture and contributing guides in [docs/guides/](docs/guides/)
+- **Agent personas**: Implementer and reviewer roles in [docs/agents/](docs/agents/)
+
+For a complete overview, see [docs/index.md](docs/index.md).
+
+### Quick Start
+
+1. **Understand the architecture**: [docs/guides/architecture.md](docs/guides/architecture.md)
+2. **Run the orientation workflow**: [docs/workflows/orientation.md](docs/workflows/orientation.md)
+3. **Choose a workflow** based on your task:
+   - [Feature](docs/workflows/feature.md) - Implement new features
+   - [Bugfix](docs/workflows/bugfix.md) - Fix bugs
+   - [Refactor](docs/workflows/refactor.md) - Improve code structure
+   - [API Validation](docs/workflows/api-validation.md) - Explore external APIs
+   - [Documentation](docs/workflows/docs.md) - Update docs/docstrings
+
+### Usage Example
+
+To start a new feature or fix a bug, you can simply tell your agent:
+> "I want to implement a new loss function. Please follow the feature workflow."
+
+The agent will:
+
+1. Reference [.claude/CLAUDE.md](.claude/CLAUDE.md) for project rules
+2. Follow [docs/workflows/feature.md](docs/workflows/feature.md) step-by-step
+3. Comply with all standards in [docs/standards/](docs/standards/)
+4. Ensure consistency and adherence to project quality standards
+
 ## License 📝
 
-This project is licensed under the MIT License - see the [LICENSE](https://raw.githubusercontent.com/antonioterpin/flowgym/main/LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
