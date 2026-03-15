@@ -5,16 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "flow-gym-suite"
 version = "0.1.0"
+description = "Flow Gym is a toolkit for research and deployment in flow quantification inspired by OpenAI Gym and Stable-Baselines3."
+readme = "README.md"
+license = { file = "LICENSE" }
 authors = [
     { name = "Antonio Terpin", email = "aterpin@ethz.ch" },
     { name = "Francesco Banelli", email = "fbanelli@ethz.ch" },
     { name = "Alan Bonomi", email = "abonomi@ethz.ch" }
 ]
-description = "Flow Gym is a toolkit for research and deployment in flow quantification inspired by OpenAI Gym and Stable-Baselines3."
-readme = "README.md"
-requires-python = ">=3.10"
-license = { text = "MIT" }
-keywords = ["PIV", "machine learning", "fluid dynamics", "jax", "flax"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
@@ -22,17 +20,15 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
 ]
+requires-python = ">=3.10"
 
 # Core dependencies
 dependencies = [
     "jax>=0.6.0",
     "flax>=0.10.5",
     "ipywidgets",
-    "robo-goggles>=0.1.6",
+    "robo-goggles @ git+https://github.com/antonioterpin/goggles.git@dev",
     "pip>=25.3",
 ]
 
@@ -50,16 +46,23 @@ exclude = ["tests*", "docs*"]
 # Dependency groups
 [dependency-groups]
 dev = [
-    "synthpix",
-    "pre_commit==4.0.1",
+    "synthpix @ git+https://github.com/antonioterpin/synthpix.git@4adea08",
+    "pre-commit==4.0.1",
     "snowballstemmer",
     "pytest==7.4.4",
-    "wandb",
+    "wandb>=0.16,<1.0",
     "scikit-image>=0.20.0",
+    "h5py>=3.10.0", # synthpix integration tests
+    "numpy>=1.20.0",
+    "basedpyright",
+    "pydoclint>=0.8.3",
+    "pyarrow>=23.0.0",
+    "ruff>=0.14.14",
+    "pytest-cov>=7.0.0",
 ]
 
 synthpix-cuda12 = [
-    "synthpix[cuda12]",
+    "synthpix[cuda12] @ git+https://github.com/antonioterpin/synthpix.git@4adea08",
 ]
 
 dev-cuda12 = [
@@ -93,60 +96,13 @@ other_methods = [
     "torchvision>=0.14.1",
 ]
 
+wandb = [
+    "robo-goggles[wandb] @ git+https://github.com/antonioterpin/goggles.git@dev",
+]
+
 cuda12 = [
     "jax[cuda12]>=0.6.0",
 ]
-
-# autopep8 configuration for 4-space indentation
-[tool.autopep8]
-max_line_length = 80
-indent_size = 4
-aggressive = 2
-in_place = true
-exclude = ".eggs,.git,.hg,.mypy_cache,.tox,.venv,_build,buck-out,build,dist"
-
-# isort configuration (updated for autopep8 compatibility)
-[tool.isort]
-line_length = 80
-indent = 4
-multi_line_output = 0
-force_single_line = false
-include_trailing_comma = false
-force_grid_wrap = 0
-use_parentheses = true
-ensure_newline_before_comments = true
-
-# MyPy configuration
-[tool.mypy]
-python_version = "3.10"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
-check_untyped_defs = true
-disallow_untyped_decorators = true
-no_implicit_optional = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-warn_no_return = true
-warn_unreachable = true
-strict_equality = true
-show_error_codes = true
-explicit_package_bases = true
-
-# Allow untyped decorators in test files for Hypothesis
-[[tool.mypy.overrides]]
-module = "tests.*"
-disallow_untyped_decorators = false
-
-# Pydocstyle configuration
-[tool.pydocstyle]
-convention = "google"
-match-dir = "^(?!tests).*"
-
-# Bandit security configuration
-[tool.bandit]
-exclude_dirs = ["tests", ".venv", "build", "dist"]
 
 # Pytest configuration
 [tool.pytest.ini_options]
@@ -155,13 +111,18 @@ addopts = [
         "-ra",
         "--strict-markers",
         "--strict-config",
-        "--cov=goggles",
+        "--cov=flowgym",
         "--cov-branch",
         "--cov-report=term-missing",
         "--cov-report=html",
         "--cov-report=xml",
 ]
 testpaths = ["tests"]
+pythonpath = ["."]
+markers = [
+        "run_explicitly: marks tests that are only run with -m run_explicitly",
+        "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
 filterwarnings = [
         "error",
         "ignore::UserWarning",
@@ -172,42 +133,74 @@ filterwarnings = [
 [tool.ruff]
 line-length = 80
 target-version = "py310"
+extend-exclude = [
+    "src/flowgym/nn/raft_torch_nn/",
+    "src/flowgym/flow/raft/raft_piv_pytorch.py",
+]
 
 [tool.ruff.lint]
 # Enable comprehensive rule sets
 select = [
-    "E",      # pycodestyle errors
-    "W",      # pycodestyle warnings
-    "F",      # pyflakes (including unused imports F401)
-    "UP",     # pyupgrade (modern typing patterns)
-    "I",      # isort
-    "N",      # pep8-naming
-    "D",      # pydocstyle
-    "PL",     # pylint
-    "RUF",    # ruff-specific rules
+    "E",     # pycodestyle errors (style/formatting)
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes (logical errors)
+    "UP",    # pyupgrade (modern Python syntax)
+    "I",     # isort (import sorting)
+    "N",     # pep8-naming (naming conventions)
+    "B",     # flake8-bugbear (potential bugs)
+    "PL",    # pylint (code quality)
+    "RUF",   # ruff-specific rules
 ]
 
+# Temporary complexity-rule relaxation tracked in umbrella issue #142.
+# Re-enable these checks once all linked refactor issues are closed.
 ignore = [
-    "D100",   # Missing docstring in public module
-    "D104",   # Missing docstring in public package
-    "D105",   # Missing docstring in magic method
-    "PLR0913", # Too many arguments to function call
+    "PLR0912", # Too many branches
+    "PLR0915", # Too many statements
     "PLR2004", # Magic value used in comparison
+    "PLR0913", # Too many arguments in function definition
+    "N803",    # Argument name should be lowercase (CV standard Ix, Iy, ecc.)
+    "N806",    # Variable in function should be lowercase (CV standard Ix, Iy, ecc.)
 ]
-
-# Specific rules for modern typing enforcement
-[tool.ruff.lint.pyupgrade]
-# Keep this empty to use all pyupgrade rules
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["D", "PLR2004"]  # Ignore docstring rules in tests
-"examples/*" = ["D"]          # Ignore docstring rules in examples
+"tests/**/*.py" = ["PLC0415"]  # Allow local imports in tests
 
-[tool.ruff.lint.pydocstyle]
-convention = "google"
+# Pydoclint configuration
+# Pydoclint is used together with Ruff because
+# Ruff hasn't yet implemented all the checks that Pydoclint provides.
+# The plan is to migrate to Ruff only when all checks are implemented.
+[tool.pydoclint]
+style = "google"
+# Skip tests and heavy legacy modules for now.
+exclude = '\.git|\.tox|^tests/|^src/flowgym/nn/raft_torch_nn/|^src/flowgym/flow/raft/raft_piv_pytorch\.py$'
+skip-checking-short-docstrings = false
+allow-init-docstring = true
+arg-type-hints-in-docstring = false
+check-return-types = false
+skip-checking-raises = false
 
-[tool.setuptools.dynamic]
-version = {attr = "flowgym.__version__"}
+# Pyright configuration for type checking
+# We use basedpyright but in this way pylance also
+# reads this configuration
+[tool.pyright]
+typeCheckingMode = "basic"
+pythonVersion = "3.10"
+include = ["src", "tests", "examples"]
+exclude = [
+    "tests",
+    "src/flowgym/nn/raft_torch_nn",
+    "src/flowgym/flow/raft/raft_piv_pytorch.py",
+]
 
-[tool.uv]
-default-groups = []
+reportMissingTypeStubs = false
+reportUnknownMemberType = false
+reportUnknownParameterType = false
+reportUnknownVariableType = false
+
+reportUnusedImport = false
+reportUnusedVariable = false
+
+enableTypeIgnoreComments = false
+reportIgnoreCommentWithoutRule = "error"
+reportUnnecessaryTypeIgnoreComment = "error"
