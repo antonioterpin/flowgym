@@ -5,8 +5,9 @@ To run it:
 
 Results are stored in results/piv_admm_baselines.csv
 
-You can select which GPU to use by setting the CUDA_VISIBLE_DEVICES environment variable.
-To run this experiment, we suggest to first run 'uv sync --all-groups' to install all dependencies.
+You can select which GPU to use by setting the CUDA_VISIBLE_DEVICES
+environment variable. To run this experiment, we suggest to first run
+'uv sync --all-groups' to install all dependencies.
 """
 
 import csv
@@ -66,7 +67,7 @@ def extract_metrics(lines: list[str]) -> dict[str, float]:
 
 
 def run_baselines():
-    """Run the parameter sweep by modifying the config and launching experiments."""
+    """Run the parameter sweep by modifying the config dynamically."""
     # Prepare environment
     env = os.environ.copy()
     env["CUDA_VISIBLE_DEVICES"] = CUDA_VISIBLE_DEVICES

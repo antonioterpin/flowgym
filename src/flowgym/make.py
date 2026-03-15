@@ -188,7 +188,7 @@ def save_model(
 
     # Define the save arguments
     save_args: dict[str, ocp.args.CheckpointArgs] = {
-        "state": ocp.args.StandardSave(item)  # type: ignore
+        "state": ocp.args.StandardSave(item)  # pyright: ignore[reportCallIssue]
     }
 
     # Extract and save optimizer config separately (as it contains strings)
@@ -197,7 +197,7 @@ def save_model(
             model, "optimizer_config", getattr(model, "opt_config", None)
         )
         if opt_cfg is not None:
-            save_args["opt_config"] = ocp.args.JsonSave(opt_cfg)  # type: ignore
+            save_args["opt_config"] = ocp.args.JsonSave(opt_cfg)  # pyright: ignore[reportCallIssue]
 
     if sampler is not None:
         try:
@@ -205,7 +205,7 @@ def save_model(
             # Flatten Composite args to root level for atomic saving
             # of (state, sampler, grain) side-by-side.
             save_args.update(
-                sampler_args.items()  # type: ignore
+                sampler_args.items()  # pyright: ignore[reportAttributeAccessIssue]
             )
         except Exception as e:
             logger.warning(f"Failed to prepare sampler checkpoint args: {e}")
