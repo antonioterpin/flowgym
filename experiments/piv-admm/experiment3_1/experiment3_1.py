@@ -1,5 +1,5 @@
 #!/usr/bin/env python3 experiment3_3.py
-"""Script to replicate experiment 3.1 in # TODO: add link to paper.
+"""Script to replicate experiment 3.1 in https://arxiv.org/abs/2512.11695.
 
 This script launches experiments for each combination and tau value.
 
@@ -12,9 +12,11 @@ NOTE: This script collects the metrics for both L1 and Huber objective functions
 paper we only report the results for Huber.
 """
 
+import copy
 import subprocess
-import yaml
 from pathlib import Path
+
+import yaml
 
 # === USER SETTINGS ===
 CONFIG_PATH = Path("experiments/piv-admm/experiment3_1/base_model.yaml")
@@ -169,8 +171,16 @@ GOGGLES_PORT = "2402"
 # ======================
 
 
-def set_nested_value(d: dict, dotted_key: str, value):
-    """Recursively set a value in a nested dictionary given a dotted key path."""
+def set_nested_value(
+    d: dict, dotted_key: str, value: str | int | float
+) -> None:
+    """Recursively set a value in a nested dictionary given a dotted key path.
+
+    Args:
+        d: The dictionary to modify.
+        dotted_key: Dot-separated key path (e.g., "parent.child.key").
+        value: The value to set at the specified path.
+    """
     keys = dotted_key.split(".")
     for k in keys[:-1]:
         d = d.setdefault(k, {})
@@ -183,32 +193,42 @@ def run_sweep():
         base_config = yaml.safe_load(f)
 
     for combo in COMBOS:
-        regularizer_weights = combo["config.consensus_config.regularizer_weights"]
+        regularizer_weights = combo[
+            "config.consensus_config.regularizer_weights"
+        ]
         weights_type = combo["config.consensus_config.weights_type"]
         objective_type = combo["config.consensus_config.flows_objective_type"]
         solver_flows = combo["config.consensus_config.solver_flows"]
         path = combo["config.estimators_list_path"]
-        baseline_performance = combo["config.experiment_params.baseline_performance"]
+        baseline_performance = combo[
+            "config.experiment_params.baseline_performance"
+        ]
 
         print(f"\n=== Running sweep for algos={combo} ===")
         for val in TAU_VALUES:
             print(f"\n=== {PARAM_KEY} = {val} ===")
 
             # Deep copy config
-            import copy
-
             cfg = copy.deepcopy(base_config)
 
             # Update required fields
             set_nested_value(cfg, "config.experiment_params.epe_limit", val)
             set_nested_value(
-                cfg, "config.consensus_config.regularizer_weights", regularizer_weights
+                cfg,
+                "config.consensus_config.regularizer_weights",
+                regularizer_weights,
             )
             set_nested_value(
-                cfg, "config.consensus_config.flows_objective_type", objective_type
+                cfg,
+                "config.consensus_config.flows_objective_type",
+                objective_type,
             )
-            set_nested_value(cfg, "config.consensus_config.solver_flows", solver_flows)
-            set_nested_value(cfg, "config.consensus_config.weights_type", weights_type)
+            set_nested_value(
+                cfg, "config.consensus_config.solver_flows", solver_flows
+            )
+            set_nested_value(
+                cfg, "config.consensus_config.weights_type", weights_type
+            )
             set_nested_value(cfg, "config.estimators_list_path", path)
             set_nested_value(
                 cfg,

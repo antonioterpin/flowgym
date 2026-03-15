@@ -1,4 +1,4 @@
-"""Script to replicate experiment 3.3 in # TODO: add link to paper.
+"""Script to replicate experiment 3.3 in https://arxiv.org/abs/2512.11695.
 
 This script runs an ablation study over the weights of the flow weights,
 in particular between uniform (here called list), photometric, photograd, and gradient.
@@ -12,9 +12,11 @@ NOTE: This script collects the metrics for both L1 and Huber objective functions
 paper we only report the results for Huber.
 """
 
+import copy
 import subprocess
-import yaml
 from pathlib import Path
+
+import yaml
 
 # === USER SETTINGS ===
 CONFIG_PATH = Path("experiments/piv-admm/experiment3_3/base_model.yaml")
@@ -135,8 +137,17 @@ GOGGLES_PORT = "2404"
 # ======================
 
 
-def set_nested_value(d: dict, dotted_key: str, value):
-    """Recursively set a value in a nested dictionary given a dotted key path."""
+def set_nested_value(
+    d: dict, dotted_key: str, value: str | int | float
+) -> None:
+    """Recursively set a value in a nested dictionary given a dotted key path.
+
+    Args:
+        d: The dictionary to modify.
+        dotted_key: The key path in dot notation
+            (e.g., "config.experiment_params.epe_limit").
+        value: The value to set at the specified path.
+    """
     keys = dotted_key.split(".")
     for k in keys[:-1]:
         d = d.setdefault(k, {})
@@ -150,7 +161,9 @@ def run_sweep():
 
     for weight in WEIGHTS:
         weights_type = weight["config.consensus_config.weights_type"]
-        regularizer_weights = weight["config.consensus_config.regularizer_weights"]
+        regularizer_weights = weight[
+            "config.consensus_config.regularizer_weights"
+        ]
         objective_type = weight["config.consensus_config.flows_objective_type"]
         solver_flows = weight["config.consensus_config.solver_flows"]
 
@@ -159,24 +172,31 @@ def run_sweep():
             print(f"\n=== {PARAM_KEY} = {val} ===")
 
             # Deep copy config
-            import copy
-
             cfg = copy.deepcopy(base_config)
 
             # Update required fields
             set_nested_value(cfg, "config.experiment_params.epe_limit", val)
-            set_nested_value(cfg, "config.consensus_config.weights_type", weights_type)
             set_nested_value(
-                cfg, "config.consensus_config.regularizer_weights", regularizer_weights
+                cfg, "config.consensus_config.weights_type", weights_type
             )
             set_nested_value(
-                cfg, "config.consensus_config.flows_objective_type", objective_type
+                cfg,
+                "config.consensus_config.regularizer_weights",
+                regularizer_weights,
             )
-            set_nested_value(cfg, "config.consensus_config.solver_flows", solver_flows)
+            set_nested_value(
+                cfg,
+                "config.consensus_config.flows_objective_type",
+                objective_type,
+            )
+            set_nested_value(
+                cfg, "config.consensus_config.solver_flows", solver_flows
+            )
 
             # Write temp config
             temp_path = (
-                CONFIG_PATH.parent / f"temp_{weights_type}_{objective_type}_{val}.yaml"
+                CONFIG_PATH.parent
+                / f"temp_{weights_type}_{objective_type}_{val}.yaml"
             )
             with open(temp_path, "w") as f:
                 yaml.safe_dump(cfg, f)
