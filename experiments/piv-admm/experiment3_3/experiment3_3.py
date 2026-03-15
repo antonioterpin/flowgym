@@ -1,15 +1,19 @@
 """Script to replicate experiment 3.3 in https://arxiv.org/abs/2512.11695.
 
 This script runs an ablation study over the weights of the flow weights,
-in particular between uniform (here called list), photometric, photograd, and gradient.
+in particular between:
+    - uniform (here called list),
+    - photometric,
+    - photograd,
+    - and gradient.
 
 To run:
     uv run python experiments/piv-admm/experiment3_3/experiment3_3.py
 
 Results are stored in results/experiment3_3.csv
 
-NOTE: This script collects the metrics for both L1 and Huber objective functions, but in the
-paper we only report the results for Huber.
+NOTE: This script collects the metrics for both L1 and Huber
+objective functions, but in the paper we only report the results for Huber.
 """
 
 import copy
@@ -155,7 +159,7 @@ def set_nested_value(
 
 
 def run_sweep():
-    """Run the parameter sweep by modifying the config and launching experiments."""
+    """Run the parameter sweep by modifying the config dynamically."""
     with open(CONFIG_PATH) as f:
         base_config = yaml.safe_load(f)
 
@@ -210,8 +214,8 @@ def run_sweep():
                 [
                     "bash",
                     "-c",
-                    f"CUDA_VISIBLE_DEVICES={CUDA_VISIBLE_DEVICES} GOGGLES_PORT={GOGGLES_PORT} "
-                    + " ".join(cmd),
+                    f"CUDA_VISIBLE_DEVICES={CUDA_VISIBLE_DEVICES} "
+                    f"GOGGLES_PORT={GOGGLES_PORT} " + " ".join(cmd),
                 ],
                 check=True,
             )

@@ -89,7 +89,7 @@ def set_nested_value(
 
 
 def run_sweep():
-    """Run the parameter sweep by modifying the config and launching experiments."""
+    """Run the parameter sweep by modifying the config dynamically."""
     with open(CONFIG_PATH) as f:
         base_config = yaml.safe_load(f)
 
@@ -101,7 +101,8 @@ def run_sweep():
             "config.consensus_config.regularizer_weights"
         ]
         print(
-            f"\n=== Running sweep for objective={objective}, solver={solver}, transformation={transformation} ==="
+            f"\n=== Running sweep for objective={objective}, "
+            f"solver={solver}, transformation={transformation} ==="
         )
         for val in TAU_VALUES:
             print(f"\n=== {PARAM_KEY} = {val} ===")

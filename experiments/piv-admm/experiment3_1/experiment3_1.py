@@ -8,8 +8,8 @@ To run:
 
 Results are stored in results/experiment3_1.csv
 
-NOTE: This script collects the metrics for both L1 and Huber objective functions, but in the
-paper we only report the results for Huber.
+NOTE: This script collects the metrics for both L1 and Huber
+objective functions, but in the paper we only report the results for Huber.
 """
 
 import copy
@@ -22,6 +22,7 @@ import yaml
 CONFIG_PATH = Path("experiments/piv-admm/experiment3_1/base_model.yaml")
 PARAM_KEY = "config.experiment_params.epe_limit"
 TAU_VALUES = [0.1, 0.3, 0.5, 0.7, 1.0, 1000.0]
+BASE_CONFIG_FOLDER = "src/flowgym/config/estimators/flow/piv_dataset/consensus"
 
 COMBO_FARNEBACK_L1 = {
     "config.consensus_config.regularizer_weights": {
@@ -32,7 +33,10 @@ COMBO_FARNEBACK_L1 = {
     "config.consensus_config.flows_objective_type": "l1",
     "config.consensus_config.solver_flows": "closed_form_l1",
     "config.consensus_config.weights_type": "photograd",
-    "config.estimators_list_path": "src/flowgym/config/estimators/flow/piv_dataset/consensus/farneback_list.yaml",
+    "config.estimators_list_path": (
+        "src/flowgym/config/estimators/flow/piv_dataset/"
+        + "consensus/farneback_list.yaml"
+    ),
     "config.experiment_params.baseline_performance": {
         "min_epe": 0.10687,
         "max_epe": 0.32995,
@@ -52,7 +56,7 @@ COMBO_MIX_L1 = {
     "config.consensus_config.flows_objective_type": "l1",
     "config.consensus_config.solver_flows": "closed_form_l1",
     "config.consensus_config.weights_type": "photograd",
-    "config.estimators_list_path": "src/flowgym/config/estimators/flow/piv_dataset/consensus/mix_list.yaml",
+    "config.estimators_list_path": f"{BASE_CONFIG_FOLDER}/mix_list.yaml",
     "config.experiment_params.baseline_performance": {
         "min_epe": 0.08859,
         "max_epe": 0.24117,
@@ -72,7 +76,7 @@ COMBO_FARNEBACK_HUBER = {
     "config.consensus_config.flows_objective_type": "huber",
     "config.consensus_config.solver_flows": "closed_form_huber",
     "config.consensus_config.weights_type": "photograd",
-    "config.estimators_list_path": "src/flowgym/config/estimators/flow/piv_dataset/consensus/farneback_list.yaml",
+    "config.estimators_list_path": f"{BASE_CONFIG_FOLDER}/farneback_list.yaml",
     "config.experiment_params.baseline_performance": {
         "min_epe": 0.10687,
         "max_epe": 0.32995,
@@ -92,7 +96,7 @@ COMBO_MIX_HUBER = {
     "config.consensus_config.flows_objective_type": "huber",
     "config.consensus_config.solver_flows": "closed_form_huber",
     "config.consensus_config.weights_type": "photograd",
-    "config.estimators_list_path": "src/flowgym/config/estimators/flow/piv_dataset/consensus/mix_list.yaml",
+    "config.estimators_list_path": f"{BASE_CONFIG_FOLDER}/mix_list.yaml",
     "config.experiment_params.baseline_performance": {
         "min_epe": 0.08859,
         "max_epe": 0.24117,
@@ -112,7 +116,7 @@ COMBO_DIS_L1 = {
     "config.consensus_config.flows_objective_type": "l1",
     "config.consensus_config.solver_flows": "closed_form_l1",
     "config.consensus_config.weights_type": "photograd",
-    "config.estimators_list_path": "src/flowgym/config/estimators/flow/piv_dataset/consensus/dis_list.yaml",
+    "config.estimators_list_path": f"{BASE_CONFIG_FOLDER}/dis_list.yaml",
     "config.experiment_params.baseline_performance": {
         "min_epe": 0.08859,
         "max_epe": 0.24117,
@@ -132,7 +136,7 @@ COMBO_DIS_HUBER = {
     "config.consensus_config.flows_objective_type": "huber",
     "config.consensus_config.solver_flows": "closed_form_huber",
     "config.consensus_config.weights_type": "photograd",
-    "config.estimators_list_path": "src/flowgym/config/estimators/flow/piv_dataset/consensus/dis_list.yaml",
+    "config.estimators_list_path": f"{BASE_CONFIG_FOLDER}/dis_list.yaml",
     "config.experiment_params.baseline_performance": {
         "min_epe": 0.08859,
         "max_epe": 0.24117,
@@ -188,7 +192,7 @@ def set_nested_value(
 
 
 def run_sweep():
-    """Run the parameter sweep by modifying the config and launching experiments."""
+    """Run the parameter sweep by modifying the config dynamically."""
     with open(CONFIG_PATH) as f:
         base_config = yaml.safe_load(f)
 

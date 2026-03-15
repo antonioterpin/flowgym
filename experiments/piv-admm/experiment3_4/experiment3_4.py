@@ -1,15 +1,19 @@
 """Script to replicate experiment 3.4 in https://arxiv.org/abs/2512.11695.
 
 This script runs an ablation study over the weights of the flow weights,
-in particular between uniform (here called list), photometric, photograd, and gradient.
+in particular between:
+    - uniform (here called list),
+    - photometric,
+    - photograd,
+    - and gradient.
 
 To run:
     uv run python experiments/piv-admm/experiment3_4/experiment3_4.py
 
 Results are stored in results/experiment3_4.csv
 
-NOTE: This script collects the metrics for both L1 and Huber objective functions, but in the
-paper we only report the results for Huber.
+NOTE: This script collects the metrics for both L1 and Huber
+objective functions, but in the paper we only report the results for Huber.
 """
 
 import copy
@@ -166,7 +170,7 @@ def set_nested_value(
 
 
 def run_sweep():
-    """Run the parameter sweep by modifying the config and launching experiments."""
+    """Run the parameter sweep by modifying the config dynamically."""
     with open(CONFIG_PATH) as f:
         base_config = yaml.safe_load(f)
 
@@ -179,7 +183,8 @@ def run_sweep():
         objective_type = combo["config.consensus_config.flows_objective_type"]
         solver_flows = combo["config.consensus_config.solver_flows"]
         print(
-            f"\n=== Running sweep for weights={regularizer_weights}, flag={flag} ==="
+            f"\n=== Running sweep for weights={regularizer_weights}, "
+            f"flag={flag} ==="
         )
         for val in TAU_VALUES:
             print(f"\n=== {PARAM_KEY} = {val} ===")
