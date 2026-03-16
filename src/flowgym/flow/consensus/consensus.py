@@ -3,6 +3,7 @@
 import csv
 import os
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any, cast
 
 import jax
@@ -19,15 +20,14 @@ from flowgym.flow.consensus.consensus_algorithms import (
     validate_experimental_params,
 )
 from flowgym.flow.consensus.objectives import make_weights
-from flowgym.make import make_estimator
-from flowgym.types import ExperimentParams, PRNGKey
-from flowgym.utils import load_configuration
+from flowgym.types import ExperimentParams
+from flowgym.utils import append_metrics_to_csv, load_configuration
 
-logger = get_logger(__name__)
+logger = get_logger(__name__, with_metrics=True)
 
 
 class ConsensusFlowEstimator(FlowFieldEstimator):
-    """ADMM-based flow field estimator."""
+    """Alternating Direction Method of Multipliers flow field estimator."""
 
     def __init__(
         self,
@@ -36,52 +36,36 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
         consensus_config: dict | None = None,
         use_temporal_propagation: bool = False,
         experiment_params: dict | None = None,
-        rng: PRNGKey | int | None = None,
         **kwargs: Any,
     ) -> None:
-        """Initialize the Distributed DIS estimator.
+        """Initialize the consensus estimator.
 
         Args:
             consensus_algorithm: Consensus algorithm to use.
-            estimators_list_path: Path to the list of estimators.
-            consensus_config: Configuration for the consensus algorithm.
+            estimators_list_path: Path to the YAML file listing estimators.
+            consensus_config: Optional configuration for the
+                consensus algorithm.
             use_temporal_propagation: Whether to use temporal propagation.
-            experiment_params: Experimental parameters.
-            rng: Random number generator key or seed.
-            **kwargs: Additional keyword arguments for the base class.
+            experiment_params: Optional experimental parameters.
+            **kwargs: Additional keyword arguments forwarded to the base class.
 
         Raises:
-            TypeError: If use_temporal_propagation is not a boolean or
-                estimators_list_path is not a string.
-            ValueError: If estimators_list_path doesn't end with .yaml,
-                no estimators are found, or invalid consensus algorithm.
+            ValueError: If required configuration files or values are missing.
         """
-        if not isinstance(use_temporal_propagation, bool):
-            raise TypeError(
-                f"use_temporal_propagation must be a boolean, "
-                f"got {use_temporal_propagation}."
-            )
+        self.counter_logger = 0
         self.use_temporal_propagation = bool(use_temporal_propagation)
 
         # Load the DIS algorithms from the specified path
-        if not isinstance(estimators_list_path, str):
-            msg = "estimators_list_path must be str, "
-            msg += f"got {type(estimators_list_path)}."
-            raise TypeError(msg)
         if not estimators_list_path.endswith(".yaml"):
-            msg = "estimators_list_path must be .yaml, "
-            msg += f"got {estimators_list_path}."
-            raise ValueError(msg)
+            raise ValueError(
+                "estimators_list_path must be a .yaml file, "
+                f"got {estimators_list_path}."
+            )
         estimators_list_config = load_configuration(estimators_list_path)
-
-        if isinstance(rng, int):
-            rng = jax.random.PRNGKey(rng)
 
         # The estimators should take as input the tuple (image, state)
         self.estimator_fns = tuple(
-            self._create_estimators(
-                estimators_list_config["estimators"], rng=rng
-            )
+            self._create_estimators(estimators_list_config["estimators"])
         )
 
         # Check if the number of estimators is valid
@@ -108,14 +92,13 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
 
         for key in self.experiment_params:
             logger.info(
-                f"Experimental parameter: {key}={self.experiment_params[key]}"
+                "Using experimental parameter: "
+                f"{key} = {self.experiment_params[key]}"
             )
 
         super().__init__(**kwargs)
 
-    def _create_estimators(
-        self, configs: list[dict], rng: PRNGKey | None = None
-    ) -> list[Callable]:
+    def _create_estimators(self, configs: list[dict]) -> list[Callable]:
         """Create the list of estimators based on the configurations.
 
         Each estimator should specify a name and the required parameters.
@@ -124,29 +107,32 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
 
         Args:
             configs: List of configurations for each estimator
-            rng: Random number generator key.
 
         Returns:
             List of estimator callables.
         """
+        # Import here to avoid circular dependency
+        from flowgym.make import make_estimator  # noqa: PLC0415
+
         estimators: list[Callable] = []
         for cfg in configs:
-            if rng is not None:
-                rng, subkey = jax.random.split(rng)
-            else:
-                subkey = None
             (trainable_state, _, compute_estimate_fn, _) = make_estimator(
                 model_config=cfg,
                 load_from=cfg.get("load_from"),
-                rng=subkey,
             )
-            trainable_state = cast(EstimatorTrainableState, trainable_state)
 
             def estimator_fn(
-                input, estimator=compute_estimate_fn, ts=trainable_state
+                input: tuple[jnp.ndarray, History],
+                estimator=compute_estimate_fn,
+                ts=trainable_state,
             ) -> tuple[History, dict]:
                 image, state = input
-                state, metrics = estimator(image, state, ts)
+                # Some estimators may be non-trainable and return ``ts=None``.
+                # Cast to ``EstimatorTrainableState`` purely to satisfy static
+                # typing; the runtime call accepts ``None`` as needed.
+                state, metrics = estimator(
+                    image, state, cast(EstimatorTrainableState, ts)
+                )
                 return state, metrics
 
             estimators.append(estimator_fn)
@@ -162,24 +148,28 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
         """Compute the flow field between the two most recent frames.
 
         Args:
-            images: Current batch of frames, shape (B, H, W).
-            state: Contains keys "images" and "estimates",
-                each with shape (B, T, H, W).
-            trainable_state: Unused argument.
-            extras: Additional information.
+            images: Current batch of frames.
+            state: Estimator state containing history
+                (images, estimates, keys, ...).
+            trainable_state: Trainable model state (unused for this estimator).
+            extras: Additional information passed to the estimator.
 
         Returns:
-            Tuple containing flow field of shape (B, H, W, 2),
-            placeholder dict for additional output, and metrics dict
-            from the estimation process.
+            A tuple of (flow, placeholder_dict, metrics) where ``flow`` is the
+            estimated flow field for the batch, ``placeholder_dict`` is a
+            placeholder for additional outputs, and ``metrics`` contains
+            evaluation values collected during estimation.
 
         Raises:
-            ValueError: If oracle masking is requested without oracle=True.
+            ValueError: If experimental configuration requires oracle mode but
+                the estimator was not created as an oracle.
         """
         # Get the most recent images from the state
         prev = state["images"][:, -1, ...]
         curr = images
         metrics = {}
+        experiment_params = self.experiment_params.copy()
+        consensus_config = self.consensus_config.copy()
 
         # Check if the state has a history of estimates
         if not self.use_temporal_propagation:
@@ -200,7 +190,7 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
                 idx: Index of the estimator.
 
             Returns:
-                state, metrics: The computed flow field for the estimator.
+                Tuple of the estimator state and metrics for that estimator.
             """
             # Select the estimator based on the index
             new_state, metrics = lax.switch(
@@ -221,11 +211,15 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
             flows, (1, 0, 2, 3, 4)
         )  # Shape (B, num_estimators, H, W, 2)
 
-        # Experiment 1: Oracle-based masking
-        epe_limit = self.experiment_params.get("epe_limit", None)
+        # Experimental: Oracle-based masking
+        epe_limit = experiment_params.pop("epe_limit", None)
         if epe_limit is not None:
             if not self.is_oracle():
-                raise ValueError("Oracle masking requires oracle=True.")
+                raise ValueError(
+                    "Oracle-based masking requires the estimator "
+                    "to be an oracle. Set oracle=True when initializing "
+                    "the ConsensusFlowEstimator."
+                )
             flow_gt = state["estimates"][:, -1, ...]
             # Compute the EPE for each estimator
             epe = jnp.linalg.norm(
@@ -239,13 +233,46 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
             mask = None
 
         weights = make_weights(
-            flows, prev, curr, self.consensus_config, mask=mask
+            flows, prev, curr, consensus_config, mask=mask
+        )  # Shape (B, num_estimators, H, W)
+
+        if len(self.experiment_params) != 0:
+            # Merge any experimental parameters into the consensus configuration
+            for key, value in experiment_params.items():
+                consensus_config["exp_" + key] = value
+
+        # Experimental: Oracle-based selection of weights
+        oracle_select_weights = experiment_params.pop(
+            "oracle_select_weights", False
         )
+        if oracle_select_weights:
+            if not self.is_oracle():
+                raise ValueError(
+                    "Oracle-based weight selection requires the estimator "
+                    "to be an oracle. Set oracle=True when initializing "
+                    "the ConsensusFlowEstimator."
+                )
+            flow_gt = state["estimates"][:, -1, ...]
+            # Compute the EPE for each estimator
+            epe = jnp.linalg.norm(
+                flows - flow_gt[:, jnp.newaxis, ...], axis=-1
+            )  # Shape (B, num_estimators, H, W)
+            # Get the indices of the best estimators based on EPE
+            best_indices = jnp.argmin(epe, axis=1)  # Shape (B, H, W)
+
+            # one-hot encode the best indices to create weights
+            mask = jax.nn.one_hot(
+                best_indices, num_classes=self.num_estimators
+            )  # Shape (B, H, W, num_estimators)
+            mask = jnp.transpose(
+                mask, (0, 3, 1, 2)
+            )  # Shape (B, num_estimators, H, W)
+            weights *= mask
 
         # Apply the consensus function to combine the flow estimates
         def map_fn(args):
             flows_i, weights_i = args
-            return self.consensus_fn(flows_i, weights_i, self.consensus_config)
+            return self.consensus_fn(flows_i, weights_i, consensus_config)
 
         new_flow, consensus_metrics = jax.lax.map(map_fn, (flows, weights))
 
@@ -256,34 +283,45 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
             metrics[f"consensus_{key}"] = value
 
         # Check if any of the images is all zeros when in experimental mode
-        if len(self.experiment_params) != 0:
+        if self.is_oracle():
             valid = jnp.logical_not(jnp.all(curr == 0, axis=(1, 2)))
             metrics["valid_images"] = valid
+
+            # Compute EPE metrics only for valid images
+            gt = state["estimates"][:, -1, ...]
+            diff = new_flow - gt
             epe = (
-                jnp.linalg.norm(
-                    new_flow - state["estimates"][:, -1, ...], axis=-1
-                )
+                jnp.linalg.norm(diff, axis=-1)
                 * valid[:, jnp.newaxis, jnp.newaxis]
             )
             mean_epes = jnp.mean(epe, axis=(1, 2))
             metrics["epe"] = mean_epes
 
+            # Compute relative error only for valid images
+            num = jnp.linalg.norm(diff, axis=-1) ** 2
+            den = jnp.maximum(jnp.linalg.norm(gt, axis=-1), 0.01) ** 2
+            relative_error = num / den * valid[:, jnp.newaxis, jnp.newaxis]
+            mean_relative_errors = jnp.mean(relative_error, axis=(1, 2))
+            metrics["relative_error"] = mean_relative_errors
+
         return new_flow, {}, metrics
 
     def process_metrics(self, metrics: dict) -> Metrics:
-        """Process and format metrics dictionary.
+        """Process and format metrics collected during evaluation.
+
+        Converts raw numpy/jax arrays into numpy arrays and updates running
+        statistics used by this estimator.
 
         Args:
-            metrics: Raw metrics dictionary.
-
-        Note:
-            Assumption: only the last batch has invalid images.
+            metrics: Raw metrics dictionary produced by ``_estimate``.
 
         Returns:
-            Processed metrics object.
+            A ``Metrics`` object with processed numeric arrays.
 
         Raises:
-            ValueError: If batch size cannot be inferred from metrics.
+            TypeError: If ``log_metrics`` in experiment parameters is not a
+                mapping as expected.
+            ValueError: If the batch size cannot be inferred from the metrics.
         """
         # Try to extract the batch size B from any array in metrics
         B = None
@@ -291,31 +329,33 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
             if isinstance(v, (np.ndarray, jnp.ndarray)) and v.ndim > 0:
                 B = v.shape[0]
                 break
-        if B is None:
+        if B is None and metrics != {}:
             raise ValueError("Could not infer batch size from metrics.")
 
-        self.total_valid_images = (
-            getattr(self, "total_valid_images", 0)
-            + np.sum(metrics["valid_images"])
+        current_valid_count = (
+            np.sum(metrics["valid_images"])
             if "valid_images" in metrics
-            else B
+            else (B if B is not None else 0)
+        )
+        self.total_valid_images = (
+            getattr(self, "total_valid_images", 0) + current_valid_count
         )
 
         # Convert the raw metrics dictionary into a structured Metrics object
         processed_metrics = Metrics()
         for key, value in metrics.items():
             if key != "valid_images":
-                filtered_value = (
+                v = (
                     value[metrics["valid_images"]]
                     if "valid_images" in metrics
                     else value
                 )
-            else:
-                filtered_value = value
+                if isinstance(v, (np.ndarray, jnp.ndarray)):
+                    processed_metrics[key] = np.array(v)
             if key == "oracle_mask":
                 # Calculate the coverage of the oracle mask
                 coverage_map = jnp.any(
-                    filtered_value > 0, axis=1
+                    value > 0, axis=1
                 )  # Shape (jnp.sum(valid), H, W)
                 coverage = jnp.mean(
                     coverage_map, axis=(1, 2)
@@ -358,31 +398,140 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
                 running_mean_epe = getattr(self, "running_mean_epe", 0.0)
                 running_mean_epe = (
                     running_mean_epe
-                    * (self.total_valid_images - filtered_value.shape[0])
-                    + jnp.sum(filtered_value)
+                    * (self.total_valid_images - value.shape[0])
+                    + jnp.sum(value)
                 ) / (self.total_valid_images)
                 self.running_mean_epe = running_mean_epe
 
                 # Update running max EPE
                 running_max_epe = getattr(self, "running_max_epe", 0.0)
-                running_max_epe = max(running_max_epe, jnp.max(filtered_value))
+                running_max_epe = max(running_max_epe, jnp.max(value))
                 self.running_max_epe = running_max_epe
 
                 # Update running min EPE
-                running_min_epe = getattr(self, "running_min_epe", 0.0)
-                running_min_epe = min(running_min_epe, jnp.min(filtered_value))
+                running_min_epe = getattr(self, "running_min_epe", jnp.inf)
+                running_min_epe = min(running_min_epe, jnp.min(value))
                 self.running_min_epe = running_min_epe
+
+            if key == "relative_error":
+                # No running stats for relative error, just store the mean
+                processed_metrics["mean_relative_error"] = np.array(
+                    jnp.mean(value)
+                )
+                processed_metrics[key] = np.array(value)
+
+                # Update running mean relative error
+                running_mean_relative_error = getattr(
+                    self, "running_mean_relative_error", 0.0
+                )
+                running_mean_relative_error = (
+                    running_mean_relative_error
+                    * (self.total_valid_images - value.shape[0])
+                    + jnp.sum(value)
+                ) / (self.total_valid_images)
+                self.running_mean_relative_error = running_mean_relative_error
+
+                # Update running max relative error
+                running_max_relative_error = getattr(
+                    self, "running_max_relative_error", 0.0
+                )
+                running_max_relative_error = max(
+                    running_max_relative_error, jnp.max(value)
+                )
+                self.running_max_relative_error = running_max_relative_error
+
+                # Update running min relative error
+                running_min_relative_error = getattr(
+                    self, "running_min_relative_error", jnp.inf
+                )
+                running_min_relative_error = min(
+                    running_min_relative_error, jnp.min(value)
+                )
+                self.running_min_relative_error = running_min_relative_error
+            if key in [
+                "consensus_final_primal_residuals",
+                "consensus_final_dual_residuals",
+                "consensus_final_eps_pri",
+                "consensus_final_eps_dual",
+                "consensus_final_stopping_time",
+            ]:
+                processed_metrics[key] = np.array(value)
+
+        log_metrics = self.experiment_params.get("log_metrics", {})
+        csv_metrics = {}
+        if not isinstance(log_metrics, dict):
+            raise TypeError(f"log_metrics must be a dict, got {log_metrics}.")
+        for metric_name, log_metric in log_metrics.items():
+            if (
+                log_metric
+                and metric_name in metrics
+                and metric_name != "consensus_stopping_time"
+            ):
+                csv_metrics[metric_name] = metrics[metric_name]
+
+        if len(csv_metrics) > 0:
+            i = getattr(self, "current_batch_index", 0)
+            append_metrics_to_csv(
+                csv_metrics, filename="admm_residuals_new_new.csv", batch_idx=i
+            )
+
+        if "consensus_stopping_time" in metrics:
+            processed_metrics["mean_consensus_stopping_time"] = np.array(
+                jnp.mean(metrics["consensus_stopping_time"])
+            )
+            stopping_time = np.asarray(
+                metrics["consensus_stopping_time"]
+            )  # (B,)
+
+            if stopping_time.ndim != 1:
+                raise ValueError(
+                    "Expected consensus_stopping_time to be 1D (B,), "
+                    f"got {stopping_time.shape}"
+                )
+
+            # Starting index for images in this batch
+            idx: int = getattr(self, "current_batch_index", 0)
+            if B is None:
+                raise ValueError("Batch size must be specified.")
+            start_img = idx * B
+
+            # Global image indices: [start_img, ..., start_img + B - 1]
+            img_idx = np.arange(start_img, start_img + B)
+
+            cols = [
+                img_idx,
+                stopping_time,
+            ]
+            header = [
+                "img_idx",
+                "stopping_time",
+            ]
+
+            data = np.column_stack(cols)
+
+            file_exists = Path("admm_stats_non_iterated.csv").exists()
+            with open("admm_stats_non_iterated.csv", "a", newline="") as f:
+                writer = csv.writer(f)
+                if not file_exists:
+                    writer.writerow(header)
+                writer.writerows(data)
+
         return processed_metrics
 
     def finalize_metrics(self) -> Metrics:
-        """Finalize metrics at the end of evaluation.
+        """Finalize and optionally persist aggregated metrics.
+
+        This method produces a final ``Metrics`` object and, when configured
+        via ``experiment_params['log_path']``, appends a CSV row describing
+        the final aggregated statistics.
 
         Returns:
-            Finalized metrics object.
+            Metrics: Final aggregated metrics for the estimator.
 
         Raises:
-            TypeError: If log_path is not a string or None.
-            ValueError: If log_path doesn't end with .csv.
+            TypeError: If configuration values (for example, ``log_path`` or
+                ``baseline_performance``) have incorrect types.
+            ValueError: If ``log_path`` does not point to a CSV file.
         """
         finalized_metrics = Metrics()
         if hasattr(self, "running_mean_coverage"):
@@ -403,25 +552,118 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
                     f"log_path must be a .csv file, got {log_path}."
                 )
             # Define the row data (use getattr to avoid AttributeError)
+            regularizer_weights = self.consensus_config.get(
+                "regularizer_weights", {}
+            )
+            if any(v > 0 for v in regularizer_weights.values()):
+                regularization = "_".join(
+                    f"{k}-{v}" for k, v in regularizer_weights.items() if v > 0
+                )
+            else:
+                regularization = "none"
             row_data = {
                 "num_estimators": getattr(self, "num_estimators", None),
+                "transformation": getattr(self, "consensus_config", {}).get(
+                    "transformation", None
+                ),
+                "regularization": regularization,
+                "loss": getattr(self, "consensus_config", {}).get(
+                    "flows_objective_type", None
+                ),
+                "weights_type": getattr(self, "consensus_config", {}).get(
+                    "weights_type", None
+                ),
                 "epe_limit": self.experiment_params.get("epe_limit", None),
                 "mean_epe": getattr(self, "running_mean_epe", None),
                 "max_epe": getattr(self, "running_max_epe", None),
                 "min_epe": getattr(self, "running_min_epe", None),
                 "mean_coverage": getattr(self, "running_mean_coverage", None),
                 "max_coverage": getattr(self, "running_max_coverage", None),
+                "min_coverage": getattr(self, "running_min_coverage", None),
+                "mean_relative_error": getattr(
+                    self, "running_mean_relative_error", None
+                ),
+                "max_relative_error": getattr(
+                    self, "running_max_relative_error", None
+                ),
+                "min_relative_error": getattr(
+                    self, "running_min_relative_error", None
+                ),
             }
 
-            # Ensure directory exists
-            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            if "baseline_performance" in self.experiment_params:
+                baseline = self.experiment_params["baseline_performance"]
+                if not isinstance(baseline, dict):
+                    raise TypeError(
+                        f"baseline_performance must be a dict, got {baseline}."
+                    )
+                baseline_mean = baseline.get("mean_epe", None)
+                row_mean = row_data.get("mean_epe", None)
+                if isinstance(baseline_mean, float) and isinstance(
+                    row_mean, float
+                ):
+                    row_data["relative_mean_epe"] = (
+                        row_mean - baseline_mean
+                    ) / baseline_mean
+
+                baseline_max = baseline.get("max_epe", None)
+                row_max = row_data.get("max_epe", None)
+                if isinstance(baseline_max, float) and isinstance(
+                    row_max, float
+                ):
+                    row_data["relative_max_epe"] = (
+                        row_max - baseline_max
+                    ) / baseline_max
+
+                baseline_min = baseline.get("min_epe", None)
+                row_min = row_data.get("min_epe", None)
+                if isinstance(baseline_min, float) and isinstance(
+                    row_min, float
+                ):
+                    row_data["relative_min_epe"] = (
+                        row_min - baseline_min
+                    ) / baseline_min
+
+                baseline_min_rel = baseline.get("min_relative_epe", None)
+                row_min_rel = row_data.get("min_relative_error", None)
+                if isinstance(baseline_min_rel, float) and isinstance(
+                    row_min_rel, float
+                ):
+                    row_data["relative_min_relative_epe"] = (
+                        row_min_rel - baseline_min_rel
+                    ) / baseline_min_rel
+
+                baseline_mean_rel = baseline.get("mean_relative_epe", None)
+                row_mean_rel = row_data.get("mean_relative_error", None)
+                if isinstance(baseline_mean_rel, float) and isinstance(
+                    row_mean_rel, float
+                ):
+                    row_data["relative_mean_relative_epe"] = (
+                        row_mean_rel - baseline_mean_rel
+                    ) / baseline_mean_rel
+
+                baseline_max_rel = baseline.get("max_relative_epe", None)
+                row_max_rel = row_data.get("max_relative_error", None)
+                if isinstance(baseline_max_rel, float) and isinstance(
+                    row_max_rel, float
+                ):
+                    row_data["relative_max_relative_epe"] = (
+                        row_max_rel - baseline_max_rel
+                    ) / baseline_max_rel
+
+            # Ensure directory exists (handle top-level files safely)
+            dir_name = os.path.dirname(log_path)
+            assert dir_name, f"Invalid log_path with no directory: {log_path}"
+            os.makedirs(dir_name, exist_ok=True)
 
             # Check if the CSV already exists
             file_exists = os.path.exists(log_path)
 
             # Append or create CSV
             with open(log_path, mode="a", newline="") as csvfile:
-                writer = csv.DictWriter(csvfile, fieldnames=row_data.keys())
+                # Ensure stable ordering for fieldnames by converting to a list
+                fieldnames = list(row_data.keys())
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
                 # Write header if creating new file
                 if not file_exists:

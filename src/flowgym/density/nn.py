@@ -38,15 +38,10 @@ class NNDensityEstimator(Estimator):
 
         Raises:
             ValueError: If features is empty or norm_fn is not in NormKind.
-            TypeError: If use_residual is not a boolean.
         """
         if not features:
             raise ValueError(
                 f"features must be a non-empty list, got: {features}."
-            )
-        if not isinstance(use_residual, bool):
-            raise TypeError(
-                f"use_residual must be a boolean, got {use_residual}."
             )
         if not isinstance(norm_fn, str) or norm_fn not in NormKind:
             raise ValueError(

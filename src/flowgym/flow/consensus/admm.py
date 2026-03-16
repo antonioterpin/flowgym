@@ -1,120 +1,77 @@
 """ADMM implementation for distributed flow estimation."""
 
-from collections.abc import Callable
-
 import jax
 import jax.numpy as jnp
+from pyparsing import cast
 
 from flowgym.flow.consensus.solvers import (
     SOLVER_CONSENSUS_FACTORY,
     SOLVER_FLOWS_FACTORY,
 )
+from flowgym.flow.consensus.types import (
+    AdmmCarry,
+    ObjectiveFn,
+)
 from flowgym.utils import DEBUG
 
 
-def _compute_stopping_criteria(
-    flows_new: jnp.ndarray,
-    consensus_flow_new: jnp.ndarray,
-    consensus_flow: jnp.ndarray,
-    consensus_dual_new: jnp.ndarray,
-    rho: float,
-    eps_abs: float,
-    eps_rel: float,
-    total_decision_vars: int,
-    N: int,
-) -> tuple[jnp.ndarray, ...]:  # 6-tuple of jnp.ndarray
-    """Compute residuals for ADMM stopping criteria.
-
-    Args:
-        flows_new: Updated flow estimates from different agents.
-        consensus_flow_new: Updated consensus flow estimate.
-        consensus_flow: Previous consensus flow estimate.
-        consensus_dual_new: Updated dual variable for consensus.
-        rho: Penalty parameter for the consensus term.
-        eps_abs: Absolute tolerance for stopping criterion.
-        eps_rel: Relative tolerance for stopping criterion.
-        total_decision_vars: Total number of decision variables.
-        N: Number of agents.
-
-    Returns:
-        Tuple containing primal residual, dual residual, primal epsilon,
-        dual epsilon, flows norm, and consensus norm.
-    """
-    primal_residual = jnp.linalg.norm(flows_new - consensus_flow_new[None, ...])
-    dual_residual = (
-        rho * jnp.sqrt(N) * jnp.linalg.norm(consensus_flow_new - consensus_flow)
-    )
-    flows_norm = jnp.linalg.norm(flows_new)
-    consensus_norm = jnp.sqrt(N) * jnp.linalg.norm(consensus_flow_new)
-    eps_pri = jnp.sqrt(total_decision_vars) * eps_abs + eps_rel * jnp.maximum(
-        flows_norm, consensus_norm
-    )
-    eps_dual = jnp.sqrt(
-        total_decision_vars
-    ) * eps_abs + eps_rel * rho * jnp.linalg.norm(consensus_dual_new)
-    return (
-        primal_residual,
-        dual_residual,
-        eps_pri,
-        eps_dual,
-        flows_norm,
-        consensus_norm,
-    )
-
-
 def run_admm(
-    flows: jnp.ndarray,
+    flows: jax.Array,
     rho: float,
-    objective_fn_flows: Callable[
-        [jnp.ndarray], tuple[jnp.ndarray, jnp.ndarray]
-    ],
+    objective_fn_flows: ObjectiveFn,
     num_iterations_flows: int | None,
     solver_flows: str,
-    objective_fn_z: Callable[
-        [jnp.ndarray, jnp.ndarray, jnp.ndarray, float], jnp.ndarray
-    ],
-    # TODO: should be optional when we have closed-form
+    objective_fn_z: ObjectiveFn,
     num_iterations_consensus: int,
     solver_consensus: str,
     max_admm_iterations: int,
-    eps_abs: float = 1e-4,
-    eps_rel: float = 1e-4,
+    eps_abs: float | None = 1e-4,
+    eps_rel: float | None = 1e-4,
     learning_rate_flows: float = 1e-3,
     learning_rate_consensus: float = 1e-3,
-) -> tuple[jnp.ndarray, dict]:
+    log_metrics: dict[str, bool] | None = None,
+) -> tuple[jax.Array, dict[str, jax.Array]]:
     """Run ADMM algorithm for consensus-based flow estimation.
 
-    This function implements the ADMM algorithm to find a consensus flow
-    estimate from multiple flow estimates provided by different agents.
+    This function implements the ADMM algorithm to find a consensus
+    flow estimate from multiple flow estimates provided by different agents.
 
     Args:
         flows: Array of flow estimates from different agents.
             shape (N, H, W, 2) where N is the number of agents.
         rho: Parameter associated with the augmented Lagrangian.
         objective_fn_flows: Objective function for flow estimates.
+            Objective functions can be partials with varying signatures,
+            thus it accepts any callable.
         num_iterations_flows: Number of iterations for flow optimization.
         solver_flows: Solver to use for flow optimization.
         objective_fn_z: Objective function for consensus variable.
-        num_iterations_consensus: Number of iterations for consensus
-            optimization.
+        num_iterations_consensus: Number of iterations for
+            consensus optimization.
+            TODO: should be optional when we have closed-form
         solver_consensus: Solver to use for consensus optimization.
         max_admm_iterations: Maximum number of ADMM iterations.
         eps_abs: eps absolute for stopping criterion.
         eps_rel: eps relative for stopping criterion.
         learning_rate_flows: Learning rate for flow solver.
         learning_rate_consensus: Learning rate for consensus solver.
+        log_metrics: Dictionary of metrics to log.
 
     Returns:
-        Tuple containing consensus flow estimate after ADMM iterations
-        and metrics dict including final stopping time.
+        jnp.ndarray: Consensus flow estimate after ADMM iterations.
+        dict: Metrics including final stopping time.
 
     Raises:
-        ValueError: If unknown solver name is provided.
+        ValueError: If any of the configuration parameters are invalid.
     """
     # TODO: this could be a different initialization
     # Initialize consensus flow and dual variable
     consensus_flow = jnp.mean(flows, axis=0)  # (H, W, 2)
     consensus_duals = flows - consensus_flow[None, ...]  # (N, H, W, 2)
+
+    # Ensure mutable defaults are initialized locally
+    if log_metrics is None:
+        log_metrics = {}
 
     try:
         optimize_flows = SOLVER_FLOWS_FACTORY[solver_flows](learning_rate_flows)
@@ -141,27 +98,40 @@ def run_admm(
     total_decision_vars = N * vars_per_agent
 
     # Initialize active and stopping time
-    active = True
-    stopping_time = 0
+    active = jnp.array(True)
+    stopping_time = jnp.array(0, dtype=jnp.int32)
 
-    def admm_iteration(i: int, carry: tuple):
+    def admm_iteration(i: int, carry: AdmmCarry) -> AdmmCarry:
         """Perform a single ADMM iteration.
 
         Args:
             i: Current iteration index.
-            carry: Tuple containing flows, consensus_flow, consensus_dual,
-                active flag, and stopping_time.
+            carry: Tuple containing current state of flows, consensus flow,
 
         Returns:
-            Updated carry tuple with new flows, consensus_flow, consensus_dual,
-            active flag, and stopping_time.
+            Updated tuple with new flows, consensus flow,
+            dual variables, active mask, stopping time, and residuals.
         """
-        flows, consensus_flow, consensus_dual, active, stopping_time = carry
+        (
+            flows,
+            consensus_flow,
+            consensus_dual,
+            active,
+            stopping_time,
+            primal_residuals,
+            dual_residuals,
+            epris,
+            eduals,
+        ) = carry
 
         # Only update active elements; others just pass their previous value
 
         # Update flows
-        if solver_flows == "closed_form":
+        if solver_flows in [
+            "closed_form_huber",
+            "closed_form_l1",
+            "closed_form_l2",
+        ]:
             # for closed-form solvers, use jnp.where
             flows_new = optimize_flows(
                 flows,
@@ -190,64 +160,69 @@ def run_admm(
             )
 
         # Update consensus
-        consensus_flow_new = jax.lax.cond(
-            active,
-            lambda _: optimize_consensus(
-                flows_new,
-                consensus_flow,
-                consensus_dual,
-                objective_fn_z,
-                rho,
-                num_iterations_consensus,
+        consensus_flow_new: jax.Array = cast(
+            jax.Array,
+            jax.lax.cond(
+                active,
+                lambda _: optimize_consensus(
+                    flows_new,
+                    consensus_flow,
+                    consensus_dual,
+                    objective_fn_z,
+                    rho,
+                    num_iterations_consensus,
+                ),
+                lambda _: consensus_flow,
+                operand=None,
             ),
-            lambda _: consensus_flow,
-            operand=None,
         )
 
         # Update dual
-        dual_update = flows_new - consensus_flow_new[None, ...]
+        dual_update: jax.Array = flows_new - consensus_flow_new[None, ...]
         # TODO: we should do this with a lax.cond and a lax.map
-        consensus_dual_new = jnp.where(
+        consensus_dual_new: jax.Array = jnp.where(
             active,
             consensus_dual + dual_update,
             consensus_dual,
         )
 
-        if eps_rel is not None and eps_abs is not None:
+        if (eps_rel is not None) and (eps_abs is not None):
             # Apply stopping criteria based on eps_abs and eps_rel
 
             # Stopping conditions (per batch)
-            (
-                primal_residual,
-                dual_residual,
-                eps_pri,
-                eps_dual,
-                flows_norm,
-                consensus_norm,
-            ) = _compute_stopping_criteria(
-                flows_new,
-                consensus_flow_new,
-                consensus_flow,
-                consensus_dual_new,
-                rho,
-                eps_abs,
-                eps_rel,
-                total_decision_vars,
-                N,
+            primal_residual = jnp.linalg.norm(
+                flows_new - consensus_flow_new[None, ...]
             )
+            dual_residual = (
+                rho
+                * jnp.sqrt(N)
+                * jnp.linalg.norm(consensus_flow_new - consensus_flow)
+            )
+            flows_norm = jnp.linalg.norm(flows_new)
+            consensus_norm = jnp.sqrt(N) * jnp.linalg.norm(consensus_flow_new)
+            eps_pri = jnp.sqrt(
+                total_decision_vars
+            ) * eps_abs + eps_rel * jnp.maximum(flows_norm, consensus_norm)
+            eps_dual = jnp.sqrt(
+                total_decision_vars
+            ) * eps_abs + eps_rel * rho * jnp.linalg.norm(consensus_dual_new)
 
             # Update active mask (per batch item)
-            still_active = (primal_residual > eps_pri) | (
+            active_new: jax.Array = (primal_residual > eps_pri) | (
                 dual_residual > eps_dual
             )
-            active_new = active & still_active
 
             # Update stopping time
-            stopping_time_new = jnp.where(
+            stopping_time_new: jax.Array = jnp.where(
                 (active) & (~active_new),  # just became inactive this iter
                 i,  # current loop index
                 stopping_time,  # otherwise keep previous value
             )
+
+            primal_residuals = primal_residuals.at[i].set(primal_residual)
+            dual_residuals = dual_residuals.at[i].set(dual_residual)
+            epris = epris.at[i].set(eps_pri)
+            eduals = eduals.at[i].set(eps_dual)
 
             if DEBUG:
                 jax.debug.print(
@@ -308,31 +283,62 @@ def run_admm(
                 consensus_dual_new,
                 active_new,
                 stopping_time_new,
-            )
-        else:
-            return (
-                flows_new,
-                consensus_flow_new,
-                consensus_dual_new,
-                active,
-                stopping_time,
+                primal_residuals,
+                dual_residuals,
+                epris,
+                eduals,
             )
 
+        return (
+            flows_new,
+            consensus_flow_new,
+            consensus_dual_new,
+            active,
+            stopping_time,
+            primal_residuals,
+            dual_residuals,
+            epris,
+            eduals,
+        )
+
     # Initial carry
-    init_carry = (
+    primal_residuals = jnp.zeros(max_admm_iterations)
+    dual_residuals = jnp.zeros(max_admm_iterations)
+    epris = jnp.zeros(max_admm_iterations)
+    eduals = jnp.zeros(max_admm_iterations)
+    init_carry: AdmmCarry = (
         flows,
         consensus_flow,
         consensus_duals,
         active,
         stopping_time,
+        primal_residuals,
+        dual_residuals,
+        epris,
+        eduals,
     )
 
     final_carry = jax.lax.fori_loop(
         0, max_admm_iterations, admm_iteration, init_carry
     )
 
-    final_flows, final_consensus_flow, _, final_actives, final_stopping_time = (
-        final_carry
+    (
+        final_flows,
+        final_consensus_flow,
+        _,
+        final_actives,
+        final_stopping_time,
+        final_primal_residuals,
+        final_dual_residuals,
+        final_epris,
+        final_eduals,
+    ) = final_carry
+
+    final_stopping_time = jax.lax.cond(
+        final_actives,
+        lambda _: max_admm_iterations,
+        lambda _: final_stopping_time,
+        operand=None,
     )
     if DEBUG:
         jax.debug.print(
@@ -352,5 +358,16 @@ def run_admm(
             jnp.linalg.norm(primal_residual),
         )
 
-    metrics = {"final_stopping_time": final_stopping_time}
+    metrics = {}
+    if log_metrics.get("final_stopping_time", False):
+        metrics["final_stopping_time"] = final_stopping_time
+    if log_metrics.get("final_primal_residuals", False):
+        metrics["final_primal_residuals"] = final_primal_residuals
+    if log_metrics.get("final_dual_residuals", False):
+        metrics["final_dual_residuals"] = final_dual_residuals
+    if log_metrics.get("final_eps_pri", False):
+        metrics["final_eps_pri"] = final_epris
+    if log_metrics.get("final_eps_dual", False):
+        metrics["final_eps_dual"] = final_eduals
+
     return final_consensus_flow, metrics
