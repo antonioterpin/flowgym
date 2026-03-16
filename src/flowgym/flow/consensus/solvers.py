@@ -130,7 +130,7 @@ def closed_form_flows_huber(
     # v = sqrt(p_l) * (b_l - a_l)
     v = sqrt_p * (b - anchor_flows)  # (N,H,W,2)
 
-    # Prox of Huber: prox_{τ φ_δ}(v)
+    # Prox of Huber: prox_{tau huber_delta}(v)
     abs_v = jnp.abs(v)
     threshold = (1.0 + tau) * delta
 

@@ -254,19 +254,13 @@ def flow_magnitude_heatmap(
     mag = np.linalg.norm(flow, axis=-1)  # (H, W)
 
     if maxrad is None:
-        maxrad = np.max(mag) + 1e-6  # avoid divide-by-zero
+        maxrad = float(np.max(mag) + 1e-6)  # avoid divide-by-zero
 
     if minrad is None:
-        minrad = np.min(mag) + 1e-6  # avoid divide-by-zero
-
-    if not isinstance(maxrad, (float, int)):
-        raise ValueError("maxrad must be a float or None.")
-
-    if not isinstance(minrad, (float, int)):
-        raise ValueError("minrad must be a float or None.")
+        minrad = float(np.min(mag) + 1e-6)  # avoid divide-by-zero
 
     norm_mag = np.clip(
-        (mag - minrad) / (maxrad - minrad), 0.0, 1.0
+        (mag - minrad) / (maxrad - minrad + 1e-6), 0.0, 1.0
     )  # Normalize to [0, 1]
 
     # Use a colormap: 'jet' (blue to red)
