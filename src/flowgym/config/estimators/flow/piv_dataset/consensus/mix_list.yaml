@@ -1,0 +1,28 @@
+estimators:
+  - name: Farneback
+    estimator: farneback
+    estimate_type: flow
+    config:
+      pyr_scale: 0.5
+      levels: 1
+      winsize: 15
+      iterations: 17
+      poly_n: 5
+      poly_sigma: 1.2
+
+  - name: DIS
+    estimator: dis_jax
+    estimate_type: flow
+    config:
+      patch_size: 11
+      patch_stride: 2
+      grad_desc_iters: 4
+      start_level: 0
+      levels: 3
+      use_temporal_propagation: false
+
+  - name: DeepFlow
+    estimator: deepflow
+    estimate_type: flow
+    config:
+      jit: false

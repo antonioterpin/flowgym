@@ -1,0 +1,33 @@
+estimators:
+  - name: Farneback0
+    estimator: farneback
+    estimate_type: flow
+    config:
+      pyr_scale: 0.5
+      levels: 1
+      winsize: 20
+      iterations: 12
+      poly_n: 5
+      poly_sigma: 1.2
+
+  - name: Farneback1
+    estimator: farneback
+    estimate_type: flow
+    config:
+      pyr_scale: 0.5
+      levels: 1
+      winsize: 7
+      iterations: 2
+      poly_n: 5
+      poly_sigma: 1.2
+
+  - name: Farneback2
+    estimator: farneback
+    estimate_type: flow
+    config:
+      pyr_scale: 0.5
+      levels: 1
+      winsize: 7
+      iterations: 5
+      poly_n: 2
+      poly_sigma: 0.7
