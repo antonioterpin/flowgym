@@ -98,7 +98,7 @@ def total_regularization_loss(
         weights: Weights for each regularizer.
 
     Returns:
-        Total regularization loss as a scalar.
+        jnp.ndarray: Total regularization loss as a scalar.
     """
     total = 0.0
     for name in regularizers:
