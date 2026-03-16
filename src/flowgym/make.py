@@ -212,7 +212,7 @@ def save_estimator(
             # Flatten Composite args to root level for atomic saving
             # of (state, sampler, grain) side-by-side.
             save_args.update(
-                sampler_args.items()  # pyright: ignore[reportAttributeAccessIssue]
+                cast(dict[str, ocp.args.CheckpointArgs], sampler_args).items()
             )
         except Exception as e:
             logger.warning(f"Failed to prepare sampler checkpoint args: {e}")

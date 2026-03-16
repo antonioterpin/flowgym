@@ -39,11 +39,8 @@ def intensity_capping_validate_params(n: float):
         n: Number of standard deviations used for capping.
 
     Raises:
-        TypeError: If `n` is not numeric.
         ValueError: If `n` is not positive.
     """
-    if not isinstance(n, (int, float)):
-        raise TypeError(f"n must be a number, got {type(n)}")
     if n <= 0:
         raise ValueError(f"n must be positive, got {n}")
 
@@ -74,11 +71,8 @@ def intensity_clipping_validate_params(n: float):
         n: Number of standard deviations used for clipping.
 
     Raises:
-        TypeError: If `n` is not numeric.
         ValueError: If `n` is not positive.
     """
-    if not isinstance(n, (int, float)):
-        raise TypeError(f"n must be a number, got {type(n)}")
     if n <= 0:
         raise ValueError(f"n must be positive, got {n}")
 
@@ -113,23 +107,11 @@ def clahe_validate_params(
         nbins: Number of bins for the histogram.
 
     Raises:
-        TypeError: If argument types are invalid.
         ValueError: If numeric values are outside valid ranges.
     """
-    if not isinstance(clip_limit, (int, float)):
-        raise TypeError(f"clip_limit must be a number, got {type(clip_limit)}")
     if clip_limit <= 0:
         raise ValueError(f"clip_limit must be positive, got {clip_limit}")
     if tile_grid_size is not None:
-        if not isinstance(tile_grid_size, tuple):
-            raise TypeError(
-                f"tile_grid_size must be a tuple, got {type(tile_grid_size)}"
-            )
-        if len(tile_grid_size) != 2:
-            raise ValueError(
-                "tile_grid_size must be a tuple of length 2, got "
-                f"{len(tile_grid_size)}"
-            )
         if not all(isinstance(x, int) and x > 0 for x in tile_grid_size):
             raise ValueError(
                 "tile_grid_size must contain positive integers, got "
@@ -158,6 +140,8 @@ def clahe(
     Returns:
         Processed images with enhanced contrast.
     """
+    # Import here to avoid heavy dependency on skimage
+    # for users who don't use CLAHE
     from skimage import exposure  # noqa: PLC0415
 
     # stretch contrast first
@@ -190,15 +174,10 @@ def high_pass_filter_validate_params(sigma: float, truncate: float = 4.0):
         truncate: Kernel truncation factor.
 
     Raises:
-        TypeError: If argument types are invalid.
         ValueError: If numeric values are outside valid ranges.
     """
-    if not isinstance(sigma, (int, float)):
-        raise TypeError(f"sigma must be a number, got {type(sigma)}")
     if sigma <= 0:
         raise ValueError(f"sigma must be positive, got {sigma}")
-    if not isinstance(truncate, (int, float)):
-        raise TypeError(f"truncate must be a number, got {type(truncate)}")
     if truncate <= 0:
         raise ValueError(f"truncate must be positive, got {truncate}")
 
@@ -234,11 +213,8 @@ def background_suppression_validate_params(
         threshold: Background suppression factor.
 
     Raises:
-        TypeError: If `threshold` is not numeric.
         ValueError: If `threshold` is negative.
     """
-    if not isinstance(threshold, (int, float)):
-        raise TypeError(f"threshold must be a number, got {type(threshold)}")
     if threshold < 0:
         raise ValueError(f"threshold must be non-negative, got {threshold}")
 

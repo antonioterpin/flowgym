@@ -129,12 +129,6 @@ def build_target_transform_from_config(
     if config is None:
         return _identity
 
-    if not isinstance(config, dict):
-        config_type = type(config).__name__
-        raise TypeError(
-            f"Target transform config must be a dictionary; got {config_type}"
-        )
-
     if "pipeline" in config:
         pipeline = config["pipeline"]
         if not isinstance(pipeline, (list, tuple)):
