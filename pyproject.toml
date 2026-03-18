@@ -91,7 +91,7 @@ docs = [
 other_methods = [
     "pyoptflow",
     "openpiv",
-    "opencv-python-headless",
+    "opencv-contrib-python-headless",
     "torch>=1.13.1",
     "torchvision>=0.14.1",
 ]

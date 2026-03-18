@@ -1,0 +1,47 @@
+config:
+  Experimental parameters: null
+  consensus_algorithm: admm
+  consensus_config:
+    eps_abs_stopping: 1e-6
+    eps_rel_stopping: 1e-6
+    flows_objective_type: l1
+    learning_rate_consensus: 0.01
+    max_admm_iterations: 30
+    normalization: none
+    num_iterations_consensus: 30
+    patch_size: 7
+    regularizer_list:
+    - smoothness
+    - divergence
+    - laplacian
+    regularizer_weights:
+      divergence: 600.0
+      laplacian: 5.0
+      smoothness: 0.0
+    rho: 2.0
+    solver_consensus: adam
+    solver_flows: closed_form_l1
+    transformation: null
+    weights:
+    - 1.0
+    - 1.0
+    - 1.0
+    weights_type: list
+  estimators_list_path: src/flowgym/config/estimators/flow/piv_dataset/consensus/dis_list.yaml
+  experiment_params:
+    baseline_performance:
+      max_epe: 0.29685
+      max_relative_epe: 54.52153
+      mean_epe: 0.15436
+      mean_relative_epe: 14.46254
+      min_epe: 0.08331
+      min_relative_epe: 0.04412
+    epe_limit: 0.3
+    log_path: results/experiment3_3.csv
+  jit: true
+  oracle: true
+  postprocess: src/flowgym/config/estimators/post-processing/common.yaml
+  preprocess: src/flowgym/config/estimators/pre-processing/common.yaml
+  use_temporal_propagation: true
+estimate_type: flow
+estimator: consensus
