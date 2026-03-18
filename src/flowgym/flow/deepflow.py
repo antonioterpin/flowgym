@@ -1,5 +1,6 @@
 """Module that implements DeepFlow for use in the Estimator framework."""
 
+from collections.abc import Callable
 from typing import Any
 
 import cv2
@@ -19,8 +20,53 @@ class DeepFlowEstimator(FlowFieldEstimator):
         Args:
             **kwargs: Additional arguments passed to FlowFieldEstimator.
         """
-        self.est = cv2.optflow.createOptFlow_DeepFlow()  # pyright: ignore[reportAttributeAccessIssue]
+        self.est = self._create_deepflow()
         super().__init__(**kwargs)
+
+    @staticmethod
+    def _create_deepflow() -> Any:
+        """Create a DeepFlow estimator across OpenCV API layouts.
+
+        Returns:
+            OpenCV DeepFlow estimator instance.
+
+        Raises:
+            ImportError: If DeepFlow cannot be created from the
+                installed OpenCV.
+        """
+        factories: list[tuple[str, Callable[[], Any] | None]] = [
+            (
+                "cv2.optflow.createOptFlow_DeepFlow",
+                getattr(
+                    getattr(cv2, "optflow", None),
+                    "createOptFlow_DeepFlow",
+                    None,
+                ),
+            ),
+            (
+                "cv2.createOptFlow_DeepFlow",
+                getattr(cv2, "createOptFlow_DeepFlow", None),
+            ),
+            (
+                "cv2.legacy.createOptFlow_DeepFlow",
+                getattr(
+                    getattr(cv2, "legacy", None),
+                    "createOptFlow_DeepFlow",
+                    None,
+                ),
+            ),
+        ]
+        for _, factory in factories:
+            if callable(factory):
+                return factory()
+
+        available = ", ".join(path for path, _ in factories)
+        raise ImportError(
+            "DeepFlow requires OpenCV contrib modules. None of these factories "
+            "were found: "
+            f"{available}. Install 'opencv-contrib-python-headless' "
+            "and ensure 'opencv-python-headless' is not shadowing it."
+        )
 
     def _estimate(
         self, image: jnp.ndarray, state: History, _, __
