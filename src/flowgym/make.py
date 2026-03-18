@@ -536,10 +536,19 @@ def make_estimator(
         dummy_estimates = None
     else:
         dummy_estimates = jnp.zeros(estimate_shape, dtype=jnp.float32)
+    use_jit = model_config["config"].get("jit", False) and not DEBUG
+    if use_jit and not model.supports_jit():
+        logger.warning(
+            "Disabling JIT for estimator "
+            f"{model_config['estimator']}: "
+            "non-jittable code path detected."
+        )
+        use_jit = False
+
     create_state_fn, compute_estimate_fn = compile_model(
         model,
         dummy_estimates,
-        model_config["config"].get("jit", False) and not DEBUG,
+        use_jit,
         history_size=model_config["config"].get("history_size", 1),
     )
     logger.info("Model compiled successfully.")

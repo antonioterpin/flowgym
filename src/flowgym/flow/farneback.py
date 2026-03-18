@@ -66,6 +66,10 @@ class FarnebackEstimator(FlowFieldEstimator):
 
         super().__init__(**kwargs)
 
+    def supports_jit(self) -> bool:
+        """Farneback relies on OpenCV/NumPy and cannot run under JAX tracing."""
+        return False
+
     def _estimate(
         self, image: jnp.ndarray, state: History, _, __
     ) -> tuple[jnp.ndarray, dict, dict]:

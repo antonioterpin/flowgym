@@ -64,9 +64,16 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
         estimators_list_config = load_configuration(estimators_list_path)
 
         # The estimators should take as input the tuple (image, state)
-        self.estimator_fns = tuple(
-            self._create_estimators(estimators_list_config["estimators"])
+        estimator_fns, inner_estimators_support_jit = self._create_estimators(
+            estimators_list_config["estimators"]
         )
+        self.estimator_fns = tuple(estimator_fns)
+        self._inner_estimators_support_jit = inner_estimators_support_jit
+        if not self._inner_estimators_support_jit:
+            logger.warning(
+                "ConsensusFlowEstimator contains non-jittable inner "
+                "estimators; using Python-loop execution for sub-estimators."
+            )
 
         # Check if the number of estimators is valid
         if len(self.estimator_fns) == 0:
@@ -98,7 +105,9 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
 
         super().__init__(**kwargs)
 
-    def _create_estimators(self, configs: list[dict]) -> list[Callable]:
+    def _create_estimators(
+        self, configs: list[dict]
+    ) -> tuple[list[Callable], bool]:
         """Create the list of estimators based on the configurations.
 
         Each estimator should specify a name and the required parameters.
@@ -109,17 +118,24 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
             configs: List of configurations for each estimator
 
         Returns:
-            List of estimator callables.
+            List of estimator callables and whether all estimators support JIT.
         """
         # Import here to avoid circular dependency
         from flowgym.make import make_estimator  # noqa: PLC0415
 
         estimators: list[Callable] = []
+        supports_jit = True
         for cfg in configs:
-            (trainable_state, _, compute_estimate_fn, _) = make_estimator(
+            (
+                trainable_state,
+                _,
+                compute_estimate_fn,
+                estimator_model,
+            ) = make_estimator(
                 model_config=cfg,
                 load_from=cfg.get("load_from"),
             )
+            supports_jit = supports_jit and estimator_model.supports_jit()
 
             def estimator_fn(
                 input: tuple[jnp.ndarray, History],
@@ -136,7 +152,11 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
                 return state, metrics
 
             estimators.append(estimator_fn)
-        return estimators
+        return estimators, supports_jit
+
+    def supports_jit(self) -> bool:
+        """Consensus is jittable only if all inner estimators are jittable."""
+        return self._inner_estimators_support_jit
 
     def _estimate(
         self,
@@ -179,29 +199,51 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
             )
 
         # Prepare the input state for estimators
-        input_state = state
-        input_state["keys"] = state["keys"][:, jnp.newaxis, :]
-
-        # Compute the flow fields using all available algorithms
-        def single_estimator(idx: int):
-            """Compute the flow field batch for a single estimator.
-
-            Args:
-                idx: Index of the estimator.
-
-            Returns:
-                Tuple of the estimator state and metrics for that estimator.
-            """
-            # Select the estimator based on the index
-            new_state, metrics = lax.switch(
-                idx, self.estimator_fns, (curr, input_state)
+        input_state = dict(state)
+        if "keys" in state:
+            # Inner estimators expect keys with shape (B, 1, 2).
+            keys = state["keys"]
+            input_state["keys"] = (
+                keys if keys.ndim == 3 else keys[:, jnp.newaxis, :]
             )
 
-            return new_state, metrics
+        metrics_per_estimator: list[dict[str, jnp.ndarray]]
+        if self._inner_estimators_support_jit:
+            # Compute the flow fields using all available algorithms.
+            def single_estimator(idx: int):
+                """Compute the flow field batch for a single estimator.
 
-        states, metrices = lax.map(
-            single_estimator, jnp.arange(self.num_estimators)
-        )
+                Args:
+                    idx: Index of the estimator.
+
+                Returns:
+                    Tuple of the estimator state and metrics for that estimator.
+                """
+                # Select the estimator based on the index
+                new_state, est_metrics = lax.switch(
+                    idx, self.estimator_fns, (curr, input_state)
+                )
+                return new_state, est_metrics
+
+            states, metrices = lax.map(
+                single_estimator, jnp.arange(self.num_estimators)
+            )
+            metrics_per_estimator = [
+                {k: v[idx] for k, v in metrices.items()}
+                for idx in range(self.num_estimators)
+            ]
+        else:
+            # Non-jittable estimators (e.g., OpenCV baselines) must run in
+            # eager Python to avoid tracing NumPy conversions.
+            state_list = []
+            metrics_per_estimator = []
+            for estimator_fn in self.estimator_fns:
+                new_state, est_metrics = estimator_fn((curr, input_state))
+                state_list.append(new_state)
+                metrics_per_estimator.append(est_metrics)
+            states = jax.tree_util.tree_map(
+                lambda *xs: jnp.stack(xs, axis=0), *state_list
+            )
 
         # Extract the flow fields from the states
         flows = states["estimates"][
@@ -276,7 +318,7 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
 
         new_flow, consensus_metrics = jax.lax.map(map_fn, (flows, weights))
 
-        for idx, met in enumerate(metrices):
+        for idx, met in enumerate(metrics_per_estimator):
             for key, value in met.items():
                 metrics[f"estimator_{idx}_{key}"] = value
         for key, value in consensus_metrics.items():

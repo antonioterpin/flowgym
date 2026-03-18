@@ -585,6 +585,15 @@ class Estimator(abc.ABC):
         """
         return self._oracle
 
+    def supports_jit(self) -> bool:
+        """Return whether this estimator can be safely JIT-compiled.
+
+        Estimators implemented with NumPy/OpenCV/PyTorch code paths should
+        override this and return ``False`` so callers can disable JIT and
+        avoid tracing errors.
+        """
+        return True
+
     @classmethod
     def get_init_param_names(cls) -> set[str]:
         """Get `__init__` parameters from the class and its parents.
