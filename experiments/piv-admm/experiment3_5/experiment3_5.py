@@ -35,6 +35,9 @@ RUN_CMD = [
 CUDA_VISIBLE_DEVICES = "1"
 GOGGLES_PORT = "2405"
 # ======================
+TOP_LEVEL_POSTPROCESS = (
+    "src/flowgym/config/estimators/post-processing/common.yaml"
+)
 
 BASE_CONSENSUS = {
     "name": "dis_huber",
@@ -182,10 +185,35 @@ def set_nested_value(d: dict, dotted_key: str, value: Any) -> None:
     d[keys[-1]] = value
 
 
+def inject_sub_estimator_postprocess(
+    estimators_cfg: dict[str, Any],
+    postprocess_cfg: str | list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Attach postprocessing to each sub-estimator configuration."""
+    out = copy.deepcopy(estimators_cfg)
+    estimators = out.get("estimators", [])
+    if not isinstance(estimators, list):
+        raise ValueError(
+            "estimators list must be present in estimators config."
+        )
+
+    for estimator_cfg in estimators:
+        est_config = estimator_cfg.setdefault("config", {})
+        if not isinstance(est_config, dict):
+            raise ValueError(
+                f"Estimator config must be a dict, got {type(est_config)}."
+            )
+        est_config["postprocess"] = postprocess_cfg
+
+    return out
+
+
 def run_sweep() -> None:
     """Run all non-oracle outlier-rejection configurations."""
     with open(CONFIG_PATH) as f:
         base_config = yaml.safe_load(f)
+    with open(BASE_CONSENSUS["config.estimators_list_path"]) as f:
+        base_estimators_cfg = yaml.safe_load(f)
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -204,10 +232,26 @@ def run_sweep() -> None:
             "config.experiment_params.oracle_select_weights",
             False,
         )
+        # Keep top-level consensus postprocessing disabled.
         set_nested_value(
             cfg,
             "config.postprocess",
+            TOP_LEVEL_POSTPROCESS,
+        )
+        # Inject outlier rejection into each sub-estimator instead.
+        estimators_with_postprocess = inject_sub_estimator_postprocess(
+            base_estimators_cfg,
             outlier["config.postprocess"],
+        )
+        temp_estimators_path = (
+            CONFIG_PATH.parent / f"temp_estimators__{outlier['name']}.yaml"
+        )
+        with open(temp_estimators_path, "w") as f:
+            yaml.safe_dump(estimators_with_postprocess, f)
+        set_nested_value(
+            cfg,
+            "config.estimators_list_path",
+            str(temp_estimators_path),
         )
 
         result_path = (
@@ -230,6 +274,10 @@ def run_sweep() -> None:
         cmd = RUN_CMD.copy()
         cmd[cmd.index(str(CONFIG_PATH))] = str(temp_path)
 
+        print(
+            "Injecting postprocess at sub-estimator level for "
+            f"scheme={outlier['name']}"
+        )
         print(f"\n=== Running outlier scheme: {outlier['name']} ===")
         subprocess.run(
             [
@@ -243,6 +291,7 @@ def run_sweep() -> None:
         )
 
         temp_path.unlink(missing_ok=True)
+        temp_estimators_path.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":
