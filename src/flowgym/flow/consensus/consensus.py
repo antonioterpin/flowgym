@@ -158,6 +158,63 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
         """Consensus is jittable only if all inner estimators are jittable."""
         return self._inner_estimators_support_jit
 
+    def _build_weight_mask_from_estimator_metrics(
+        self,
+        metrics_per_estimator: list[dict[str, jnp.ndarray]],
+        flows_shape: tuple[int, ...],
+    ) -> tuple[jnp.ndarray | None, jnp.ndarray | None]:
+        """Build consensus keep/reject masks from estimator outlier metrics.
+
+        The expected estimator metric is ``postprocess_combined_rejected_mask``
+        with shape ``(B, H, W)`` and boolean semantics where True means
+        rejected/outlier.
+
+        Args:
+            metrics_per_estimator: Metrics emitted by each sub-estimator.
+            flows_shape: Shape of the batched flow tensor ``(B, N, H, W, 2)``.
+
+        Returns:
+            Tuple ``(keep_mask, rejected_mask)`` with shape ``(B, N, H, W)``
+            each, or ``(None, None)`` when no rejection mask is available.
+        """
+        if len(flows_shape) != 5:
+            raise ValueError(
+                f"flows_shape must be (B, N, H, W, 2), got {flows_shape}."
+            )
+        B, N, H, W, _ = flows_shape
+        if N != self.num_estimators:
+            raise ValueError(
+                f"Expected {self.num_estimators} estimators, got {N}."
+            )
+
+        rejected_masks: list[jnp.ndarray] = []
+        has_any_rejection_mask = False
+        for idx in range(self.num_estimators):
+            estimator_metrics = metrics_per_estimator[idx]
+            rejected = estimator_metrics.get(
+                "postprocess_combined_rejected_mask"
+            )
+            if rejected is None:
+                rejected_masks.append(jnp.zeros((B, H, W), dtype=jnp.bool_))
+                continue
+
+            rejected = rejected.astype(jnp.bool_)
+            if rejected.shape != (B, H, W):
+                raise ValueError(
+                    "postprocess_combined_rejected_mask must have shape "
+                    f"(B, H, W)=({B}, {H}, {W}), got {rejected.shape} "
+                    f"for estimator {idx}."
+                )
+            has_any_rejection_mask = True
+            rejected_masks.append(rejected)
+
+        if not has_any_rejection_mask:
+            return None, None
+
+        rejected_mask = jnp.stack(rejected_masks, axis=1)  # (B, N, H, W)
+        keep_mask = jnp.logical_not(rejected_mask)
+        return keep_mask, rejected_mask
+
     def _estimate(
         self,
         images: jnp.ndarray,
@@ -274,6 +331,31 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
         else:
             mask = None
 
+        # Non-oracle rejection mask coming from sub-estimator postprocessing.
+        subestimator_keep_mask, subestimator_rejected_mask = (
+            self._build_weight_mask_from_estimator_metrics(
+                metrics_per_estimator, flows.shape
+            )
+        )
+        if subestimator_keep_mask is not None:
+            rejected_frac = jnp.mean(
+                subestimator_rejected_mask.astype(jnp.float32), axis=(2, 3)
+            )  # (B, N)
+            for idx in range(self.num_estimators):
+                metrics[f"estimator_{idx}_postprocess_rejected_percentage"] = (
+                    rejected_frac[:, idx] * 100.0
+                )
+
+        # Combine all masks into one keep-mask used by weight computation.
+        if mask is not None:
+            oracle_keep_mask = mask > 0
+            if subestimator_keep_mask is not None:
+                mask = jnp.logical_and(oracle_keep_mask, subestimator_keep_mask)
+            else:
+                mask = oracle_keep_mask
+        else:
+            mask = subestimator_keep_mask
+
         weights = make_weights(
             flows, prev, curr, consensus_config, mask=mask
         )  # Shape (B, num_estimators, H, W)
@@ -320,6 +402,10 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
 
         for idx, met in enumerate(metrics_per_estimator):
             for key, value in met.items():
+                if key == "postprocess_combined_rejected_mask":
+                    # Internal helper for consensus weighting; avoid logging the
+                    # full (B, H, W) mask in global metrics.
+                    continue
                 metrics[f"estimator_{idx}_{key}"] = value
         for key, value in consensus_metrics.items():
             metrics[f"consensus_{key}"] = value
@@ -490,6 +576,27 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
                     running_min_relative_error, jnp.min(value)
                 )
                 self.running_min_relative_error = running_min_relative_error
+            if key.endswith("_rejected_percentage"):
+                if isinstance(v, (np.ndarray, jnp.ndarray)):
+                    rejected_values = np.asarray(v).reshape(-1)
+                    finite = np.isfinite(rejected_values)
+                    if np.any(finite):
+                        rejected_sum = getattr(
+                            self, "running_rejected_percentage_sum", {}
+                        )
+                        rejected_count = getattr(
+                            self, "running_rejected_percentage_count", {}
+                        )
+                        rejected_sum[key] = rejected_sum.get(
+                            key, 0.0
+                        ) + float(np.sum(rejected_values[finite]))
+                        rejected_count[key] = rejected_count.get(
+                            key, 0
+                        ) + int(np.sum(finite))
+                        self.running_rejected_percentage_sum = rejected_sum
+                        self.running_rejected_percentage_count = (
+                            rejected_count
+                        )
             if key in [
                 "consensus_final_primal_residuals",
                 "consensus_final_dual_residuals",
@@ -560,6 +667,38 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
 
         return processed_metrics
 
+    def _get_estimator_rejected_percentages(self) -> dict[str, float]:
+        """Get mean rejected percentages aggregated per estimator."""
+        rejected_sum = getattr(self, "running_rejected_percentage_sum", {})
+        rejected_count = getattr(
+            self, "running_rejected_percentage_count", {}
+        )
+        if not rejected_sum or not rejected_count:
+            return {}
+
+        estimator_values: dict[int, list[float]] = {}
+        for key, total in rejected_sum.items():
+            count = rejected_count.get(key, 0)
+            if count <= 0:
+                continue
+
+            parts = key.split("_", 2)
+            if len(parts) < 3 or parts[0] != "estimator":
+                continue
+
+            try:
+                estimator_idx = int(parts[1])
+            except ValueError:
+                continue
+
+            estimator_values.setdefault(estimator_idx, []).append(total / count)
+
+        return {
+            f"estimator_{idx}_mean_rejected_percentage": float(np.mean(values))
+            for idx, values in sorted(estimator_values.items())
+            if len(values) > 0
+        }
+
     def finalize_metrics(self) -> Metrics:
         """Finalize and optionally persist aggregated metrics.
 
@@ -582,6 +721,9 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
             )
         if hasattr(self, "running_mean_epe"):
             finalized_metrics["mean_epe"] = np.array(self.running_mean_epe)
+        estimator_rejected = self._get_estimator_rejected_percentages()
+        for metric_name, metric_value in estimator_rejected.items():
+            finalized_metrics[metric_name] = np.array(metric_value)
 
         log_path = self.experiment_params.get("log_path", None)
         if not isinstance(log_path, (type(None), str)):
@@ -632,6 +774,7 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
                     self, "running_min_relative_error", None
                 ),
             }
+            row_data.update(estimator_rejected)
 
             if "baseline_performance" in self.experiment_params:
                 baseline = self.experiment_params["baseline_performance"]

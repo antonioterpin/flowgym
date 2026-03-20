@@ -16,6 +16,12 @@ from flowgym.flow.postprocess import apply_postprocessing, validate_params
 from flowgym.utils import DEBUG
 
 logger = get_logger(__name__)
+OUTLIER_REJECTION_STEPS = {
+    "constant_threshold_filter",
+    "adaptive_global_filter",
+    "adaptive_local_filter",
+    "universal_median_test",
+}
 
 
 class FlowFieldEstimator(Estimator):
@@ -109,18 +115,53 @@ class FlowFieldEstimator(Estimator):
                 # If no postprocessing steps are defined, return the flow as is.
                 return flow_field, out_extras, metrics
             valid = jnp.ones_like(flow_field[..., 0], dtype=jnp.bool_)
-            for step in self.postprocessing_steps:
+            combined_rejected_mask: jnp.ndarray | None = None
+            for idx, step in enumerate(self.postprocessing_steps):
+                step_name = step.keywords.get("name", f"step_{idx}")
                 flow_field, valid, state = step(
                     flow=flow_field, valid=valid, state=state
                 )
+                if valid is not None:
+                    # NOTE: current validation steps return a boolean mask where
+                    # True marks rejected/outlier pixels.
+                    outlier_frac = jnp.mean(
+                        valid.astype(jnp.float32), axis=(1, 2)
+                    )
+                    metric_prefix = (
+                        f"postprocess_{step_name}_{idx}_outlier_percentage"
+                    )
+                    metrics[metric_prefix] = outlier_frac * 100.0
+
+                    if step_name in OUTLIER_REJECTION_STEPS:
+                        metrics[
+                            f"postprocess_{step_name}_{idx}_rejected_percentage"
+                        ] = (outlier_frac * 100.0)
+                        if combined_rejected_mask is None:
+                            combined_rejected_mask = valid.astype(jnp.bool_)
+                        else:
+                            combined_rejected_mask = jnp.logical_or(
+                                combined_rejected_mask, valid.astype(jnp.bool_)
+                            )
+
                 if DEBUG:
                     logger.debug(
                         f"Flow field shape after filtering: {flow_field.shape}"
                     )
                     n_outliers = jnp.mean(jnp.sum(valid, axis=(1, 2)))
+                    outlier_pct = jnp.mean(
+                        jnp.mean(valid.astype(jnp.float32), axis=(1, 2)) * 100.0
+                    )
                     logger.debug(
                         f"Average number of outliers per field: {n_outliers}"
                     )
+                    logger.debug(
+                        f"Average outlier percentage after "
+                        f"{step_name}: {outlier_pct:.4f}%"
+                    )
+            if combined_rejected_mask is not None:
+                metrics["postprocess_combined_rejected_mask"] = (
+                    combined_rejected_mask
+                )
             return flow_field, out_extras, metrics
 
         return call
