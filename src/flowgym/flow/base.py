@@ -122,9 +122,9 @@ class FlowFieldEstimator(Estimator):
                     flow=flow_field, valid=valid, state=state
                 )
                 if valid is not None:
-                    # NOTE: current validation steps return a boolean mask where
-                    # True marks rejected/outlier pixels.
-                    outlier_frac = jnp.mean(
+                    # NOTE: validation steps return a boolean mask where
+                    # True marks valid/inlier pixels, False marks rejected/outlier.
+                    outlier_frac = 1.0 - jnp.mean(
                         valid.astype(jnp.float32), axis=(1, 2)
                     )
                     metric_prefix = (
@@ -137,10 +137,10 @@ class FlowFieldEstimator(Estimator):
                             f"postprocess_{step_name}_{idx}_rejected_percentage"
                         ] = (outlier_frac * 100.0)
                         if combined_rejected_mask is None:
-                            combined_rejected_mask = valid.astype(jnp.bool_)
+                            combined_rejected_mask = jnp.logical_not(valid.astype(jnp.bool_))
                         else:
                             combined_rejected_mask = jnp.logical_or(
-                                combined_rejected_mask, valid.astype(jnp.bool_)
+                                combined_rejected_mask, jnp.logical_not(valid.astype(jnp.bool_))
                             )
 
                 if DEBUG:

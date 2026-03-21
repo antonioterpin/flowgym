@@ -54,7 +54,7 @@ def constant_threshold_filter(
     """
     mag = jnp.linalg.norm(flow_field, axis=-1)
     valid = valid if valid is not None else jnp.ones(mag.shape, dtype=bool)
-    return flow_field, valid & ((mag < vel_min) | (mag > vel_max)), state
+    return flow_field, valid & ~((mag < vel_min) | (mag > vel_max)), state
 
 
 def adaptive_global_filter_validate_params(n_sigma: float):
@@ -99,7 +99,7 @@ def adaptive_global_filter(
     lo = mu - n_sigma * sigma
     hi = mu + n_sigma * sigma
     valid = valid if valid is not None else jnp.ones(mag.shape, dtype=bool)
-    return flow_field, ((mag < lo) | (mag > hi)) & valid, state
+    return flow_field, valid & ~((mag < lo) | (mag > hi)), state
 
 
 def adaptive_local_filter_validate_params(
@@ -193,8 +193,7 @@ def adaptive_local_filter(
     # if outside the bounds, mark as outlier
     return (
         flow_field,
-        jnp.squeeze((centers < lower_bound) | (centers > upper_bound), axis=-1)
-        & valid,
+        valid & ~jnp.squeeze((centers < lower_bound) | (centers > upper_bound), axis=-1),
         state,
     )
 
@@ -292,6 +291,6 @@ def universal_median_test(
 
     return (
         flow_field,
-        jnp.any(r0 > r_threshold, axis=-1) & valid,
+        valid & ~jnp.any(r0 > r_threshold, axis=-1),
         state,
     )
