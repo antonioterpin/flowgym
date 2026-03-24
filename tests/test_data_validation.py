@@ -77,16 +77,18 @@ def test_constant_threshold_filter_batch(
         # check that the mask has no NaNs
         assert not jnp.isnan(mask[b]).any(), f"Mask contains NaNs for batch {b}"
 
-        # check that all the True values in the mask correspond to outliers
+        # check that all the True values in the mask correspond to inliers
         mag = jnp.linalg.norm(flow_field[b], axis=-1)
-        assert jnp.all((mag[mask[b]] < vel_min) | (mag[mask[b]] > vel_max)), (
-            f"Mask does not correctly identify outliers for batch {b}"
+        assert jnp.all(
+            (mag[mask[b]] >= vel_min) & (mag[mask[b]] <= vel_max)
+        ), (
+            f"Mask does not correctly identify inliers for batch {b}"
         )
 
-        # check that all the False values in the mask correspond to inliers
+        # check that all the False values in the mask correspond to outliers
         assert jnp.all(
-            (mag[~mask[b]] >= vel_min) & (mag[~mask[b]] <= vel_max)
-        ), f"Mask does not correctly identify inliers for batch {b}"
+            (mag[~mask[b]] < vel_min) | (mag[~mask[b]] > vel_max)
+        ), f"Mask does not correctly identify outliers for batch {b}"
 
 
 @pytest.mark.skipif(
@@ -142,9 +144,9 @@ def test_adaptive_global_filter_zero_variance():
     # all the same magnitude, sigma=0 threshold=mean
     u = jnp.array([[1.0, 0.0], [-1.0, 0.0], [0.0, 1.0], [0.0, -1.0]])
     u, mask, _ = adaptive_global_filter(u, n_sigma=1.0, valid=None, state=None)
-    # all have magnitude 1 == mean; none outside
+    # all have magnitude 1 == mean; all are valid/inliers
     assert mask is not None
-    assert not mask.any()
+    assert mask.all()
 
 
 def _naive_local_filter(
@@ -190,14 +192,15 @@ def test_local_std_vs_naive(
     key = jrandom.PRNGKey(seed)
     flow = jrandom.normal(key, (B, H, W, 2))
 
-    expected = _naive_local_filter(flow, n_sigma, radius)
+    expected_outliers = _naive_local_filter(flow, n_sigma, radius)
+    expected_valid = ~expected_outliers
     flow, got, _ = adaptive_local_filter(
         flow, n_sigma, radius, valid=None, state=None
     )
 
     assert got is not None, "Mask is None"
-    assert got.shape == expected.shape, "Output shape mismatch"
-    assert jnp.array_equal(got, expected), "Naive and JAX results differ"
+    assert got.shape == expected_valid.shape, "Output shape mismatch"
+    assert jnp.array_equal(got, expected_valid), "Naive and JAX results differ"
 
 
 @pytest.mark.skipif(
@@ -267,12 +270,11 @@ def test_universal_median_test_center_outlier():
     )
     assert mask is not None
     mask = mask[0, ...]
-    # only the center should be flagged
+    # center should be rejected (False), others valid (True)
     assert mask.shape == (5, 5)
-    assert mask[2, 2]
-    # no other pixel
-    mask = mask.at[2, 2].set(False)
-    assert not mask.any()
+    assert not bool(mask[2, 2])
+    mask_wo_center = mask.at[2, 2].set(True)
+    assert bool(mask_wo_center.all())
 
 
 def _naive_median_test(
@@ -325,13 +327,16 @@ def test_universal_vs_naive(batch, height, width, radius, r_threshold):
     # JAX → NumPy for the reference
     ff_np = np.asarray(ff_jax)
 
-    expected = _naive_median_test(ff_np, r_threshold=r_threshold, radius=radius)
+    expected_outlier = _naive_median_test(
+        ff_np, r_threshold=r_threshold, radius=radius
+    )
+    expected_valid = ~expected_outlier
     ff_jax, actual, _ = universal_median_test(
         ff_jax, r_threshold=r_threshold, radius=radius, valid=None, state=None
     )
 
     # Move JAX result to host memory for comparison
-    np.testing.assert_array_equal(np.asarray(actual), expected)
+    np.testing.assert_array_equal(np.asarray(actual), expected_valid)
 
 
 @pytest.mark.skipif(

@@ -1,5 +1,7 @@
 """Data smoothing functions for optical flow estimation."""
 
+from typing import Any
+
 import jax.numpy as jnp
 from goggles.history.types import History
 from jax import lax
@@ -28,6 +30,7 @@ def average_smoothing(
     radius: int,
     valid: jnp.ndarray | None = None,
     state: History | None = None,
+    **kwargs: Any,
 ) -> tuple[jnp.ndarray, jnp.ndarray | None, History | None]:
     """Uniform average smoothing (channel-wise).
 
@@ -77,6 +80,7 @@ def median_smoothing(
     radius: int = 3,
     valid: jnp.ndarray | None = None,
     state: History | None = None,
+    **kwargs: Any,
 ) -> tuple[jnp.ndarray, jnp.ndarray | None, History | None]:
     """Sliding-window median filter (channel-wise).
 
@@ -87,6 +91,7 @@ def median_smoothing(
         valid:
             Optional mask of shape (B, H, W) where 1 means valid.
         state: Current state of the estimator.
+        **kwargs: Additional keyword arguments.
 
     Returns:
         Smoothed flow with the same shape as the input.
@@ -134,6 +139,7 @@ def gaussian_smoothing(
     valid: jnp.ndarray | None = None,
     state: History | None = None,
     mode: str = "same",
+    **kwargs: Any,
 ) -> tuple[jnp.ndarray, jnp.ndarray | None, History | None]:
     """Gaussian smoothing (channel-wise).
 
@@ -144,6 +150,7 @@ def gaussian_smoothing(
         valid: Optional mask of shape (B, H, W) where 1 means valid.
         state: Current state of the estimator.
         mode: Padding mode, either "same" or "reflect".
+        **kwargs: Additional keyword arguments.
 
     Returns:
         Smoothed flow with the same shape as the input.

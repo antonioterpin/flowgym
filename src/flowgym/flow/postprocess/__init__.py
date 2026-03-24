@@ -25,6 +25,8 @@ from .data_validation import (
     adaptive_local_filter_validate_params,
     constant_threshold_filter,
     constant_threshold_filter_validate_params,
+    learned_oracle_threshold,
+    learned_oracle_threshold_validate_params,
     universal_median_test,
     universal_median_test_validate_params,
 )
@@ -253,6 +255,8 @@ __all__ = [
     "gaussian_smoothing_validate_params",
     "laplace_interpolation",
     "laplace_interpolation_validate_params",
+    "learned_oracle_threshold",
+    "learned_oracle_threshold_validate_params",
     "median_smoothing",
     "median_smoothing_validate_params",
     "quantize",
