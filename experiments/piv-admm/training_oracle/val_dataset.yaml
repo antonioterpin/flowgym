@@ -1,0 +1,26 @@
+# Dataset parameters
+seed: 0
+batch_size: 10
+flow_fields_per_batch: 10
+include_images: true
+loop: false
+randomize: false
+episode_length: 0
+buffer_size: 10
+
+# Image parameters
+image_shape: [256, 256]
+
+# Min and max speed bounds in the flow field, used for constraint violations
+min_speed_x: 0
+max_speed_x: 0
+min_speed_y: 0
+max_speed_y: 0
+
+output_units: "pixels"
+
+# Flows files
+file_list:
+    - /shared/fluids/fluids-estimation/piv_dataset_class1_256/val
+scheduler_class: ".mat"
+eval_gt: false
