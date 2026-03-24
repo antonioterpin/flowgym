@@ -1,6 +1,6 @@
 """Interpolation for optical-flow tensors with missing/outlier vectors."""
 
-from typing import cast
+from typing import Any, cast
 
 import jax.numpy as jnp
 from goggles.history.types import History
@@ -27,6 +27,7 @@ def tile_average_interpolation(
     valid: jnp.ndarray,
     radius: int,
     state: History | None = None,
+    **kwargs: Any,
 ) -> tuple[jnp.ndarray, jnp.ndarray | None, History | None]:
     """Fill outliers with the average of their surrounding tile.
 
@@ -35,6 +36,7 @@ def tile_average_interpolation(
         valid: Mask of shape (B, H, W) where 1 means valid.
         radius: Radius of the tile to average over.
         state: Current state of the estimator.
+        **kwargs: Additional keyword arguments.
 
     Returns:
         Interpolated flow tensor of the same shape as `flow`.
@@ -102,6 +104,7 @@ def laplace_interpolation(
     valid: jnp.ndarray,
     num_iter: int = 512,
     state: History | None = None,
+    **kwargs: Any,
 ) -> tuple[jnp.ndarray, jnp.ndarray | None, History | None]:
     """Solve Laplace equation with fixed boundary via Jacobi relaxation.
 
@@ -110,6 +113,7 @@ def laplace_interpolation(
         valid: Mask of shape (B, H, W) where 1 means valid.
         num_iter: Number of Jacobi iterations to perform.
         state: Current state of the estimator.
+        **kwargs: Additional keyword arguments.
 
     Returns:
         - Interpolated flow tensor of the same shape as `flow`.

@@ -24,16 +24,11 @@ class DummyFlowEstimator(FlowFieldEstimator):
 
 
 def test_validation_and_interpolation_mask_semantics_debug():
-    """Show current mask mismatch between validation and interpolation steps.
-
-    Validation functions output ``True`` for outliers, while interpolation
-    functions expect ``True`` for inliers/fixed samples.
-    This test keeps that behavior explicit for debugging.
-    """
+    """Ensure validation/interpolation share ``True=inlier`` semantics."""
     flow = jnp.zeros((1, 7, 7, 2), dtype=jnp.float32)
     flow = flow.at[0, 3, 3, 0].set(10.0)
 
-    _, outlier_mask, _ = universal_median_test(
+    _, valid_mask, _ = universal_median_test(
         flow,
         r_threshold=2.0,
         epsilon=0.1,
@@ -41,25 +36,26 @@ def test_validation_and_interpolation_mask_semantics_debug():
         valid=None,
         state=None,
     )
-    assert outlier_mask is not None
-    assert bool(outlier_mask[0, 3, 3])
+    assert valid_mask is not None
+    assert not bool(valid_mask[0, 3, 3])
 
-    # Current wiring: pass validation mask directly to interpolation.
+    # Current wiring: pass validation mask directly to interpolation
+    # (`True` means inlier).
     flow_current, _, _ = tile_average_interpolation(
-        flow, valid=outlier_mask, radius=1, state=None
+        flow, valid=valid_mask, radius=1, state=None
     )
     # Debug reference: invert mask before interpolation.
     flow_inverted, _, _ = tile_average_interpolation(
-        flow, valid=~outlier_mask, radius=1, state=None
+        flow, valid=~valid_mask, radius=1, state=None
     )
 
     center_mag_current = float(jnp.linalg.norm(flow_current[0, 3, 3]))
     center_mag_inverted = float(jnp.linalg.norm(flow_inverted[0, 3, 3]))
 
-    # With current semantics, outlier tends to survive.
-    assert center_mag_current > 1.0
-    # With inverted semantics, outlier is replaced by neighbors (~0).
-    assert center_mag_inverted < 1.0
+    # With correct semantics, outlier is replaced by neighbors (~0).
+    assert center_mag_current < 1.0
+    # With inverted semantics, outlier tends to survive.
+    assert center_mag_inverted > 1.0
 
 
 def test_flow_estimator_emits_rejected_percentage_metrics():

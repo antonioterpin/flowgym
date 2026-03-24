@@ -1,9 +1,13 @@
 """Data validation and outlier detection utilities for optical flow."""
 
+from typing import Any
+
+import jax
 import jax.numpy as jnp
 from goggles.history.types import History
 from jax import lax
 
+from flowgym.common.base import EstimatorTrainableState
 from flowgym.common.median import median
 from flowgym.utils import DEBUG
 
@@ -35,6 +39,7 @@ def constant_threshold_filter(
     vel_max: float,
     valid: jnp.ndarray | None = None,
     state: History | None = None,
+    **kwargs: Any,
 ) -> tuple[jnp.ndarray, jnp.ndarray | None, History | None]:
     """Mark outliers based on constant thresholds u_min and u_max.
 
@@ -46,6 +51,7 @@ def constant_threshold_filter(
             Optional mask of shape (B, H, W) where 1 means valid.
             If provided, the outlier mask will be combined with this mask.
         state: Current state of the estimator.
+        **kwargs: Additional keyword arguments.
 
     Returns:
         Original flow field.
@@ -77,6 +83,7 @@ def adaptive_global_filter(
     n_sigma: float,
     valid: jnp.ndarray | None = None,
     state: History | None = None,
+    **kwargs: Any,
 ) -> tuple[jnp.ndarray, jnp.ndarray | None, History | None]:
     """Thresholding based on mean and standard deviation of magnitudes.
 
@@ -87,6 +94,7 @@ def adaptive_global_filter(
             Optional mask of shape (B, H, W) where 1 means valid.
             If provided, the outlier mask will be combined with this mask.
         state: Current state of the estimator.
+        **kwargs: Additional keyword arguments.
 
     Returns:
         Original flow field.
@@ -132,6 +140,7 @@ def adaptive_local_filter(
     radius: int = 1,
     valid: jnp.ndarray | None = None,
     state: History | None = None,
+    **kwargs: Any,
 ) -> tuple[jnp.ndarray, jnp.ndarray | None, History | None]:
     """Adaptive local thresholding based on mean and standard deviation.
 
@@ -144,6 +153,7 @@ def adaptive_local_filter(
             Optional mask of shape (B, H, W) where 1 means valid.
             If provided, the outlier mask will be combined with this mask.
         state: Current state of the estimator.
+        **kwargs: Additional keyword arguments.
 
     Returns:
         Original flow field.
@@ -193,7 +203,10 @@ def adaptive_local_filter(
     # if outside the bounds, mark as outlier
     return (
         flow_field,
-        valid & ~jnp.squeeze((centers < lower_bound) | (centers > upper_bound), axis=-1),
+        valid
+        & ~jnp.squeeze(
+            (centers < lower_bound) | (centers > upper_bound), axis=-1
+        ),
         state,
     )
 
@@ -234,6 +247,7 @@ def universal_median_test(
     radius: int = 1,
     valid: jnp.ndarray | None = None,
     state: History | None = None,
+    **kwargs: Any,
 ) -> tuple[jnp.ndarray, jnp.ndarray | None, History | None]:
     """Universal outlier detection by median test.
 
@@ -249,6 +263,7 @@ def universal_median_test(
             Optional mask of shape (B, H, W) where 1 means valid.
             If provided, the outlier mask will be combined with this mask.
         state: Current state of the estimator.
+        **kwargs: Additional keyword arguments.
 
     Returns:
         Original flow field.
@@ -294,3 +309,72 @@ def universal_median_test(
         valid & ~jnp.any(r0 > r_threshold, axis=-1),
         state,
     )
+
+
+def learned_oracle_threshold(
+    flow_field: jnp.ndarray,
+    trainable_state: EstimatorTrainableState,
+    valid: jnp.ndarray | None = None,
+    state: History | None = None,
+    threshold_value: float = 0.5,
+    **kwargs: Any,
+) -> tuple[jnp.ndarray, jnp.ndarray | None, History | None]:
+    """Apply a learned oracle threshold from a trainable mask model.
+
+    Args:
+        flow_field: Input array of shape (B, H, W, 2).
+        valid:
+             Optional mask of shape (B, H, W) where 1 means valid.
+             If provided, the outlier mask will be combined with this mask.
+        state: Current state of the estimator.
+        trainable_state: Trainable state of the estimator.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        Filtered flow field with outliers removed.
+        mask of shape (B, H, W) where 1 means valid.
+        Current state of the estimator.
+    """
+    if trainable_state.apply_fn is None:
+        raise ValueError("trainable_state.apply_fn cannot be None.")
+
+    try:
+        output = trainable_state.apply_fn(
+            {"params": trainable_state.params}, flow_field, **kwargs
+        )
+    except (TypeError, KeyError):
+        output = trainable_state.apply_fn(
+            flow_field, trainable_state.params, **kwargs
+        )
+
+    logits = output[0] if isinstance(output, tuple) else output
+    logits = jnp.asarray(logits)
+    if logits.ndim == 4 and logits.shape[-1] == 1:
+        logits = jnp.squeeze(logits, axis=-1)
+    if logits.ndim != 3:
+        raise ValueError(
+            "Learned oracle threshold model must return logits of shape "
+            f"(B, H, W) or (B, H, W, 1), got {logits.shape}."
+        )
+    mask_probs = jax.nn.sigmoid(logits)
+
+    valid = valid if valid is not None else jnp.ones(logits.shape, dtype=bool)
+    return flow_field, valid & (mask_probs > threshold_value), state
+
+
+def learned_oracle_threshold_validate_params(threshold_value: float = 0.5):
+    """Validate parameters for learned oracle thresholding.
+
+    Args:
+        threshold_value: Probability cutoff used to keep an inlier.
+
+    Raises:
+        ValueError: If threshold_value is not in (0, 1).
+    """
+    if not isinstance(threshold_value, (int, float)) or not (
+        0.0 < threshold_value < 1.0
+    ):
+        raise ValueError(
+            "`threshold_value` must be in (0, 1), got "
+            f"{threshold_value}."
+        )
