@@ -119,7 +119,7 @@ class FlowFieldEstimator(Estimator):
             for idx, step in enumerate(self.postprocessing_steps):
                 step_name = step.keywords.get("name", f"step_{idx}")
                 flow_field, valid, state = step(
-                    flow=flow_field, valid=valid, state=state
+                    flow=flow_field, valid=valid, state=state, trainable_state=trainable_state
                 )
                 if valid is not None:
                     # NOTE: validation steps return a boolean mask where

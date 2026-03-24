@@ -9,6 +9,9 @@ from flowgym.flow.consensus import ConsensusFlowEstimator
 from flowgym.flow.dis import DISJAXFlowFieldEstimator
 from flowgym.flow.dummy import DummyEstimator
 from flowgym.flow.open_piv import OpenPIVJAXEstimator
+from flowgym.flow.postprocess.oracle_threshold import (
+    LearnedOracleThresholdEstimator,
+)
 from flowgym.flow.raft.raft_jax import RaftJaxEstimator
 from flowgym.utils import MissingDependency, optional_import
 
@@ -64,4 +67,5 @@ ALL_ESTIMATORS: dict[str, type[Estimator] | MissingDependency] = {
     "raft_jax": RaftJaxEstimator,
     "raft_torch": RaftTorchEstimator,
     "dummy": DummyEstimator,
+    "learned_oracle_threshold": LearnedOracleThresholdEstimator,
 }
