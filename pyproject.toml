@@ -24,11 +24,11 @@ classifiers = [
 requires-python = ">=3.10"
 
 # Core dependencies
+#"robo-goggles @ git+https://github.com/antonioterpin/goggles.git@dev",
 dependencies = [
     "jax>=0.6.0",
     "flax>=0.10.5",
     "ipywidgets",
-    "robo-goggles @ git+https://github.com/antonioterpin/goggles.git@dev",
     "pip>=25.3",
 ]
 
@@ -96,9 +96,9 @@ other_methods = [
     "torchvision>=0.14.1",
 ]
 
-wandb = [
-    "robo-goggles[wandb] @ git+https://github.com/antonioterpin/goggles.git@dev",
-]
+#wandb = [
+#   "robo-goggles[wandb] @ git+https://github.com/antonioterpin/goggles.git@dev",
+#]
 
 cuda12 = [
     "jax[cuda12]>=0.6.0",
