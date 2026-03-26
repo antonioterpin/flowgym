@@ -184,8 +184,8 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
         # Check if the state has a history of estimates
         if not self.use_temporal_propagation:
             # Use the last estimate from the history
-            state["estimates"][:, -1, ...] = jnp.zeros_like(
-                state["estimates"][:, -1, ...]
+            state["estimates"] = state["estimates"].at[:, -1, ...].set(
+                jnp.zeros_like(state["estimates"][:, -1, ...])
             )
 
         # Prepare the input state for estimators
