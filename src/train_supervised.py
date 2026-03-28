@@ -91,11 +91,18 @@ def train_supervised(
     )
 
     if estimator_config["config"].get("jit", False) and not DEBUG:
-        train_step_fn = jax.jit(train_step_fn)
+        if estimator.supports_train_step_jit():
+            train_step_fn = jax.jit(train_step_fn)
+        else:
+            logger.warning(
+                "Disabling JIT for supervised train step: "
+                "estimator reports non-jittable train-step execution path."
+            )
 
     logger.info("Training step function compiled successfully.")
 
-    best_mean_error = float("inf")
+    best_validation_score = float("-inf")
+    has_saved_best_checkpoint = False
     last_val_metrics: dict | None = None
 
     # Initialize the replay buffer
@@ -153,6 +160,9 @@ def train_supervised(
 
                 # Build validation message with all scalar metrics
                 mean_error = float(val_metrics.get("mean_error", float("nan")))
+                current_score = float(
+                    val_metrics.get("mask_f1", -mean_error)
+                )
                 init_val_msg = (
                     f"Initial validation (before training): "
                     f"mean_error={mean_error:.5f}"
@@ -172,7 +182,7 @@ def train_supervised(
                         init_val_msg += f", {k}={float(v):.5f}"
                 logger.info(init_val_msg)
                 last_val_metrics = dict(val_metrics)
-                best_mean_error = mean_error
+                best_validation_score = current_score
             except Exception as e:
                 logger.error(f"Initial validation failed: {e}")
 
@@ -225,6 +235,9 @@ def train_supervised(
                     obs=(images1, images2),
                     ground_truth=ground_truth,
                     cache_payload=cache_payload,
+                )
+                experience = model.prepare_experience_for_training(
+                    experience, trainable_state
                 )
                 # Do one training step
                 t = time.time()
@@ -290,6 +303,11 @@ def train_supervised(
                                 prefetch=prefetch_replay_size,
                             )
                             for replay_exp in replay_iter:
+                                replay_exp_prepared = (
+                                    model.prepare_experience_for_training(
+                                        replay_exp, trainable_state
+                                    )
+                                )
                                 t_replay = time.time()
                                 (
                                     replay_loss,
@@ -297,7 +315,7 @@ def train_supervised(
                                     _,
                                 ) = train_step_fn(
                                     trainable_state=trainable_state,
-                                    experience=replay_exp,
+                                    experience=replay_exp_prepared,
                                 )
                                 t_replay = time.time() - t_replay
                                 logger.info(
@@ -404,13 +422,22 @@ def train_supervised(
                             f"no validation computed yet."
                         )
                     else:
-                        # Only save if validation was actually computed
-                        current_mean_error = float(
-                            last_val_metrics["mean_error"]
+                        # Select best checkpoint by validation mask_f1
+                        # (higher is better). Fallback to -mean_error
+                        # if mask_f1 is unavailable.
+                        mean_error = float(
+                            last_val_metrics.get("mean_error", float("nan"))
+                        )
+                        current_score = float(
+                            last_val_metrics.get("mask_f1", -mean_error)
                         )
 
-                        if current_mean_error < best_mean_error:
-                            best_mean_error = current_mean_error
+                        should_save = (not has_saved_best_checkpoint) or (
+                            current_score > best_validation_score
+                        )
+                        if should_save:
+                            best_validation_score = current_score
+                            has_saved_best_checkpoint = True
 
                             save_estimator(
                                 state=trainable_state,
@@ -423,7 +450,8 @@ def train_supervised(
 
                             logger.info(
                                 f"New best estimator saved at batch {batch_idx} "
-                                f"(mean_error={current_mean_error:.6f})"
+                                f"(mask_f1={current_score:.6f}, "
+                                f"mean_error={mean_error:.6f})"
                             )
 
                 # Reset sampler timer for next batch

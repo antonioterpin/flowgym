@@ -1,12 +1,12 @@
 # Dataset parameters
 seed: 0 # Random seed for reproducibility
-batch_size: 10 # Number of (img1, img2, flow, density) tuples per batch
-flow_fields_per_batch: 10 # Number of flow fields per batch
+batch_size: 64 # Number of (img1, img2, flow, density) tuples per batch
+flow_fields_per_batch: 64 # Number of flow fields per batch
 include_images: true # Whether to include images in the dataset
 loop: true # Whether to loop the dataset
 randomize: true # Whether to randomize the order of the batches
 episode_length: 0
-buffer_size: 30
+buffer_size: 100
 
 # Image parameters
 image_shape: [256, 256] # Shape of the images
@@ -26,7 +26,7 @@ scheduler_class: ".mat"
 eval_gt: false # Whether to evaluate on groundtruth
 
 # Supervised training controls
-num_batches: 5000
+num_batches: 12000
 save_every: 500
 log_every: 20
 save_only_best: true

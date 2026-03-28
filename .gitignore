@@ -186,6 +186,9 @@ cython_debug/
 
 # Models
 *.pkl
+results/**/checkpoints/
+results/**/checkpoints/**
+**/checkpoints/LearnedOracleThresholdEstimator/
 
 # Shell scripts
 *.sh

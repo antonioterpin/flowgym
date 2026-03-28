@@ -6,6 +6,7 @@ config:
   jit: true
   threshold: 0.5
   oracle_epe_threshold: 1.0
+  estimator_list: src/flowgym/config/estimators/flow/piv_dataset/consensus/dis_list.yaml
   features: [16, 32]
   history_size: 1
   optimizer_config:

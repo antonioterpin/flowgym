@@ -500,6 +500,27 @@ class Estimator(abc.ABC):
         """
         return experience
 
+    def prepare_experience_for_training(
+        self,
+        experience: SupervisedExperience,
+        trainable_state: NNEstimatorTrainableState,
+    ) -> SupervisedExperience:
+        """Prepare a supervised experience before a training step.
+
+        This hook runs on the host before invoking the (potentially jitted)
+        train step. Subclasses can override it to compute non-jittable data
+        once per batch and pass it through ``experience.cache_payload``.
+
+        Args:
+            experience: The experience to prepare.
+            trainable_state: Current trainable state of the model.
+
+        Returns:
+            The prepared experience (may be the same or enriched).
+        """
+        del trainable_state
+        return experience
+
     def enrich(
         self,
         batch: SynthpixBatch,
@@ -593,6 +614,15 @@ class Estimator(abc.ABC):
         avoid tracing errors.
         """
         return True
+
+    def supports_train_step_jit(self) -> bool:
+        """Return whether supervised train step can be safely JIT-compiled.
+
+        Defaults to :meth:`supports_jit`, but subclasses may override this
+        when model forward/eval paths are non-jittable while training can be
+        kept jittable by precomputing host-side data.
+        """
+        return self.supports_jit()
 
     @classmethod
     def get_init_param_names(cls) -> set[str]:
