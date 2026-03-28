@@ -1,0 +1,17 @@
+config:
+  estimator_list: src/flowgym/config/estimators/flow/piv_dataset/consensus/farneback_list.yaml
+  features:
+  - 16
+  - 32
+  history_size: 1
+  include_image_pair: false
+  jit: true
+  optimizer_config:
+    learning_rate: 0.001
+    name: adam
+  oracle_epe_threshold: 0.1
+  threshold: 0.5
+estimate_type: flow
+estimator: learned_oracle_threshold
+out_dir: results/training_oracle/farneback/imgpair_0/tau_0_1
+run_name: piv_admm_training_oracle_farneback_imgpair_0_tau_0_1
