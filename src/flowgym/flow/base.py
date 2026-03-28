@@ -21,6 +21,7 @@ OUTLIER_REJECTION_STEPS = {
     "adaptive_global_filter",
     "adaptive_local_filter",
     "universal_median_test",
+    "learned_oracle_threshold",
 }
 
 
@@ -119,11 +120,17 @@ class FlowFieldEstimator(Estimator):
             for idx, step in enumerate(self.postprocessing_steps):
                 step_name = step.keywords.get("name", f"step_{idx}")
                 flow_field, valid, state = step(
-                    flow=flow_field, valid=valid, state=state, trainable_state=trainable_state
+                    flow=flow_field,
+                    valid=valid,
+                    state=state,
+                    trainable_state=trainable_state,
+                    previous_image=state["images"][:, -1, ...],
+                    current_image=image,
                 )
                 if valid is not None:
                     # NOTE: validation steps return a boolean mask where
-                    # True marks valid/inlier pixels, False marks rejected/outlier.
+                    # True marks valid/inlier pixels, False marks
+                    # rejected/outlier.
                     outlier_frac = 1.0 - jnp.mean(
                         valid.astype(jnp.float32), axis=(1, 2)
                     )
@@ -137,10 +144,13 @@ class FlowFieldEstimator(Estimator):
                             f"postprocess_{step_name}_{idx}_rejected_percentage"
                         ] = (outlier_frac * 100.0)
                         if combined_rejected_mask is None:
-                            combined_rejected_mask = jnp.logical_not(valid.astype(jnp.bool_))
+                            combined_rejected_mask = jnp.logical_not(
+                                valid.astype(jnp.bool_)
+                            )
                         else:
                             combined_rejected_mask = jnp.logical_or(
-                                combined_rejected_mask, jnp.logical_not(valid.astype(jnp.bool_))
+                                combined_rejected_mask,
+                                jnp.logical_not(valid.astype(jnp.bool_)),
                             )
 
                 if DEBUG:

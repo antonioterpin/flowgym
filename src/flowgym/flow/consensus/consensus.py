@@ -361,9 +361,17 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
         )  # Shape (B, num_estimators, H, W)
 
         if len(self.experiment_params) != 0:
-            # Merge any experimental parameters into the consensus configuration
+            # Only forward experiment parameters explicitly supported by
+            # consensus algorithms to avoid passing unrelated metadata.
+            forwarded_experiment_keys = {
+                "log_metrics",
+                "log_path",
+                "baseline_performance",
+                "oracle_select_weights",
+            }
             for key, value in experiment_params.items():
-                consensus_config["exp_" + key] = value
+                if key in forwarded_experiment_keys:
+                    consensus_config["exp_" + key] = value
 
         # Experimental: Oracle-based selection of weights
         oracle_select_weights = experiment_params.pop(
@@ -715,12 +723,17 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
             ValueError: If ``log_path`` does not point to a CSV file.
         """
         finalized_metrics = Metrics()
+        eval_summary = getattr(self, "_eval_summary_metrics", {})
+        if not isinstance(eval_summary, dict):
+            eval_summary = {}
         if hasattr(self, "running_mean_coverage"):
             finalized_metrics["mean_oracle_mask_coverage"] = np.array(
                 self.running_mean_coverage
             )
         if hasattr(self, "running_mean_epe"):
             finalized_metrics["mean_epe"] = np.array(self.running_mean_epe)
+        elif "mean_epe" in eval_summary:
+            finalized_metrics["mean_epe"] = np.array(eval_summary["mean_epe"])
         estimator_rejected = self._get_estimator_rejected_percentages()
         for metric_name, metric_value in estimator_rejected.items():
             finalized_metrics[metric_name] = np.array(metric_value)
@@ -746,6 +759,15 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
             else:
                 regularization = "none"
             row_data = {
+                "comparison_profile": self.experiment_params.get(
+                    "comparison_profile", None
+                ),
+                "comparison_tau": self.experiment_params.get(
+                    "comparison_tau", None
+                ),
+                "comparison_checkpoint": self.experiment_params.get(
+                    "comparison_checkpoint", None
+                ),
                 "num_estimators": getattr(self, "num_estimators", None),
                 "transformation": getattr(self, "consensus_config", {}).get(
                     "transformation", None
@@ -758,20 +780,38 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
                     "weights_type", None
                 ),
                 "epe_limit": self.experiment_params.get("epe_limit", None),
-                "mean_epe": getattr(self, "running_mean_epe", None),
-                "max_epe": getattr(self, "running_max_epe", None),
-                "min_epe": getattr(self, "running_min_epe", None),
+                "mean_epe": getattr(
+                    self,
+                    "running_mean_epe",
+                    eval_summary.get("mean_epe", None),
+                ),
+                "max_epe": getattr(
+                    self,
+                    "running_max_epe",
+                    eval_summary.get("max_epe", None),
+                ),
+                "min_epe": getattr(
+                    self,
+                    "running_min_epe",
+                    eval_summary.get("min_epe", None),
+                ),
                 "mean_coverage": getattr(self, "running_mean_coverage", None),
                 "max_coverage": getattr(self, "running_max_coverage", None),
                 "min_coverage": getattr(self, "running_min_coverage", None),
                 "mean_relative_error": getattr(
-                    self, "running_mean_relative_error", None
+                    self,
+                    "running_mean_relative_error",
+                    eval_summary.get("mean_relative_error", None),
                 ),
                 "max_relative_error": getattr(
-                    self, "running_max_relative_error", None
+                    self,
+                    "running_max_relative_error",
+                    eval_summary.get("max_relative_error", None),
                 ),
                 "min_relative_error": getattr(
-                    self, "running_min_relative_error", None
+                    self,
+                    "running_min_relative_error",
+                    eval_summary.get("min_relative_error", None),
                 ),
             }
             row_data.update(estimator_rejected)

@@ -15,6 +15,7 @@ objective functions, but in the paper we only report the results for Huber.
 import copy
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -23,6 +24,12 @@ CONFIG_PATH = Path("experiments/piv-admm/experiment3_1/base_model.yaml")
 PARAM_KEY = "config.experiment_params.epe_limit"
 TAU_VALUES = [0.1, 0.3, 0.5, 0.7, 1.0, 1000.0]
 BASE_CONFIG_FOLDER = "src/flowgym/config/estimators/flow/piv_dataset/consensus"
+USE_LEARNED_ORACLE_REJECTOR_FOR_DIS = True
+LEARNED_ORACLE_TRAINED_THRESHOLDS = [0.1, 0.3, 0.5, 0.7, 1.0]
+LEARNED_ORACLE_CHECKPOINTS_ROOT = Path("results/training_oracle/imgpair_0")
+LEARNED_ORACLE_MASK_THRESHOLD = 0.5
+LEARNED_ORACLE_FEATURES = [16, 32]
+LEARNED_ORACLE_DIS_ESTIMATORS_LIST_PATH = f"{BASE_CONFIG_FOLDER}/dis_list.yaml"
 
 COMBO_FARNEBACK_L1 = {
     "config.consensus_config.regularizer_weights": {
@@ -116,7 +123,7 @@ COMBO_DIS_L1 = {
     "config.consensus_config.flows_objective_type": "l1",
     "config.consensus_config.solver_flows": "closed_form_l1",
     "config.consensus_config.weights_type": "photograd",
-    "config.estimators_list_path": f"{BASE_CONFIG_FOLDER}/dis_list.yaml",
+    "config.estimators_list_path": LEARNED_ORACLE_DIS_ESTIMATORS_LIST_PATH,
     "config.experiment_params.baseline_performance": {
         "min_epe": 0.08859,
         "max_epe": 0.24117,
@@ -136,7 +143,7 @@ COMBO_DIS_HUBER = {
     "config.consensus_config.flows_objective_type": "huber",
     "config.consensus_config.solver_flows": "closed_form_huber",
     "config.consensus_config.weights_type": "photograd",
-    "config.estimators_list_path": f"{BASE_CONFIG_FOLDER}/dis_list.yaml",
+    "config.estimators_list_path": LEARNED_ORACLE_DIS_ESTIMATORS_LIST_PATH,
     "config.experiment_params.baseline_performance": {
         "min_epe": 0.08859,
         "max_epe": 0.24117,
@@ -191,6 +198,66 @@ def set_nested_value(
     d[keys[-1]] = value
 
 
+def _tau_tag(tau: float) -> str:
+    """Format tau for path names."""
+    return str(tau).replace(".", "_")
+
+
+def _checkpoint_has_saved_steps(checkpoint_dir: Path) -> bool:
+    """Return True when an Orbax checkpoint directory has at least one step."""
+    if not checkpoint_dir.exists() or not checkpoint_dir.is_dir():
+        return False
+    return any(
+        entry.is_dir() and entry.name.isdigit()
+        for entry in checkpoint_dir.iterdir()
+    )
+
+
+def inject_dis_learned_oracle_postprocess(
+    estimators_cfg: dict[str, Any],
+    checkpoint_dir: Path,
+) -> dict[str, Any]:
+    """Attach learned-oracle postprocess to each DIS sub-estimator."""
+    out = copy.deepcopy(estimators_cfg)
+    estimators = out.get("estimators", [])
+    if not isinstance(estimators, list):
+        raise ValueError(
+            "estimators list must be present in estimators config."
+        )
+
+    dis_estimators_count = sum(
+        1 for estimator in estimators if estimator.get("estimator") == "dis_jax"
+    )
+    dis_idx = 0
+
+    for estimator_cfg in estimators:
+        if estimator_cfg.get("estimator") != "dis_jax":
+            continue
+        est_config = estimator_cfg.setdefault("config", {})
+        if not isinstance(est_config, dict):
+            raise ValueError(
+                f"Estimator config must be a dict, got {type(est_config)}."
+            )
+
+        learned_step = {
+            "name": "learned_oracle_threshold",
+            "threshold_value": LEARNED_ORACLE_MASK_THRESHOLD,
+            "load_from": str(checkpoint_dir),
+            "features": LEARNED_ORACLE_FEATURES,
+            "estimator_index": dis_idx,
+            "estimator_count": dis_estimators_count,
+        }
+
+        existing_postprocess = est_config.get("postprocess", [])
+        if isinstance(existing_postprocess, list):
+            est_config["postprocess"] = [learned_step, *existing_postprocess]
+        else:
+            est_config["postprocess"] = [learned_step]
+        dis_idx += 1
+
+    return out
+
+
 def run_sweep():
     """Run the parameter sweep by modifying the config dynamically."""
     with open(CONFIG_PATH) as f:
@@ -211,6 +278,7 @@ def run_sweep():
         print(f"\n=== Running sweep for algos={combo} ===")
         for val in TAU_VALUES:
             print(f"\n=== {PARAM_KEY} = {val} ===")
+            temp_estimators_path: Path | None = None
 
             # Deep copy config
             cfg = copy.deepcopy(base_config)
@@ -233,14 +301,62 @@ def run_sweep():
             set_nested_value(
                 cfg, "config.consensus_config.weights_type", weights_type
             )
-            set_nested_value(cfg, "config.estimators_list_path", path)
+            estimators_path = path
+
+            should_use_learned_dis_rejector = (
+                USE_LEARNED_ORACLE_REJECTOR_FOR_DIS
+                and Path(path).name
+                == Path(LEARNED_ORACLE_DIS_ESTIMATORS_LIST_PATH).name
+                and val in LEARNED_ORACLE_TRAINED_THRESHOLDS
+            )
+            if should_use_learned_dis_rejector:
+                checkpoint_dir = (
+                    LEARNED_ORACLE_CHECKPOINTS_ROOT
+                    / f"tau_{_tau_tag(val)}"
+                    / "learned_oracle_threshold"
+                    / "0"
+                    / "checkpoints"
+                    / "LearnedOracleThresholdEstimator"
+                )
+                if _checkpoint_has_saved_steps(checkpoint_dir):
+                    with open(path) as f:
+                        base_estimators_cfg = yaml.safe_load(f)
+                    dis_estimators_cfg = inject_dis_learned_oracle_postprocess(
+                        base_estimators_cfg, checkpoint_dir
+                    )
+                    temp_estimators_path = (
+                        CONFIG_PATH.parent
+                        / (
+                            "temp_estimators_dis_learned_oracle_"
+                            f"{objective_type}_{_tau_tag(val)}.yaml"
+                        )
+                    )
+                    with open(temp_estimators_path, "w") as f:
+                        yaml.safe_dump(dis_estimators_cfg, f)
+                    estimators_path = str(temp_estimators_path)
+                    print(
+                        "Using learned-oracle outlier rejector for DIS "
+                        f"(tau={val}, checkpoint={checkpoint_dir})."
+                    )
+                else:
+                    print(
+                        "Learned-oracle checkpoint not found for "
+                        f"tau={val} at {checkpoint_dir}; "
+                        "falling back to baseline DIS estimators."
+                    )
+
+            set_nested_value(
+                cfg, "config.estimators_list_path", estimators_path
+            )
             set_nested_value(
                 cfg,
                 "config.experiment_params.baseline_performance",
                 baseline_performance,
             )
 
-            final_part_path = path.split("/")[-1].replace(".yaml", "")
+            final_part_path = (
+                Path(estimators_path).name.replace(".yaml", "")
+            )
             # Write temp config
             temp_path = (
                 CONFIG_PATH.parent
@@ -266,6 +382,8 @@ def run_sweep():
             )
 
             temp_path.unlink(missing_ok=True)
+            if temp_estimators_path is not None:
+                temp_estimators_path.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

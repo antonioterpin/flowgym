@@ -219,7 +219,7 @@ def prepare_configs(
 
     gg.attach(
         gg.WandBHandler(
-            project="Art_of_PIV",
+            project="flowgym",
             run_name=model_config["run_name"],
             config={
                 "model_config": log_model_config,
@@ -381,7 +381,7 @@ if __name__ == "__main__":
         )
         logger.info("Validation sampler created successfully.")
 
-    elif args.mode == "eval":
+    if args.mode == "eval":
         if create_state_fn is None or compute_estimate_fn is None:
             raise ValueError(
                 "create_state_fn and compute_estimate_fn must be provided "

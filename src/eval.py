@@ -29,6 +29,48 @@ from flowgym.utils import block_until_ready_dict
 logger = get_logger(__name__, with_metrics=True)
 
 
+def _compute_binary_classification_metrics(
+    preds: jnp.ndarray,
+    labels: jnp.ndarray,
+) -> dict[str, np.ndarray]:
+    """Compute per-sample binary classification metrics."""
+    preds = jnp.asarray(preds, dtype=jnp.bool_)
+    labels = jnp.asarray(labels, dtype=jnp.bool_)
+    if preds.shape != labels.shape:
+        raise ValueError(
+            f"preds shape {preds.shape} must match labels shape {labels.shape}."
+        )
+    if preds.ndim < 2:
+        raise ValueError(
+            f"Expected classification arrays with ndim >= 2, got {preds.ndim}."
+        )
+    eps = jnp.asarray(1e-8, dtype=jnp.float32)
+    reduce_axes = tuple(range(1, preds.ndim))
+
+    tp = jnp.sum(preds & labels, axis=reduce_axes).astype(jnp.float32)
+    tn = jnp.sum((~preds) & (~labels), axis=reduce_axes).astype(jnp.float32)
+    fp = jnp.sum(preds & (~labels), axis=reduce_axes).astype(jnp.float32)
+    fn = jnp.sum((~preds) & labels, axis=reduce_axes).astype(jnp.float32)
+
+    accuracy = (tp + tn) / (tp + tn + fp + fn + eps)
+    precision = tp / (tp + fp + eps)
+    recall = tp / (tp + fn + eps)
+    specificity = tn / (tn + fp + eps)
+    balanced_accuracy = 0.5 * (recall + specificity)
+    f1 = (2.0 * tp) / (2.0 * tp + fp + fn + eps)
+    iou = tp / (tp + fp + fn + eps)
+
+    return {
+        "mask_accuracy": np.asarray(accuracy),
+        "mask_precision": np.asarray(precision),
+        "mask_recall": np.asarray(recall),
+        "mask_specificity": np.asarray(specificity),
+        "mask_balanced_accuracy": np.asarray(balanced_accuracy),
+        "mask_f1": np.asarray(f1),
+        "mask_iou": np.asarray(iou),
+    }
+
+
 def eval_flow(
     model: Estimator,
     trained_state: EstimatorTrainableState,
@@ -84,22 +126,76 @@ def eval_flow(
 
     # Extract the flow field from the estimation state
     flow_field = estimation_state["estimates"][:, -1]
+    per_pixel_epe = jnp.linalg.norm(flow_field - flow_field_gt, axis=-1)
 
     # Log flow estimate and ground truth
     # If metrics already has errors (from cache), use them.
     if "errors" not in metrics:
-        errors = jnp.linalg.norm(flow_field - flow_field_gt, axis=-1)
-        metrics["errors"] = np.array(jnp.mean(errors, axis=(1, 2)))
+        metrics["errors"] = np.array(jnp.mean(per_pixel_epe, axis=(1, 2)))
         # Also compute relative errors if not present
         if "relative_errors" not in metrics:
             relative_errors = (
-                jnp.linalg.norm(flow_field - flow_field_gt, axis=-1) ** 2
+                per_pixel_epe**2
                 / jnp.maximum(jnp.linalg.norm(flow_field_gt, axis=-1), 0.01)
                 ** 2
             )
             metrics["relative_errors"] = np.array(
                 jnp.mean(relative_errors, axis=(1, 2))
             )
+
+    oracle_epe_threshold = getattr(model, "oracle_epe_threshold", None)
+    pred_mask = metrics.get("mask")
+    if (
+        pred_mask is not None
+        and isinstance(oracle_epe_threshold, (int, float))
+        and oracle_epe_threshold > 0
+    ):
+        pred_mask_arr = jnp.asarray(pred_mask, dtype=jnp.bool_)
+        if pred_mask_arr.shape == per_pixel_epe.shape:
+            oracle_mask = per_pixel_epe <= float(oracle_epe_threshold)
+            metrics.update(
+                _compute_binary_classification_metrics(
+                    pred_mask_arr, oracle_mask
+                )
+            )
+            metrics["oracle_inlier_fraction"] = np.asarray(
+                jnp.mean(oracle_mask.astype(jnp.float32), axis=(1, 2))
+            )
+            metrics["pred_inlier_fraction"] = np.asarray(
+                jnp.mean(pred_mask_arr.astype(jnp.float32), axis=(1, 2))
+            )
+        else:
+            mask_flow_fields = metrics.get("mask_flow_fields")
+            if mask_flow_fields is not None:
+                mask_flow_fields = jnp.asarray(mask_flow_fields)
+                if (
+                    mask_flow_fields.ndim == 5
+                    and pred_mask_arr.ndim == 4
+                    and pred_mask_arr.shape == mask_flow_fields.shape[:-1]
+                ):
+                    flow_gt_expanded = flow_field_gt[:, None, ...]
+                    per_pixel_epe_k = jnp.linalg.norm(
+                        mask_flow_fields - flow_gt_expanded, axis=-1
+                    )
+                    oracle_mask = (
+                        per_pixel_epe_k <= float(oracle_epe_threshold)
+                    )
+                    metrics.update(
+                        _compute_binary_classification_metrics(
+                            pred_mask_arr, oracle_mask
+                        )
+                    )
+                    metrics["oracle_inlier_fraction"] = np.asarray(
+                        jnp.mean(
+                            oracle_mask.astype(jnp.float32), axis=(1, 2, 3)
+                        )
+                    )
+                    metrics["pred_inlier_fraction"] = np.asarray(
+                        jnp.mean(
+                            pred_mask_arr.astype(jnp.float32),
+                            axis=(1, 2, 3),
+                        )
+                    )
 
     metrics["time"] = t
     return metrics
@@ -592,6 +688,16 @@ def eval_full_dataset(
                 f"Min Relative EPE over {batches_processed} batches: "
                 f"{min_relative_errors:.5f}"
             )
+            # Keep a summary on the model so estimator-specific finalizers
+            # can persist downstream eval metrics even in non-oracle mode.
+            model._eval_summary_metrics = {
+                "mean_epe": float(mean_errors),
+                "max_epe": float(max_errors),
+                "min_epe": float(min_errors),
+                "mean_relative_error": float(mean_relative_errors),
+                "max_relative_error": float(max_relative_errors),
+                "min_relative_error": float(min_relative_errors),
+            }
         else:
             logger.info(
                 f"Mean Density Error over {batches_processed} batches: "

@@ -1,0 +1,28 @@
+batch_size: 64
+buffer_size: 100
+episode_length: 0
+eval_gt: false
+file_list:
+- /shared/fluids/fluids-estimation/piv_dataset_class1_256/train
+flow_fields_per_batch: 64
+image_shape:
+- 256
+- 256
+include_images: true
+log_every: 20
+loop: true
+max_speed_x: 0
+max_speed_y: 0
+min_speed_x: 0
+min_speed_y: 0
+num_batches: 12000
+output_units: pixels
+randomize: true
+save_every: 500
+save_only_best: true
+scheduler_class: .mat
+seed: 0
+validation:
+  dataset: experiments/piv-admm/training_oracle/temp_val_dataset_no_cache_imgpair_0_gpu_1_pid_2766128.yaml
+  interval: 250
+  num_batches: 20
