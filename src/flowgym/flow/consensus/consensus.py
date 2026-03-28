@@ -190,7 +190,6 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
 
         # Prepare the input state for estimators
         input_state = state
-        input_state["keys"] = state["keys"][:, jnp.newaxis, :]
 
         # Compute the flow fields using all available algorithms
         def single_estimator(idx: int):
