@@ -50,21 +50,43 @@ def mean_consensus(
 
 def median_consensus(
     flows: jax.Array,
-    _: jax.Array | None = None,
+    weights: jax.Array | None = None,
     __: dict | None = None,
 ) -> tuple[jax.Array, dict]:
     """Compute the median consensus flow from multiple flow estimates.
 
     Args:
         flows: Array of flow estimates from different agents.
-            shape (N, H, W, 2) where B is the batch size,
-            N is the number of estimates.
+            shape (N, H, W, 2) where N is the number of estimates.
+        weights: Weights for each flow estimate, shape (N, H, W).
+            If provided, flow estimates with zero weight are excluded
+            from the median computation.
 
     Returns:
         jnp.ndarray: Median consensus flow estimate.
-        None: Placeholder for additional return values, if needed.
+        dict: Placeholder for additional return values, if needed.
     """
-    return jnp.median(flows, axis=0), {}
+    if weights is None:
+        return jnp.median(flows, axis=0), {}
+
+    # Detect pixels where all N weights are zero
+    all_zero = jnp.all(weights == 0, axis=0)  # (H, W), bool
+
+    # Mask out flow estimates with zero weights by setting them to NaN
+    masked_flows = jnp.where(
+        weights[..., None] > 0,  # Expand weights to match flows shape
+        flows,
+        jnp.nan,
+    )
+
+    # Compute median, ignoring NaN values
+    result = jnp.nanmedian(masked_flows, axis=0)
+
+    # For pixels where all weights are zero, use unweighted median as fallback
+    fallback = jnp.median(flows, axis=0)
+    result = jnp.where(all_zero[..., None], fallback, result)
+
+    return result, {}
 
 
 def admm_consensus(
