@@ -58,12 +58,12 @@ COMBO_MIX_L1 = {
     "config.consensus_config.weights_type": "photograd",
     "config.estimators_list_path": f"{BASE_CONFIG_FOLDER}/mix_list.yaml",
     "config.experiment_params.baseline_performance": {
-        "min_epe": 0.08859,
-        "max_epe": 0.24117,
-        "mean_epe": 0.15316,
-        "min_relative_epe": 0.11474,
-        "mean_relative_epe": 12.70115,
-        "max_relative_epe": 44.74119,
+        "min_epe": 0.00492,
+        "max_epe": 0.48433,
+        "mean_epe": 0.14360,
+        "min_relative_epe": 0.00001,
+        "mean_relative_epe": 205.82474,
+        "max_relative_epe": 3091.90186,
     },
 }
 
@@ -98,12 +98,12 @@ COMBO_MIX_HUBER = {
     "config.consensus_config.weights_type": "photograd",
     "config.estimators_list_path": f"{BASE_CONFIG_FOLDER}/mix_list.yaml",
     "config.experiment_params.baseline_performance": {
-        "min_epe": 0.08859,
-        "max_epe": 0.24117,
-        "mean_epe": 0.15316,
-        "min_relative_epe": 0.11474,
-        "mean_relative_epe": 12.70115,
-        "max_relative_epe": 44.74119,
+        "min_epe": 0.00492,
+        "max_epe": 0.48433,
+        "mean_epe": 0.14360,
+        "min_relative_epe": 0.00001,
+        "mean_relative_epe": 205.82474,
+        "max_relative_epe": 3091.90186,
     },
 }
 
@@ -170,7 +170,7 @@ RUN_CMD = [
     "--mode",
     "eval",
 ]
-CUDA_VISIBLE_DEVICES = "1"
+CUDA_VISIBLE_DEVICES = "2"
 GOGGLES_PORT = "2402"
 # ======================
 
