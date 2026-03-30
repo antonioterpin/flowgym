@@ -746,8 +746,95 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
             }
             row_data.update(estimator_rejected)
 
-            # Ensure directory exists
-            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            if "baseline_performance" in self.experiment_params:
+                baseline = self.experiment_params["baseline_performance"]
+                if not isinstance(baseline, dict):
+                    raise TypeError(
+                        f"baseline_performance must be a dict, got {baseline}."
+                    )
+                
+                baseline_mean = baseline.get("mean_epe", None)
+                row_mean = row_data.get("mean_epe", None)
+                if isinstance(baseline_mean, jnp.ndarray) and (baseline_mean.ndim == 0 or baseline_mean.ndim == 1):
+                    baseline_mean = float(baseline_mean)
+                if isinstance(row_mean, jnp.ndarray) and (row_mean.ndim == 0 or row_mean.ndim == 1):
+                    row_mean = float(row_mean)
+                if isinstance(baseline_mean, float) and isinstance(
+                    row_mean, float
+                ):
+                    row_data["relative_mean_epe"] = (
+                        row_mean - baseline_mean
+                    ) / baseline_mean
+
+                baseline_max = baseline.get("max_epe", None)
+                row_max = row_data.get("max_epe", None)
+                if isinstance(baseline_max, jnp.ndarray) and (baseline_max.ndim == 0 or baseline_max.ndim == 1):
+                    baseline_max = float(baseline_max)
+                if isinstance(row_max, jnp.ndarray) and (row_max.ndim == 0 or row_max.ndim == 1):
+                    row_max = float(row_max)
+                if isinstance(baseline_max, float) and isinstance(
+                    row_max, float
+                ):
+                    row_data["relative_max_epe"] = (
+                        row_max - baseline_max
+                    ) / baseline_max
+
+                baseline_min = baseline.get("min_epe", None)
+                row_min = row_data.get("min_epe", None)
+                if isinstance(baseline_min, jnp.ndarray) and (baseline_min.ndim == 0 or baseline_min.ndim == 1):
+                    baseline_min = float(baseline_min)
+                if isinstance(row_min, jnp.ndarray) and (row_min.ndim == 0 or row_min.ndim == 1):
+                    row_min = float(row_min)
+                if isinstance(baseline_min, float) and isinstance(
+                    row_min, float
+                ):
+                    row_data["relative_min_epe"] = (
+                        row_min - baseline_min
+                    ) / baseline_min
+
+                baseline_min_rel = baseline.get("min_relative_epe", None)
+                row_min_rel = row_data.get("min_relative_error", None)
+                if isinstance(baseline_min_rel, jnp.ndarray) and (baseline_min_rel.ndim == 0 or baseline_min_rel.ndim == 1):
+                    baseline_min_rel = float(baseline_min_rel)
+                if isinstance(row_min_rel, jnp.ndarray) and (row_min_rel.ndim == 0 or row_min_rel.ndim == 1):
+                    row_min_rel = float(row_min_rel)
+                if isinstance(baseline_min_rel, float) and isinstance(
+                    row_min_rel, float
+                ):
+                    row_data["relative_min_relative_epe"] = (
+                        row_min_rel - baseline_min_rel
+                    ) / baseline_min_rel
+
+                baseline_mean_rel = baseline.get("mean_relative_epe", None)
+                row_mean_rel = row_data.get("mean_relative_error", None)
+                if isinstance(baseline_mean_rel, jnp.ndarray) and (baseline_mean_rel.ndim == 0 or baseline_mean_rel.ndim == 1):
+                    baseline_mean_rel = float(baseline_mean_rel)
+                if isinstance(row_mean_rel, jnp.ndarray) and (row_mean_rel.ndim == 0 or row_mean_rel.ndim == 1):
+                    row_mean_rel = float(row_mean_rel)
+                if isinstance(baseline_mean_rel, float) and isinstance(
+                    row_mean_rel, float
+                ):
+                    row_data["relative_mean_relative_epe"] = (
+                        row_mean_rel - baseline_mean_rel
+                    ) / baseline_mean_rel
+
+                baseline_max_rel = baseline.get("max_relative_epe", None)
+                row_max_rel = row_data.get("max_relative_error", None)
+                if isinstance(baseline_max_rel, jnp.ndarray) and (baseline_max_rel.ndim == 0 or baseline_max_rel.ndim == 1):
+                    baseline_max_rel = float(baseline_max_rel)
+                if isinstance(row_max_rel, jnp.ndarray) and (row_max_rel.ndim == 0 or row_max_rel.ndim == 1):
+                    row_max_rel = float(row_max_rel)
+                if isinstance(baseline_max_rel, float) and isinstance(
+                    row_max_rel, float
+                ):
+                    row_data["relative_max_relative_epe"] = (
+                        row_max_rel - baseline_max_rel
+                    ) / baseline_max_rel
+
+            # Ensure directory exists (handle top-level files safely)
+            dir_name = os.path.dirname(log_path)
+            assert dir_name, f"Invalid log_path with no directory: {log_path}"
+            os.makedirs(dir_name, exist_ok=True)
 
             # Check if the CSV already exists
             file_exists = os.path.exists(log_path)
