@@ -1,5 +1,7 @@
 """Module for compiling, saving, and loading flow field estimator models."""
 
+from __future__ import annotations
+
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast, overload
@@ -547,7 +549,7 @@ def make_estimator(
     return trained_state, create_state_fn, compute_estimate_fn, model
 
 
-def select_gt(estimate_type: str, batch: "SynthpixBatch") -> jnp.ndarray:
+def select_gt(estimate_type: str, batch: SynthpixBatch) -> jnp.ndarray:
     """Select the ground truth based on the mode.
 
     Args:

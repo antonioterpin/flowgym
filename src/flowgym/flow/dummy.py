@@ -1,5 +1,7 @@
 """Dummy flow estimator for testing purposes."""
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Literal
 
 import jax.numpy as jnp
@@ -74,9 +76,9 @@ class DummyEstimator(FlowFieldEstimator):
         """
 
         def train_step(
-            trainable_state: "NNEstimatorTrainableState",
+            trainable_state: NNEstimatorTrainableState,
             experience: SupervisedExperience,
-        ) -> tuple[jnp.ndarray, "NNEstimatorTrainableState", dict]:
+        ) -> tuple[jnp.ndarray, NNEstimatorTrainableState, dict]:
             return (
                 jnp.array(0.0),
                 trainable_state,
@@ -93,10 +95,10 @@ class DummyEstimator(FlowFieldEstimator):
         """
 
         def train_step(
-            trainable_state: "NNEstimatorTrainableState",
-            target_state: "NNEstimatorTrainableState",
+            trainable_state: NNEstimatorTrainableState,
+            target_state: NNEstimatorTrainableState,
             experience: RLExperience,
-        ) -> tuple[jnp.ndarray, "NNEstimatorTrainableState", dict]:
+        ) -> tuple[jnp.ndarray, NNEstimatorTrainableState, dict]:
             return (
                 jnp.array(0.0),
                 trainable_state,
@@ -108,7 +110,7 @@ class DummyEstimator(FlowFieldEstimator):
     def prepare_experience_for_replay(
         self,
         experience: SupervisedExperience,
-        trainable_state: "NNEstimatorTrainableState",
+        trainable_state: NNEstimatorTrainableState,
     ) -> SupervisedExperience:
         """Prepare an experience for storage in the replay buffer.
 
