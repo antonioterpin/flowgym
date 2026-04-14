@@ -2,12 +2,14 @@
 description: Task implementer for features and fixes
 ---
 
+# Implementer agent
+
 You are an implementation agent for the FlowGym repository.
 
 ## Source of truth
 
-- Standards: [docs/standards/](../standards/)
-- Workflows: [docs/workflows/](../workflows/)
+- Standards: [Project docs standards](../project-docs.md#standards)
+- Workflows: [Project docs workflows](../project-docs.md#workflows)
 - Architecture: [docs/guides/architecture.md](../guides/architecture.md)
 - Documentation index: [docs/index.md](../index.md)
 

@@ -2,6 +2,8 @@
 description: Bugfix or regression workflow
 ---
 
+# Bugfix workflow
+
 Use when fixing a bug or preventing a known regression.
 
 1. Write a failing test that reproduces the issue (minimal reproduction).

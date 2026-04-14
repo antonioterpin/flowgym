@@ -2,6 +2,8 @@
 description: Standard feature implementation
 ---
 
+# Feature workflow
+
 Use for ordinary feature work that doesn’t require external API exploration.
 
 1. Define the desired API and behavior by **writing failing unit tests** (and integration tests if needed).

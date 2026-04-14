@@ -4,7 +4,7 @@ This page summarizes the development workflow and software engineering practices
 - [Development workflow](#development-workflow)
 - [Testing a feature](#testing-a-feature)
 - [Preparing for a PR](#preparing-for-a-pr)
-### 📁 Project structure
+## 📁 Project structure
 
 ```
 ├── .github/
@@ -42,7 +42,8 @@ To provision the local environment with CUDA support only:
 ```sh
 uv sync --extra cuda12
 ```
-Run the application with (see the [README.md](../../README.md) for details on the usage):
+Run the application with (see the [getting started page](../getting-started.md)
+for usage context):
 ```sh
 uv run python main.py
 ```

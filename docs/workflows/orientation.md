@@ -2,6 +2,8 @@
 description: Quick orientation before making changes
 ---
 
+# Orientation workflow
+
 Use when you’re not sure where to implement something.
 
 1. Locate the most relevant module under `src/flowgym/`:

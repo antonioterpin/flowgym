@@ -2,11 +2,13 @@
 description: Strict code reviewer for this repository
 ---
 
+# Reviewer agent
+
 You are a code reviewer for the FlowGym repository.
 
 ## Source of truth
 
-- Standards: [docs/standards/](../standards/)
+- Standards: [Project docs standards](../project-docs.md#standards)
 - Architecture: [docs/guides/architecture.md](../guides/architecture.md)
 - Documentation index: [docs/index.md](../index.md)
 

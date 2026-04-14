@@ -2,9 +2,11 @@
 description: Documentation-only change
 ---
 
+# Documentation workflow
+
 Use when updating docstrings, README/docs, or comments.
 
-### Standards
+## Standards
 - Adhere to **Docstring & Typing** rules in [`typing-docstrings.md`](../standards/typing-docstrings.md).
 - Follow **Markdown heading capitalization** in [`code-clarity.md`](../standards/code-clarity.md#markdown-header-capitalization): use sentence case (capitalize only the first word, except proper nouns/acronyms).
 - Follow **Markdown link path rules** in [`code-clarity.md`](../standards/code-clarity.md#markdown-link-paths): use relative links for repository-internal targets.

@@ -241,7 +241,8 @@ Start with [docs/workflows/orientation.md](../workflows/orientation.md) to under
 See [docs/guides/architecture.md](architecture.md) for a complete overview of the codebase structure and responsibilities.
 
 ### "What rules apply to my code?"
-Check [docs/standards/](../standards/) for the specific rule you're unsure about. Each file covers one topic.
+Check [the standards section](../project-docs.md#standards) for the
+specific rule you're unsure about. Each file covers one topic.
 
 ### "Can I break the rules for X?"
 Most rules are non-negotiable. If you think a rule doesn't apply, discuss it in a PR comment - but the assumption is that all standards in `docs/standards/` apply.

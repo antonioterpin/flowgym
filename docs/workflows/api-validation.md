@@ -2,6 +2,8 @@
 description: External API validation and integration
 ---
 
+# API validation workflow
+
 Use when interacting with a new external library API or uncertain behavior.
 
 1. **Validate first in a scratch script** (not committed):

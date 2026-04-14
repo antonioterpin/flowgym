@@ -2,6 +2,8 @@
 description: Code refactoring without behavior change
 ---
 
+# Refactor workflow
+
 Use when improving structure, naming, or internal APIs without changing outputs.
 
 1. Identify the refactor scope and keep it small and coherent.
