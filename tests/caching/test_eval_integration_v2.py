@@ -65,7 +65,7 @@ def test_evaluate_batches_caching_robust():
             spec={"epe": (np.float32, ())},
         )
 
-        model = MockEvalEstimator()
+        mock_estimator = MockEvalEstimator()
 
         # Batch 1: keys 200, 201
         batch1 = MockEvalBatch(keys=[200, 201])
@@ -82,7 +82,7 @@ def test_evaluate_batches_caching_robust():
 
         # Run evaluate_batches
         results = evaluate_batches(
-            estimator=model,
+            estimator=mock_estimator,
             sampler=sampler,
             create_state_fn=create_state_fn,
             compute_estimate_fn=compute_estimate_fn,
@@ -93,8 +93,8 @@ def test_evaluate_batches_caching_robust():
         )
 
         assert results["mean_error"] == 0.5
-        assert len(model._compute_calls) == 1
-        assert len(model._compute_calls[0]) == 2  # 2 misses
+        assert len(mock_estimator._compute_calls) == 1
+        assert len(mock_estimator._compute_calls[0]) == 2  # 2 misses
 
         # Verify it's now in cache
         _payload, hit = cache_manager.lookup(
@@ -118,7 +118,7 @@ def test_eval_full_dataset_caching_robust():
         )
         cache_manager.flush()
 
-        model = MockEvalEstimator()
+        mock_estimator = MockEvalEstimator()
 
         # Batch: keys 300 (hit), 301 (miss)
         batch = MockEvalBatch(keys=[300, 301])
@@ -146,7 +146,7 @@ def test_eval_full_dataset_caching_robust():
             return state, {"errors": cache_payload.epe}
 
         eval_full_dataset(
-            estimator=model,
+            estimator=mock_estimator,
             sampler=sampler,
             create_state_fn=create_state_fn,
             compute_estimate_fn=compute_estimate_fn,
@@ -155,17 +155,17 @@ def test_eval_full_dataset_caching_robust():
         )
 
         # Check that enrich was called only for 301 (1 sample)
-        assert len(model._compute_calls) == 1
-        assert len(model._compute_calls[0]) == 1  # Only 1 miss (301)
-        assert model._compute_calls[0][0] == 1  # Index 1 in batch
+        assert len(mock_estimator._compute_calls) == 1
+        assert len(mock_estimator._compute_calls[0]) == 1  # Only 1 miss (301)
+        assert mock_estimator._compute_calls[0][0] == 1  # Index 1 in batch
 
         # Verify processed metrics
         # eval() calls process_metrics. The errors passed to eval were
         # [0.1, 0.5].
         # Mean should be 0.3
-        assert len(model._processed_metrics) == 1
+        assert len(mock_estimator._processed_metrics) == 1
         np.testing.assert_allclose(
-            model._processed_metrics[0]["errors"], [0.1, 0.5]
+            mock_estimator._processed_metrics[0]["errors"], [0.1, 0.5]
         )
 
 
