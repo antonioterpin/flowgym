@@ -21,7 +21,7 @@ understand the estimator interface, or navigate the repository.
 - [API reference](api/index.md):
   Looking for a specific class, function, or module? The API reference is
   the quickest way to find the public Python surface.
-- [Contribute](guides/contributing.md):
+- [Contribute](contribute.md):
   Want to contribute to the project? Start here for local setup, development
   workflow, and contributor-facing docs.
 
@@ -34,7 +34,5 @@ understand the estimator interface, or navigate the repository.
 getting-started/index
 user-guide/index
 api/index
-guides/contributing
-guides/architecture
-project-docs
+contribute
 ```
