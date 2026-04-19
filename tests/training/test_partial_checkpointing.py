@@ -133,7 +133,7 @@ def test_synthetic_sampler_checkpoint_integration(tmp_path, npy_flow_files):
     """Test checkpoint/restore cycle for SyntheticImageSampler.
 
     Verifies that:
-    1. flowgym.save_estimator correctly saves sampler state alongside model state
+    1. flowgym.save_estimator correctly saves sampler state alongside estimator state
     2. synthpix.make(load_from=...) correctly restores sampler state
     3. The restored sampler produces identical outputs to original
     """
@@ -152,15 +152,15 @@ def test_synthetic_sampler_checkpoint_integration(tmp_path, npy_flow_files):
         next(sampler)
         next(sampler)
 
-        # 3. Create model state and save checkpoint
-        model_state = _make_model_state()
-        model_name = "CheckpointTest_synthetic"
+        # 3. Create estimator state and save checkpoint
+        estimator_state = _make_model_state()
+        estimator_name = "CheckpointTest_synthetic"
 
         save_path_str = save_estimator(
-            state=model_state,
+            state=estimator_state,
             out_dir=tmp_path,
             step=10,
-            estimator_name=model_name,
+            estimator_name=estimator_name,
             sampler=sampler,
         )
         save_path = pathlib.Path(save_path_str)
@@ -188,14 +188,14 @@ def test_synthetic_sampler_checkpoint_integration(tmp_path, npy_flow_files):
             restored_batch.flow_fields,
         ), "Flow fields should match"
 
-        # 9. Verify model state can also be restored independently
+        # 9. Verify estimator state can also be restored independently
         template_state = _make_model_state()
         restored_estimator = load_estimator(
             save_path, template_state, mode="resume"
         )
         assert restored_estimator.step == 10, "Estimator step should be restored"
         assert jnp.allclose(
-            restored_estimator.params["w"], model_state.params["w"]
+            restored_estimator.params["w"], estimator_state.params["w"]
         ), "Estimator params should be restored"
     finally:
         sampler.shutdown()
@@ -207,7 +207,7 @@ def test_real_sampler_checkpoint_integration(tmp_path, mock_mat_files):
     """Test checkpoint/restore cycle for RealImageSampler.
 
     Verifies that:
-    1. flowgym.save_estimator correctly saves sampler state alongside model state
+    1. flowgym.save_estimator correctly saves sampler state alongside estimator state
     2. synthpix.make(load_from=...) correctly restores sampler state
     3. The restored sampler produces identical outputs to original
     """
@@ -227,15 +227,15 @@ def test_real_sampler_checkpoint_integration(tmp_path, mock_mat_files):
         next(sampler)
         next(sampler)
 
-        # 3. Create model state and save checkpoint
-        model_state = _make_model_state()
-        model_name = "CheckpointTest_real"
+        # 3. Create estimator state and save checkpoint
+        estimator_state = _make_model_state()
+        estimator_name = "CheckpointTest_real"
 
         save_path_str = save_estimator(
-            state=model_state,
+            state=estimator_state,
             out_dir=tmp_path,
             step=10,
-            estimator_name=model_name,
+            estimator_name=estimator_name,
             sampler=sampler,
         )
         save_path = pathlib.Path(save_path_str)
@@ -263,14 +263,14 @@ def test_real_sampler_checkpoint_integration(tmp_path, mock_mat_files):
             restored_batch.flow_fields,
         ), "Flow fields should match"
 
-        # 9. Verify model state can also be restored independently
+        # 9. Verify estimator state can also be restored independently
         template_state = _make_model_state()
         restored_estimator = load_estimator(
             save_path, template_state, mode="resume"
         )
         assert restored_estimator.step == 10, "Estimator step should be restored"
         assert jnp.allclose(
-            restored_estimator.params["w"], model_state.params["w"]
+            restored_estimator.params["w"], estimator_state.params["w"]
         ), "Estimator params should be restored"
     finally:
         sampler.shutdown()

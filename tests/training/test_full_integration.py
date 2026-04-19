@@ -54,7 +54,7 @@ def test_train_supervised_full_integration(
     tmp_path, mock_sampler, dummy_trainable_state
 ):
     """Test train_supervised with replay buffer, validation, checkpointing."""
-    model = DummyEstimator(train_type="supervised", enrichment_marker=True)
+    estimator = DummyEstimator(train_type="supervised", enrichment_marker=True)
 
     # Create a separate mock for validation sampler
     val_sampler = MagicMock()
@@ -91,7 +91,7 @@ def test_train_supervised_full_integration(
         }
 
         train_supervised(
-            estimator=model,
+            estimator=estimator,
             estimator_config={"config": {"jit": False}},
             trainable_state=dummy_trainable_state,
             out_dir=str(out_dir),
@@ -126,7 +126,7 @@ def test_train_supervised_replay_enrichment(
     tmp_path, mock_sampler, dummy_trainable_state
 ):
     """Test that prepare_experience_for_replay is called and enriches data."""
-    model = DummyEstimator(train_type="supervised", enrichment_marker=True)
+    estimator = DummyEstimator(train_type="supervised", enrichment_marker=True)
 
     def create_state_fn(img, key):
         B, H, W = img.shape
@@ -151,7 +151,7 @@ def test_train_supervised_replay_enrichment(
 
     with patch.object(ReplayBuffer, "push", tracking_push):
         train_supervised(
-            estimator=model,
+            estimator=estimator,
             estimator_config={"config": {"jit": False}},
             trainable_state=dummy_trainable_state,
             out_dir=str(out_dir),
@@ -179,7 +179,7 @@ def test_train_supervised_checkpointing_roundtrip(
     tmp_path, mock_sampler, dummy_trainable_state
 ):
     """Test that checkpoints are saved at the expected intervals."""
-    model = DummyEstimator(train_type="supervised")
+    estimator = DummyEstimator(train_type="supervised")
 
     def create_state_fn(img, key):
         B, H, W = img.shape
@@ -203,7 +203,7 @@ def test_train_supervised_checkpointing_roundtrip(
     # Run training to create a checkpoint
     with patch("train_supervised.save_estimator", side_effect=tracking_save):
         train_supervised(
-            estimator=model,
+            estimator=estimator,
             estimator_config={"config": {"jit": False}},
             trainable_state=dummy_trainable_state,
             out_dir=str(out_dir),
@@ -223,7 +223,7 @@ def test_train_supervised_no_enrichment_without_flag(
     tmp_path, mock_sampler, dummy_trainable_state
 ):
     """Test that enrichment is skipped when enrichment_marker is False."""
-    model = DummyEstimator(train_type="supervised", enrichment_marker=False)
+    estimator = DummyEstimator(train_type="supervised", enrichment_marker=False)
 
     def create_state_fn(img, key):
         B, H, W = img.shape
@@ -248,7 +248,7 @@ def test_train_supervised_no_enrichment_without_flag(
 
     with patch.object(ReplayBuffer, "push", tracking_push):
         train_supervised(
-            estimator=model,
+            estimator=estimator,
             estimator_config={"config": {"jit": False}},
             trainable_state=dummy_trainable_state,
             out_dir=str(out_dir),
@@ -276,7 +276,7 @@ def test_train_supervised_no_enrichment_without_flag(
 
 def test_train_rl_full_integration(tmp_path, mock_env):
     """Test train (RL) loop with replay buffer and checkpointing."""
-    model = DummyEstimator(train_type="rl")
+    estimator = DummyEstimator(train_type="rl")
     env, obs, env_state = mock_env
 
     def apply_fn(params, x):
@@ -307,7 +307,7 @@ def test_train_rl_full_integration(tmp_path, mock_env):
         patch("train.log_flow_estimate"),
     ):
         train(
-            estimator=model,
+            estimator=estimator,
             estimator_config={"config": {"jit": False}},
             trainable_state=trainable_state,
             out_dir=str(out_dir),
@@ -333,7 +333,7 @@ def test_train_rl_full_integration(tmp_path, mock_env):
 
 def test_train_rl_replay_buffer_used(tmp_path, mock_env):
     """Test that replay buffer is initialized and used in RL training."""
-    model = DummyEstimator(train_type="rl")
+    estimator = DummyEstimator(train_type="rl")
     env, obs, env_state = mock_env
 
     def apply_fn(params, x):
@@ -361,7 +361,7 @@ def test_train_rl_replay_buffer_used(tmp_path, mock_env):
         patch("train.log_flow_estimate"),
     ):
         train(
-            estimator=model,
+            estimator=estimator,
             estimator_config={"config": {"jit": False}},
             trainable_state=trainable_state,
             out_dir=str(tmp_path),
@@ -383,7 +383,7 @@ def test_train_rl_replay_buffer_used(tmp_path, mock_env):
 
 def test_train_rl_replay_buffer_samples(tmp_path, mock_env):
     """Test that replay buffer sampling is called when replay_ratio > 0."""
-    model = DummyEstimator(train_type="rl")
+    estimator = DummyEstimator(train_type="rl")
     env, obs, env_state = mock_env
 
     def apply_fn(params, x):
@@ -407,7 +407,7 @@ def test_train_rl_replay_buffer_samples(tmp_path, mock_env):
 
     # Track train_step_fn calls
     train_step_calls = []
-    original_train_step = model.create_train_step()
+    original_train_step = estimator.create_train_step()
 
     def tracking_train_step(*args, **kwargs):
         train_step_calls.append((args, kwargs))
@@ -415,12 +415,12 @@ def test_train_rl_replay_buffer_samples(tmp_path, mock_env):
 
     with (
         patch.object(
-            model, "create_train_step", return_value=tracking_train_step
+            estimator, "create_train_step", return_value=tracking_train_step
         ),
         patch("train.log_flow_estimate"),
     ):
         train(
-            estimator=model,
+            estimator=estimator,
             estimator_config={"config": {"jit": False}},
             trainable_state=trainable_state,
             out_dir=str(tmp_path),
@@ -452,7 +452,7 @@ def test_train_supervised_validation_runs(
     tmp_path, mock_sampler, dummy_trainable_state
 ):
     """Test that validation is executed at specified intervals."""
-    model = DummyEstimator(train_type="supervised")
+    estimator = DummyEstimator(train_type="supervised")
 
     val_sampler = MagicMock()
     val_sampler.shutdown = MagicMock()
@@ -482,7 +482,7 @@ def test_train_supervised_validation_runs(
         }
 
         train_supervised(
-            estimator=model,
+            estimator=estimator,
             estimator_config={"config": {"jit": False}},
             trainable_state=dummy_trainable_state,
             out_dir=str(out_dir),
@@ -506,7 +506,7 @@ def test_train_supervised_save_only_best(
     tmp_path, mock_sampler, dummy_trainable_state
 ):
     """Test save_only_best mode saves only when validation improves."""
-    model = DummyEstimator(train_type="supervised")
+    estimator = DummyEstimator(train_type="supervised")
 
     val_sampler = MagicMock()
     val_sampler.shutdown = MagicMock()
@@ -549,7 +549,7 @@ def test_train_supervised_save_only_best(
         patch("train_supervised.save_estimator", side_effect=tracking_save),
     ):
         train_supervised(
-            estimator=model,
+            estimator=estimator,
             estimator_config={"config": {"jit": False}},
             trainable_state=dummy_trainable_state,
             out_dir=str(out_dir),
@@ -576,7 +576,7 @@ def test_train_supervised_metrics_logged(
     tmp_path, mock_sampler, dummy_trainable_state
 ):
     """Test that metrics from train step are properly logged."""
-    model = DummyEstimator(train_type="supervised")
+    estimator = DummyEstimator(train_type="supervised")
 
     def create_state_fn(img, key):
         B, H, W = img.shape
@@ -593,7 +593,7 @@ def test_train_supervised_metrics_logged(
 
     # Run training
     train_supervised(
-        estimator=model,
+        estimator=estimator,
         estimator_config={"config": {"jit": False}},
         trainable_state=dummy_trainable_state,
         out_dir=str(out_dir),
