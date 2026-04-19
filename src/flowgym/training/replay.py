@@ -143,7 +143,7 @@ class ReplayBuffer(Generic[ExperienceType]):
             device: Target device for prefetch. Defaults to first available.
 
         Yields:
-            ExperienceType: Batches of stacked experiences.
+            Batches of stacked experiences.
 
         Raises:
             ValueError: If batch_size exceeds buffer size.

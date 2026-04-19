@@ -15,8 +15,16 @@ start with [Getting started](../getting-started/index.md) or the
 - [Estimator implementations](estimators.md)
   - [Flow estimator base](estimators.md#flow-estimator-base)
   - [DIS JAX estimator](estimators.md#dis-jax-estimator)
+  - [DIS OpenCV estimator](estimators.md#dis-opencv-estimator)
   - [RAFT JAX estimator](estimators.md#raft-jax-estimator)
+  - [RAFT PyTorch estimator](estimators.md#raft-pytorch-estimator)
   - [OpenPIV JAX estimator](estimators.md#openpiv-jax-estimator)
+  - [OpenPIV estimator](estimators.md#openpiv-estimator)
+  - [Farneback estimator](estimators.md#farneback-estimator)
+  - [DeepFlow estimator](estimators.md#deepflow-estimator)
+  - [Horn-Schunck estimator](estimators.md#horn-schunck-estimator)
+  - [Consensus estimator](estimators.md#consensus-estimator)
+  - [Dummy estimator](estimators.md#dummy-estimator)
   - [Density estimators](estimators.md#density-estimators)
 
 - [Evaluation helpers and caching](evaluation.md)
@@ -24,8 +32,12 @@ start with [Getting started](../getting-started/index.md) or the
   - [Caching](evaluation.md#caching)
 
 - [Training and optimization](optimization.md)
-  - [Optimizer setup](optimization.md#optimizer-setup)
+  - [Optimizers](optimization.md#optimizers)
   - [Schedules](optimization.md#schedules)
+  - [Losses](optimization.md#losses)
+  - [Replay buffer](optimization.md#replay-buffer)
+  - [Target transforms](optimization.md#target-transforms)
+  - [Exploration policies](optimization.md#exploration-policies)
 
 ```{toctree}
 :hidden:

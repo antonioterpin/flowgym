@@ -100,21 +100,24 @@ def build_target_transform_from_config(
 
     Accepts either a single transform config or a pipeline of transforms.
 
-    Config format:
-        name: The transform name (from TRANSFORM_REGISTRY)
-        **kwargs: Arguments for the transform function
+    Single-transform format::
 
-    Pipeline format:
-        pipeline: List of transform configs to apply sequentially.
+        {
+            "name": "log1p",
+            "eps": 1e-8,
+        }
 
-    Example:
-        config = {"name": "log1p", "eps": 1e-8}
-        config = {
+    Pipeline format::
+
+        {
             "pipeline": [
                 {"name": "clip", "min": 0.0, "max": 10.0},
-                {"name": "log1p"}
-            ]
+                {"name": "log1p"},
+            ],
         }
+
+    ``name`` selects a transform from ``TRANSFORM_REGISTRY``. Any additional
+    keys are passed as keyword arguments to that transform.
 
     Args:
         config: Configuration dictionary for the transform(s).
