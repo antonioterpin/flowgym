@@ -24,8 +24,8 @@ uv run python examples/03_density_eval.py
 
 - The repo-level flow stays the same: configs, CLI entrypoint, evaluation.
 - The main difference is the estimator family and `estimate_type: density`.
-- This page is the quickest way to see how density fits into the same mental
-  model as flow evaluation.
+- This page is the quickest way to see how density fits into the same
+  repository workflow shape as flow evaluation.
 
 ## Related pages
 

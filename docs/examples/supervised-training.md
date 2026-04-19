@@ -9,7 +9,7 @@ the training path that matter most in practice.
 ## What it does
 
 - generates tiny synthetic training and validation datasets locally
-- writes dataset and model YAML files
+- writes dataset and estimator YAML files
 - includes `validation` settings in the dataset config
 - runs `src/main.py --mode train-supervised`
 - prints the checkpoint directory written during the run

@@ -83,14 +83,14 @@ This is the most important package area for public API navigation.
 - `src/flowgym/config/`:
   YAML configs for datasets, estimators, and experiments.
 - `src/flowgym/config/estimators/`:
-  model-specific defaults.
+  estimator-specific defaults.
 - top-level dataset configs like `piv_dataset_class1_eval.yaml`:
   ready-made CLI inputs for `src/main.py`.
 
 ## Entry points that matter
 
 - `src/main.py`:
-  parse CLI arguments, load dataset/model configs, create samplers, and
+  parse CLI arguments, load dataset/estimator configs, create samplers, and
   dispatch into eval or training modes.
 - `src/train.py`:
   reinforcement-learning training loop.
@@ -108,7 +108,7 @@ If you are documenting or debugging a user-facing workflow, start with
 
 - "I need the public estimator API":
   start with `flowgym.make` and `flowgym.common.base`.
-- "I need to understand a model implementation":
+- "I need to understand an estimator implementation":
   start under `flowgym.flow/` or `flowgym.density/`.
 - "I need dataset or experiment defaults":
   start in `src/flowgym/config/`.

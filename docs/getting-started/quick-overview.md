@@ -4,7 +4,7 @@ This page shows a minimal example of the core estimator API.
 
 It is not meant to be a full tutorial, but rather a quick sketch of the main
 steps for configuring, building, and running an estimator. For more context on
-the API design and the estimator model, see the
+the API design and the estimator interface, see the
 [User guide](../user-guide/index.md).
 
 ## Configure the estimator
@@ -94,13 +94,13 @@ In particular, the [Example workflows](../examples/index.md) include walkthrough
 - training a learning-based estimator with `src.main`
 - using the cache for expensive derived quantities
 
-Instead, if you want to understand the API design and the estimator model in more depth, see the
+Instead, if you want to understand the API design and the estimator interface in more depth, see the
 [User guide](../user-guide/index.md) for a detailed introduction to the
 estimator state, configuration, and runtime concepts.
 
 ## Next places to look
 
-- [User guide](../user-guide/index.md) for the estimator model, runtime
+- [User guide](../user-guide/index.md) for the estimator interface, runtime
   state, and
   configuration concepts
 - [Example workflows](../examples/index.md) for evaluation, training, and

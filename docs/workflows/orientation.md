@@ -9,7 +9,7 @@ Use when you’re not sure where to implement something.
 1. Locate the most relevant module under `src/flowgym/`:
    - preprocessing / utilities: `flowgym/common/`, `flowgym/utils.py`
    - configuration: `flowgym/config/`
-   - models / networks: `flowgym/nn/`
+   - neural networks: `flowgym/nn/`
    - training logic: `flowgym/training/`, `train*.py`
    - flow / estimators: `flowgym/flow/`
    - environments: `flowgym/environment/`

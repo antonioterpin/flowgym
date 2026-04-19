@@ -85,7 +85,8 @@ Because the state is explicit, the same interface supports both:
   classical PIV methods
 - recurrent estimators:
   methods that exploit short-term temporal context across calls, like 
-  learned recurrent models or classical methods with multi-frame processing
+  learning-based recurrent estimators or classical methods with
+  multi-frame processing
 
 When image pairs are processed independently, such as during benchmarking on
 a shuffled dataset, the runtime state can simply be re-initialized before
@@ -99,7 +100,7 @@ documented in [Base classes and environment](../api/base.md) and
 ### Trainable state
 
 The `trainable_state` captures the long-term parameters of the estimator.
-For learning-based methods, this usually includes model weights, optimizer
+For learning-based methods, this usually includes estimator parameters, optimizer
 state, and related training information.
 
 Classical estimators usually do not have trainable parameters. In those cases,

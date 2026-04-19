@@ -28,7 +28,8 @@ uv run python examples/00_first_estimate.py
 
 - The image input shape is `(B, H, W)`.
 - `make_estimator(...)` returns four pieces:
-  trained state, state-construction function, estimate function, and model.
+  trained state, state-construction function, estimate function, and the
+  estimator itself.
 - The computed flow estimate lives in `state["estimates"][:, -1]`.
 - This is the clearest place to inspect the public estimator API before
   moving to CLI workflows.

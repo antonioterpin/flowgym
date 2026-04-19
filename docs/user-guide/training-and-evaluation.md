@@ -23,7 +23,7 @@ through the repository orchestration layer.
 
 These workflows usually involve:
 
-- a model configuration
+- an estimator configuration
 - a dataset configuration
 - evaluation helpers under `flowgym.common.evaluation`
 - the main repository entrypoint, `src/main.py`.

@@ -99,5 +99,5 @@ This lets FlowGym use the same mental model for a broad range of methods.
 Continue to [Installation](installation.md) if you want to
 set up the package locally, or jump to the
 [Quick overview](quick-overview.md) if you want to see the API right away.
-For a deeper explanation of the estimator model and common workflows,
+For a deeper explanation of the estimator interface and common workflows,
 continue to the [User guide](../user-guide/index.md).

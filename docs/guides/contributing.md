@@ -69,7 +69,7 @@ uv run --group docs make -C docs html
 Run the strict docs build:
 
 ```bash
-uv run --group docs make -C docs stricthtml
+uv run --group docs sphinx-build -b html docs docs/build/html -W --keep-going
 ```
 
 ## How the repo is organized
@@ -130,7 +130,8 @@ Before finishing a docs-affecting change, verify:
 - public examples match current signatures and import paths
 - new or changed APIs are listed in the right reference page
 - internal links render correctly
-- `html` and `stricthtml` doc builds pass
+- the HTML docs build passes
+- the strict Sphinx docs build passes
 
 This project treats broken examples and stale paths as documentation bugs,
 not editorial nits.

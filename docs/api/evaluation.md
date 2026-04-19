@@ -1,6 +1,6 @@
 # Evaluation and caching
 
-This page collects the modules that support model evaluation and
+This page collects the modules that support estimator evaluation and
 cache-backed reuse of expensive derived quantities.
 
 ## Evaluation helpers

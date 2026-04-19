@@ -8,8 +8,8 @@ repeatable.
 
 ## The two main kinds of config
 
-- model configs:
-  choose the estimator family, estimate type, and model-specific settings
+- estimator configs:
+  choose the estimator family, estimate type, and estimator-specific settings
 - dataset configs:
   describe the data source or sampler setup used for evaluation or training
 
@@ -21,7 +21,7 @@ evaluation or training.
 
 The main user-facing entrypoint is `src/main.py`.
 
-It reads the model and dataset configurations, creates the corresponding
+It reads the estimator and dataset configurations, creates the corresponding
 objects, and dispatches into evaluation or training workflows through the
 repository scripts such as `src/eval.py`, `src/train.py`, and
 `src/train_supervised.py`.

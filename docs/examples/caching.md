@@ -45,7 +45,7 @@ uv run python examples/11_caching.py
 Both scripts:
 
 - create temporary `.mat` files locally
-- write temporary dataset and model YAML files
+- write temporary dataset and estimator YAML files
 - invoke `src.main` in evaluation mode
 - measure the duration of two runs
 
@@ -68,11 +68,11 @@ artifacts. The second run tries to load and reuse them.
 
 ## The DIS example
 
-`examples/10_caching.py` uses a small `dis_jax` model configuration and a
+`examples/10_caching.py` uses a small `dis_jax` estimator configuration and a
 cache id named `dis_example_cache`.
 
 Use this script when you want the simplest caching walkthrough and the
-smallest amount of model-specific detail.
+smallest amount of estimator-specific detail.
 
 ## The RAFT example
 
@@ -83,7 +83,7 @@ Use this script when you want to see the same caching pattern with a
 learning-based estimator.
 
 The RAFT script also checks the output for a cache-id update message, which
-is useful when you want to verify how caching interacts with model-specific
+is useful when you want to verify how caching interacts with estimator-specific
 configuration.
 
 ## What to look for in the output
@@ -96,7 +96,7 @@ When the scripts run successfully, you should see:
 - a final comparison that reports whether the warm-cache run was faster
 
 For the RAFT example, you may also see a message confirming that the cache
-id was updated with a model-specific suffix.
+id was updated with an estimator-specific suffix.
 
 These scripts are meant to be practical references for the real example
 files, so the most important thing to compare is the difference between the

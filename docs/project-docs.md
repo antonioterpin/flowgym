@@ -76,6 +76,7 @@ The maintained agent role pages live under `docs/agents/`.
 
 - [Implementer](agents/implementer.md)
 - [Reviewer](agents/reviewer.md)
+- [Agent-driven development guide](guides/agent-development.md)
 
 ```{toctree}
 :hidden:
@@ -83,6 +84,7 @@ The maintained agent role pages live under `docs/agents/`.
 
 agents/implementer
 agents/reviewer
+guides/agent-development
 ```
 
 ## Maintenance notes

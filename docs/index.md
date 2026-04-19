@@ -6,7 +6,7 @@ benchmarking, training, and deployment more reproducible by giving
 classical and learning-based estimators a shared software interface.
 
 These docs are a good place to start if you want to use the package,
-understand the estimator model, or navigate the repository.
+understand the estimator interface, or navigate the repository.
 
 ![The Flow Gym environment](flowgym.jpg)
 
@@ -17,11 +17,11 @@ understand the estimator model, or navigate the repository.
   quickest path to a first estimator run.
 - [User guide](user-guide/index.md):
   Ready to go deeper? Visit the user guide for the Estimator API, runtime
-  state model, workflows, and configuration concepts.
+  state flow, workflows, and configuration concepts.
 - [API reference](api/index.md):
   Looking for a specific class, function, or module? The API reference is
   the quickest way to find the public Python surface.
-- [Contribute](contribute.md):
+- [Contribute](guides/contributing.md):
   Want to contribute to the project? Start here for local setup, development
   workflow, and contributor-facing docs.
 
@@ -34,5 +34,7 @@ understand the estimator model, or navigate the repository.
 getting-started/index
 user-guide/index
 api/index
-contribute
+guides/contributing
+guides/architecture
+project-docs
 ```

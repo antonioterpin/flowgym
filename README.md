@@ -54,7 +54,7 @@ import jax.numpy as jnp
 
 from flowgym.make import make_estimator
 
-model_config = {
+estimator_config = {
     "estimator": "dis_jax",
     "estimate_type": "flow",
     "config": {
@@ -66,8 +66,8 @@ model_config = {
 image_shape = (1, 64, 64)
 estimate_shape = (1, 64, 64, 2)
 
-trained_state, create_state_fn, compute_estimate_fn, model = make_estimator(
-    estimator_config=model_config,
+trained_state, create_state_fn, compute_estimate_fn, estimator = make_estimator(
+    estimator_config=estimator_config,
     image_shape=image_shape,
     estimate_shape=estimate_shape,
     rng=0,
@@ -88,7 +88,7 @@ below.
 ```bash
 uv run python src/main.py \
   --mode eval \
-  --model src/flowgym/config/estimators/flow/real_dis.yaml \
+  --estimator src/flowgym/config/estimators/flow/real_dis.yaml \
   --dataset src/flowgym/config/piv_dataset_class1_eval.yaml
 ```
 

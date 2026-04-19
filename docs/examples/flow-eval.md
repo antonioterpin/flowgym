@@ -9,7 +9,7 @@ shared datasets.
 ## What it does
 
 - generates a tiny synthetic `.npy` flow dataset in a temporary directory
-- writes local dataset and model YAML files
+- writes local dataset and estimator YAML files
 - runs `src/main.py --mode eval`
 - prints the command and the evaluation output
 
@@ -26,7 +26,7 @@ uv run python examples/01_flow_eval.py
 ## What to notice
 
 - It uses the same `src/main.py` entrypoint as real evaluation runs.
-- The dataset config and model config are the main interface between repo
+- The dataset config and estimator config are the main interface between repo
   workflows and estimator code.
 
 ## Related pages
