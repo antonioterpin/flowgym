@@ -15,7 +15,7 @@ structure.
   - [Package use](training-and-evaluation.md#package-use)
   - [Evaluation workflows](training-and-evaluation.md#evaluation-workflows)
   - [Training workflows](training-and-evaluation.md#training-workflows)
-  - [Where examples fit](training-and-evaluation.md#where-examples-fit)
+  - [Example workflows](training-and-evaluation.md#example-workflows)
 
 - [Configuration and data flow](configuration-and-data.md)
   - [The two main kinds of config](configuration-and-data.md#the-two-main-kinds-of-config)

@@ -37,7 +37,7 @@ These workflows are the reason FlowGym has both package-level modules under
 `flowgym.training.*` and repository scripts such as `src/train.py` and
 `src/train_supervised.py`.
 
-## Where examples fit
+## Example workflows
 
 The pages under [Example workflows](../examples/index.md) show complete,
 small repository-backed runs.
