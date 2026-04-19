@@ -76,7 +76,7 @@ def parse_args():
 def prepare_configs(
     args: argparse.Namespace,
 ) -> tuple[dict, dict | None, dict, str | None, dict | None, dict | None]:
-    """Prepare dataset and model configurations based on command line arguments.
+    """Prepare dataset and estimator configurations based on command line arguments.
 
     Args:
         args: Parsed command line arguments.
@@ -86,7 +86,7 @@ def prepare_configs(
             - Dataset configuration dictionary.
             - Second dataset configuration dictionary for comparison,
                 if in compare mode.
-            - Model configuration dictionary.
+            - Estimator configuration dictionary.
             - Output directory path if in training mode, else None.
             - Validation settings dictionary, if validation is enabled.
             - Caching configuration dictionary, if caching is enabled.
@@ -289,7 +289,7 @@ if __name__ == "__main__":
             "Configuration artifacts will not be logged."
         )
     if out_dir is not None:
-        logger.info(f"Saving models in directory: {out_dir}")
+        logger.info(f"Saving estimators in directory: {out_dir}")
 
     key = jax.random.PRNGKey(dataset_config["seed"])
     key, subkey = jax.random.split(key)
@@ -354,7 +354,7 @@ if __name__ == "__main__":
         estimate_shape = gt.shape
 
     # Create the estimator
-    (trainable_state, create_state_fn, compute_estimate_fn, model) = (
+    (trainable_state, create_state_fn, compute_estimate_fn, estimator) = (
         make_estimator(
             estimator_config,
             image_shape=(
@@ -395,21 +395,21 @@ if __name__ == "__main__":
                 "Initializing CacheManager from dataset config: "
                 f"{caching_config}"
             )
-            # Append model-specific suffix to cache_id (e.g. hash of weights)
+            # Append estimator-specific suffix to cache_id (e.g. hash of weights)
             if "cache_id" in caching_config:
-                suffix = model.get_cache_id_suffix(trainable_state)
+                suffix = estimator.get_cache_id_suffix(trainable_state)
                 if suffix:
                     caching_config["cache_id"] += suffix
                     cache_id = caching_config["cache_id"]
                     logger.info(
-                        f"Updated cache_id with model suffix: {cache_id}"
+                        f"Updated cache_id with estimator suffix: {cache_id}"
                     )
 
             cache_manager = CacheManager(**caching_config)
 
         try:
             eval_full_dataset(
-                estimator=model,
+                estimator=estimator,
                 sampler=sampler,
                 create_state_fn=create_state_fn,
                 compute_estimate_fn=compute_estimate_fn,
@@ -446,7 +446,7 @@ if __name__ == "__main__":
 
         try:
             train(
-                estimator=model,
+                estimator=estimator,
                 estimator_config=estimator_config,
                 trainable_state=trainable_state,
                 out_dir=out_dir,
@@ -502,7 +502,7 @@ if __name__ == "__main__":
                 "NNEstimatorTrainableState."
             )
 
-        logger.info("Training supervised model...")
+        logger.info("Training supervised estimator...")
 
         # Caching Setup
         cache_manager = None
@@ -511,20 +511,20 @@ if __name__ == "__main__":
                 "Initializing CacheManager from dataset config: "
                 f"{caching_config}"
             )
-            # Append model-specific suffix to cache_id (e.g. hash of weights)
+            # Append estimator-specific suffix to cache_id (e.g. hash of weights)
             if "cache_id" in caching_config:
-                suffix = model.get_cache_id_suffix(trainable_state)
+                suffix = estimator.get_cache_id_suffix(trainable_state)
                 if suffix:
                     caching_config["cache_id"] += suffix
                     cache_id = caching_config["cache_id"]
                     logger.info(
-                        f"Updated cache_id with model suffix: {cache_id}"
+                        f"Updated cache_id with estimator suffix: {cache_id}"
                     )
             cache_manager = CacheManager(**caching_config)
 
         try:
             train_supervised(
-                estimator=model,
+                estimator=estimator,
                 estimator_config=estimator_config,
                 trainable_state=trainable_state,
                 out_dir=out_dir,
@@ -573,7 +573,7 @@ if __name__ == "__main__":
                 if i != 0:
                     batch = next(sampler)
                 eval(
-                    model=model,
+                    estimator=estimator,
                     trainable_state=trainable_state,
                     create_state_fn=create_state_fn,
                     compute_estimate_fn=compute_estimate_fn,
@@ -606,10 +606,10 @@ if __name__ == "__main__":
             batch2 = next(sampler2)
             assert trainable_state is not None
             comparison(
-                model_config=estimator_config,
+                estimator_config=estimator_config,
                 sampler1=sampler,
                 sampler2=sampler2,
-                model=model,
+                estimator=estimator,
                 create_state_fn=create_state_fn,
                 compute_estimate_fn=compute_estimate_fn,
                 trainable_state=trainable_state,

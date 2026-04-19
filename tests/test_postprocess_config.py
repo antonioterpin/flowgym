@@ -24,7 +24,7 @@ from flowgym.flow.postprocess import (
     tile_average_interpolation,
     universal_median_test,
 )
-from flowgym.make import compile_model
+from flowgym.make import compile_estimator
 from flowgym.utils import load_configuration
 
 config = load_configuration("src/flowgym/config/testing.yaml")
@@ -177,7 +177,7 @@ def test_postprocess_config(B, N, seed):
     # Instantiate the dummy estimator
     model = DummyEstimator.from_config(post_process_config)
     trainable_state = model.create_trainable_state(image, key)
-    create_state_fn, compute_estimate_fn = compile_model(
+    create_state_fn, compute_estimate_fn = compile_estimator(
         model, flow_reference, False
     )
     # Create the state
@@ -265,7 +265,7 @@ def test_postprocess_jit(B, H, time_limit, seed):
     # Instantiate the dummy estimator
     model = DummyEstimator.from_config(post_process_config)
     trainable_state = model.create_trainable_state(image, key=key)
-    create_state_fn, compute_estimate_fn = compile_model(
+    create_state_fn, compute_estimate_fn = compile_estimator(
         model, jnp.zeros((*image.shape, 2)), True
     )
     # Warm up

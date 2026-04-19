@@ -92,8 +92,8 @@ def test_train_supervised_caching_integration(mock_save_estimator):
         sampler_pass1.shutdown = MagicMock()
 
         train_supervised(
-            model=model,
-            model_config=model_config,
+            estimator=model,
+            estimator_config=model_config,
             trainable_state=trainable_state,
             out_dir=tmp_dir,
             create_state_fn=create_state_fn,
@@ -134,8 +134,8 @@ def test_train_supervised_caching_integration(mock_save_estimator):
         model.enrich.reset_mock()
 
         train_supervised(
-            model=model,
-            model_config=model_config,
+            estimator=model,
+            estimator_config=model_config,
             trainable_state=trainable_state,
             out_dir=tmp_dir,
             create_state_fn=create_state_fn,
@@ -194,8 +194,8 @@ def test_estimator_enrich(mock_save_estimator):
         trainable_state.extras = {}
 
         train_supervised(
-            model=model,
-            model_config={"config": {"jit": False}},
+            estimator=model,
+            estimator_config={"config": {"jit": False}},
             trainable_state=trainable_state,
             out_dir=tmp_dir,
             create_state_fn=MagicMock(),

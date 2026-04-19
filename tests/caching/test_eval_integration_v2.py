@@ -82,7 +82,7 @@ def test_evaluate_batches_caching_robust():
 
         # Run evaluate_batches
         results = evaluate_batches(
-            model=model,
+            estimator=model,
             sampler=sampler,
             create_state_fn=create_state_fn,
             compute_estimate_fn=compute_estimate_fn,
@@ -146,7 +146,7 @@ def test_eval_full_dataset_caching_robust():
             return state, {"errors": cache_payload.epe}
 
         eval_full_dataset(
-            model=model,
+            estimator=model,
             sampler=sampler,
             create_state_fn=create_state_fn,
             compute_estimate_fn=compute_estimate_fn,

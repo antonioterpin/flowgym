@@ -62,7 +62,7 @@ def test_eval_full_dataset_with_caching():
     # Run eval_full_dataset
     try:
         eval_full_dataset(
-            model=mock_model,
+            estimator=mock_model,
             sampler=mock_sampler,
             create_state_fn=mock_create_state_fn,
             compute_estimate_fn=mock_compute_estimate_fn,

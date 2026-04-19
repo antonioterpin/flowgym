@@ -22,7 +22,7 @@ from flax.core import FrozenDict, freeze
 from goggles import get_logger
 from goggles.history.types import History
 
-# Models
+# Estimators
 from flowgym.common.base import Estimator
 from flowgym.common.base.trainable_state import (
     EstimatorTrainableState,
@@ -59,8 +59,11 @@ def make_manager(ckpt_dir: Path, keep: int = 3) -> ocp.CheckpointManager:
 
 
 @overload
-def compile_model(
-    model: Estimator, estimates: None, jit: bool = True, history_size: int = 1
+def compile_estimator(
+    estimator: Estimator,
+    estimates: None,
+    jit: bool = True,
+    history_size: int = 1,
 ) -> tuple[
     None,
     CompiledComputeEstimateFn,
@@ -68,8 +71,8 @@ def compile_model(
 
 
 @overload
-def compile_model(
-    model: Estimator,
+def compile_estimator(
+    estimator: Estimator,
     estimates: jnp.ndarray,
     jit: bool = True,
     history_size: int = 1,
@@ -79,8 +82,8 @@ def compile_model(
 ]: ...
 
 
-def compile_model(
-    model: Estimator,
+def compile_estimator(
+    estimator: Estimator,
     estimates: jnp.ndarray | None,
     jit: bool = True,
     history_size: int = 1,
@@ -88,13 +91,13 @@ def compile_model(
     CompiledCreateStateFn | None,
     CompiledComputeEstimateFn,
 ]:
-    """Compile the model for JAX.
+    """Compile the estimator for JAX.
 
     Args:
-        model: The flow field estimator model.
+        estimator: The flow field estimator instance.
         estimates: Example estimates for shape inference.
         jit: Whether to use JIT compilation.
-        history_size: The size of the history for the model.
+        history_size: The size of the history for the estimator.
 
     Returns:
         Compiled functions.
@@ -103,7 +106,7 @@ def compile_model(
     if estimates is not None:
 
         def create_state_fn_impl(images: jnp.ndarray, rng: PRNGKey) -> History:
-            return model.create_state(
+            return estimator.create_state(
                 images,
                 estimates=estimates,
                 image_history_size=history_size,
@@ -121,7 +124,7 @@ def compile_model(
         trainable_state: EstimatorTrainableState,
         cache_payload: CachePayload | None = None,
     ) -> tuple[History, dict]:
-        return model(
+        return estimator(
             images, state, trainable_state, cache_payload=cache_payload
         )
 
@@ -219,7 +222,7 @@ def save_estimator(
     return str(ckpt_root / str(step))
 
 
-def load_model(
+def load_estimator(
     ckpt_dir: str | Path,
     template_state: NNEstimatorTrainableState,
     mode: Literal["resume", "params_only"] = "params_only",
@@ -450,17 +453,17 @@ def make_estimator(
         estimator_config: Configuration dictionary for the estimator.
         image_shape: Shape of the input images (B, H, W).
         estimate_shape: Shape of the estimate. Defaults to (B, H, W, 2).
-        load_from: Path to load the trained model state.
+        load_from: Path to load the trained estimator state.
         rng: Random number generator key or seed.
 
     Returns:
-        EstimatorTrainableState: The trainable state of the model.
-        callable: Function to create the model state.
-        callable: Function to compute the model estimate.
-        Estimator: The model instance.
+        EstimatorTrainableState: The trainable state of the estimator.
+        callable: Function to create the estimator state.
+        callable: Function to compute the estimator estimate.
+        Estimator: The estimator instance.
 
     Raises:
-        ValueError: If estimator not found or model loading fails.
+        ValueError: If estimator not found or estimator loading fails.
     """
     # Import here to avoid circular dependency
     from flowgym import ALL_ESTIMATORS as ESTIMATORS  # noqa: PLC0415
@@ -470,14 +473,14 @@ def make_estimator(
         raise ValueError(
             f"Estimator {estimator_config['estimator']} not found."
         )
-    model_class = ESTIMATORS.get(estimator_config["estimator"])
-    if model_class is None:
+    estimator_class = ESTIMATORS.get(estimator_config["estimator"])
+    if estimator_class is None:
         raise ValueError(
             f"Estimator {estimator_config['estimator']} not found."
         )
-    elif isinstance(model_class, MissingDependency):
-        model_class()  # Raises MissingDependency error
-        # Type narrowing: model_class is not MissingDependency here
+    elif isinstance(estimator_class, MissingDependency):
+        estimator_class()  # Raises MissingDependency error
+        # Type narrowing: estimator_class is not MissingDependency here
         raise ValueError("Unreachable")  # pragma: no cover
 
     if rng is None:
@@ -485,8 +488,8 @@ def make_estimator(
     elif isinstance(rng, int):
         rng = jax.random.PRNGKey(rng)
 
-    # Create the model instance
-    model = cast(type[Estimator], model_class).from_config(
+    # Create the estimator instance
+    estimator = cast(type[Estimator], estimator_class).from_config(
         estimator_config["config"]
         | {
             "estimate_shape": estimate_shape,
@@ -500,22 +503,24 @@ def make_estimator(
     if load_from:
         if estimator_config["estimator"] == "raft_torch":
             if torch is None:
-                raise ValueError("torch required for raft_torch model")
+                raise ValueError("torch required for raft_torch estimator")
             checkpoint = torch.load(load_from, map_location="cuda")
-            model_any = model  # type: Any
-            model_any.raft.load_state_dict(
+            estimator_any = estimator  # type: Any
+            estimator_any.raft.load_state_dict(
                 checkpoint["model_state_dict"], strict=False
             )
             trained_state = None
         else:
             mode = estimator_config.get("load_mode", "params_only")
-            template_state = model.create_trainable_state(
+            template_state = estimator.create_trainable_state(
                 jnp.zeros(image_shape, dtype=jnp.float32), key=rng
             )
             if isinstance(template_state, NNEstimatorTrainableState):
-                trained_state = load_model(load_from, template_state, mode=mode)
+                trained_state = load_estimator(
+                    load_from, template_state, mode=mode
+                )
             else:
-                raise ValueError("Model is not a neural network estimator.")
+                raise ValueError("Estimator is not a neural network estimator.")
         logger.info("Trainable state loaded successfully.")
     # Create a dummy input to initialize the trainable state
     elif image_shape is None:
@@ -525,7 +530,7 @@ def make_estimator(
         trained_state = None
     else:
         sample_images = jnp.zeros(image_shape, dtype=jnp.float32)
-        trained_state = model.create_trainable_state(sample_images, key=rng)
+        trained_state = estimator.create_trainable_state(sample_images, key=rng)
         logger.info("Trainable state created successfully.")
 
     if estimate_shape is None:
@@ -542,15 +547,15 @@ def make_estimator(
         dummy_estimates = None
     else:
         dummy_estimates = jnp.zeros(estimate_shape, dtype=jnp.float32)
-    create_state_fn, compute_estimate_fn = compile_model(
-        model,
+    create_state_fn, compute_estimate_fn = compile_estimator(
+        estimator,
         dummy_estimates,
         estimator_config["config"].get("jit", False) and not DEBUG,
         history_size=estimator_config["config"].get("history_size", 1),
     )
     logger.info("Estimator compiled successfully.")
 
-    return trained_state, create_state_fn, compute_estimate_fn, model
+    return trained_state, create_state_fn, compute_estimate_fn, estimator
 
 
 def select_gt(estimate_type: str, batch: SynthpixBatch) -> jnp.ndarray:

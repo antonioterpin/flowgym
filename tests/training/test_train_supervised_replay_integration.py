@@ -41,8 +41,8 @@ def test_train_supervised_integration_with_replay():
 
     # Call train_supervised
     train_supervised(
-        model=model,
-        model_config={"config": {"jit": False}},
+        estimator=model,
+        estimator_config={"config": {"jit": False}},
         trainable_state=MagicMock(),
         out_dir="/tmp",
         # Use a real dict for state so it can be tree_mapped/stacked

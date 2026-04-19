@@ -91,8 +91,8 @@ def test_raft_integration_caching(mock_save_estimator):
             return jnp.zeros((len(state.history_images), 64, 64, 2))
 
         train_supervised(
-            model=model,
-            model_config={"config": {"jit": True}},
+            estimator=model,
+            estimator_config={"config": {"jit": True}},
             trainable_state=trainable_state,
             out_dir=tmp_dir,
             create_state_fn=create_state_fn,
@@ -140,8 +140,8 @@ def test_raft_integration_caching(mock_save_estimator):
             )
 
             train_supervised(
-                model=model,
-                model_config={"config": {"jit": True}},
+                estimator=model,
+                estimator_config={"config": {"jit": True}},
                 trainable_state=trainable_state,
                 out_dir=tmp_dir,
                 create_state_fn=create_state_fn,

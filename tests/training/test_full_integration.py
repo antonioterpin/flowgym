@@ -91,8 +91,8 @@ def test_train_supervised_full_integration(
         }
 
         train_supervised(
-            model=model,
-            model_config={"config": {"jit": False}},
+            estimator=model,
+            estimator_config={"config": {"jit": False}},
             trainable_state=dummy_trainable_state,
             out_dir=str(out_dir),
             create_state_fn=create_state_fn,
@@ -151,8 +151,8 @@ def test_train_supervised_replay_enrichment(
 
     with patch.object(ReplayBuffer, "push", tracking_push):
         train_supervised(
-            model=model,
-            model_config={"config": {"jit": False}},
+            estimator=model,
+            estimator_config={"config": {"jit": False}},
             trainable_state=dummy_trainable_state,
             out_dir=str(out_dir),
             create_state_fn=create_state_fn,
@@ -203,8 +203,8 @@ def test_train_supervised_checkpointing_roundtrip(
     # Run training to create a checkpoint
     with patch("train_supervised.save_estimator", side_effect=tracking_save):
         train_supervised(
-            model=model,
-            model_config={"config": {"jit": False}},
+            estimator=model,
+            estimator_config={"config": {"jit": False}},
             trainable_state=dummy_trainable_state,
             out_dir=str(out_dir),
             create_state_fn=create_state_fn,
@@ -248,8 +248,8 @@ def test_train_supervised_no_enrichment_without_flag(
 
     with patch.object(ReplayBuffer, "push", tracking_push):
         train_supervised(
-            model=model,
-            model_config={"config": {"jit": False}},
+            estimator=model,
+            estimator_config={"config": {"jit": False}},
             trainable_state=dummy_trainable_state,
             out_dir=str(out_dir),
             create_state_fn=create_state_fn,
@@ -307,8 +307,8 @@ def test_train_rl_full_integration(tmp_path, mock_env):
         patch("train.log_flow_estimate"),
     ):
         train(
-            model=model,
-            model_config={"config": {"jit": False}},
+            estimator=model,
+            estimator_config={"config": {"jit": False}},
             trainable_state=trainable_state,
             out_dir=str(out_dir),
             create_state_fn=create_state_fn,
@@ -361,8 +361,8 @@ def test_train_rl_replay_buffer_used(tmp_path, mock_env):
         patch("train.log_flow_estimate"),
     ):
         train(
-            model=model,
-            model_config={"config": {"jit": False}},
+            estimator=model,
+            estimator_config={"config": {"jit": False}},
             trainable_state=trainable_state,
             out_dir=str(tmp_path),
             create_state_fn=create_state_fn,
@@ -420,8 +420,8 @@ def test_train_rl_replay_buffer_samples(tmp_path, mock_env):
         patch("train.log_flow_estimate"),
     ):
         train(
-            model=model,
-            model_config={"config": {"jit": False}},
+            estimator=model,
+            estimator_config={"config": {"jit": False}},
             trainable_state=trainable_state,
             out_dir=str(tmp_path),
             create_state_fn=create_state_fn,
@@ -482,8 +482,8 @@ def test_train_supervised_validation_runs(
         }
 
         train_supervised(
-            model=model,
-            model_config={"config": {"jit": False}},
+            estimator=model,
+            estimator_config={"config": {"jit": False}},
             trainable_state=dummy_trainable_state,
             out_dir=str(out_dir),
             create_state_fn=create_state_fn,
@@ -549,8 +549,8 @@ def test_train_supervised_save_only_best(
         patch("train_supervised.save_estimator", side_effect=tracking_save),
     ):
         train_supervised(
-            model=model,
-            model_config={"config": {"jit": False}},
+            estimator=model,
+            estimator_config={"config": {"jit": False}},
             trainable_state=dummy_trainable_state,
             out_dir=str(out_dir),
             create_state_fn=create_state_fn,
@@ -593,8 +593,8 @@ def test_train_supervised_metrics_logged(
 
     # Run training
     train_supervised(
-        model=model,
-        model_config={"config": {"jit": False}},
+        estimator=model,
+        estimator_config={"config": {"jit": False}},
         trainable_state=dummy_trainable_state,
         out_dir=str(out_dir),
         create_state_fn=create_state_fn,
