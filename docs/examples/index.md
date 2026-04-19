@@ -1,9 +1,10 @@
 # Example workflows
 
-This section is a graduated ladder from first estimator use to full
-repository workflows. It complements [Getting started](../getting-started/index.md)
-and the [User guide](../user-guide/index.md) with examples that are runnable,
-curated, and small enough to learn from.
+This section collects small, runnable examples of the main FlowGym
+workflows.
+
+They cover complete paths through the code, from a single in-memory
+estimate to configuration-driven evaluation, training, and caching runs.
 
 ## How to use this section
 

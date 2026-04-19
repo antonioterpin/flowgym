@@ -119,7 +119,11 @@ If you are documenting or debugging a user-facing workflow, start with
 
 ## Testing shape
 
-Tests live in `tests/` and largely follow the package structure.
+Tests live in `tests/` and are intended to largely follow the package
+structure, with a mix of unit and integration coverage. That is the shape
+the project is aiming for, but it is not fully realized yet; see
+[issue #22](https://github.com/antonioterpin/flowgym/issues/22) for the
+current cleanup and restructuring work.
 
 - top-level tests:
   cross-cutting behavior such as preprocessing, filtering, or configuration

@@ -1,36 +1,25 @@
 # Caching examples
 
-FlowGym ships two example scripts that demonstrate the repository's
-cache-backed evaluation flow. They are lightweight examples of the same
-orchestration path used by `src/main.py`, but they make the most sense after
-you have already seen the basic evaluation workflow.
+These pages document two example scripts that exercise FlowGym's
+cache-backed evaluation workflow:
 
-## What these examples show
+- `examples/10_caching.py` for a `dis_jax` estimator
+- `examples/11_caching.py` for a `raft_jax` estimator
 
-- `examples/10_caching.py`:
-  creates temporary `.mat` files, evaluates a `dis_jax` model, then reruns
-  the same configuration with cache warm-start enabled.
-- `examples/11_caching.py`:
-  repeats the pattern with `raft_jax`, using a smaller configuration to
-  reduce memory pressure.
+Both scripts run the same evaluation twice:
 
-Both examples:
+1. once with a cold cache
+2. once with a warm cache
 
-- generate temporary input data
-- write temporary dataset and model YAML files
-- invoke `src/main.py --mode eval`
-- compare a cold-cache run with a warm-cache run
+The point is to show what changes when cached evaluation artifacts are
+reused instead of recomputed.
 
-## When to use them
+## Scripts
 
-- Use this page after [Flow evaluation](flow-eval.md), not before it.
-- Use the DIS example when you want the simplest cache walkthrough.
-- Use the RAFT example when you need to understand how cache keys interact
-  with model-specific configuration.
-- Use these examples as integration references, not as minimal package
-  quickstarts.
+- `examples/10_caching.py`
+- `examples/11_caching.py`
 
-## Prerequisites
+## How to run them
 
 These examples assume a local repository checkout with development
 dependencies available:
@@ -39,15 +28,82 @@ dependencies available:
 uv sync --group dev
 ```
 
-For docs work, you do not need to run them. They are here to document the
-intended workflow and to provide a stable place to point readers who want a
-real script.
+Run the DIS example with:
+
+```bash
+uv run python examples/10_caching.py
+```
+
+Run the RAFT example with:
+
+```bash
+uv run python examples/11_caching.py
+```
+
+## What the scripts do
+
+Both scripts:
+
+- create temporary `.mat` files locally
+- write temporary dataset and model YAML files
+- invoke `src.main` in evaluation mode
+- measure the duration of two runs
+
+In the first run, the dataset config uses:
+
+```yaml
+caching:
+  warm_start: index
+```
+
+In the second run, the script rewrites the dataset config to use:
+
+```yaml
+caching:
+  warm_start: all
+```
+
+That change is the key action in both examples. The first run builds cache
+artifacts. The second run tries to load and reuse them.
+
+## The DIS example
+
+`examples/10_caching.py` uses a small `dis_jax` model configuration and a
+cache id named `dis_example_cache`.
+
+Use this script when you want the simplest caching walkthrough and the
+smallest amount of model-specific detail.
+
+## The RAFT example
+
+`examples/11_caching.py` uses `raft_jax` with a reduced configuration so
+the example is lighter on memory and runtime than a larger RAFT setup.
+
+Use this script when you want to see the same caching pattern with a
+learning-based estimator.
+
+The RAFT script also checks the output for a cache-id update message, which
+is useful when you want to verify how caching interacts with model-specific
+configuration.
+
+## What to look for in the output
+
+When the scripts run successfully, you should see:
+
+- output from the first evaluation run
+- output from the second evaluation run
+- the duration of each run
+- a final comparison that reports whether the warm-cache run was faster
+
+For the RAFT example, you may also see a message confirming that the cache
+id was updated with a model-specific suffix.
+
+These scripts are meant to be practical references for the real example
+files, so the most important thing to compare is the difference between the
+first and second run.
 
 ## Related docs
 
-- [First estimate](first-estimate.md)
 - [Flow evaluation](flow-eval.md)
-- [Getting started](../getting-started/index.md) for the minimal public API path
-- [Evaluation and caching API](../api/evaluation.md) for module reference
-- [Architecture guide](../guides/architecture.md) for where caching lives in
-  the codebase
+- [Evaluation and caching API](../api/evaluation.md)
+- [Configuration and data flow](../user-guide/configuration-and-data.md)

@@ -2,8 +2,8 @@
 
 FlowGym supports more than one style of use.
 
-At the package level, you can build an estimator directly and run it from
-Python. At the repository level, you can also launch evaluation, training,
+When imported as a package, you can build an estimator directly and run it from
+Python. When cloning the repository, you can also launch evaluation, training,
 and comparison workflows from configuration files.
 
 ## Package use
@@ -26,7 +26,7 @@ These workflows usually involve:
 - a model configuration
 - a dataset configuration
 - evaluation helpers under `flowgym.common.evaluation`
-- repository entrypoints such as `src/main.py` and `src/eval.py`
+- the main repository entrypoint, `src/main.py`.
 
 ## Training workflows
 
@@ -39,9 +39,11 @@ These workflows are the reason FlowGym has both package-level modules under
 
 ## Where examples fit
 
-The pages under [Example workflows](../examples/index.md) sit between the
-package API and the full contributor/developer workflow. They are the best
-place to look when you want a concrete repository-backed run.
+The pages under [Example workflows](../examples/index.md) show complete,
+small repository-backed runs.
+
+Use them when you want to see how estimator configuration, dataset
+configuration, and `src/main.py` fit together in practice.
 
 ## Related pages
 

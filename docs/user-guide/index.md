@@ -6,10 +6,10 @@ mental model of the estimator API, common workflows, and configuration
 structure.
 
 - [Estimator API overview](estimator-api.md)
-  - [The main pieces](estimator-api.md#the-main-pieces)
-  - [Why the API is split this way](estimator-api.md#why-the-api-is-split-this-way)
-  - [The usual flow](estimator-api.md#the-usual-flow)
-  - [What lives in the runtime state](estimator-api.md#what-lives-in-the-runtime-state)
+  - [What an `Estimator` is](estimator-api.md#what-an-estimator-is)
+  - [The call signature](estimator-api.md#the-call-signature)
+  - [Runtime state and trainable state](estimator-api.md#runtime-state-and-trainable-state)
+  - [Using `make_estimator(...)`](estimator-api.md#using-make_estimator)
 
 - [Training and evaluation workflows](training-and-evaluation.md)
   - [Package use](training-and-evaluation.md#package-use)
@@ -40,9 +40,4 @@ estimator-api
 training-and-evaluation
 configuration-and-data
 ../examples/index
-../examples/first-estimate
-../examples/flow-eval
-../examples/supervised-training
-../examples/density-eval
-../examples/caching
 ```

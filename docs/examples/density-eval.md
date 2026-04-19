@@ -1,7 +1,7 @@
 # Density evaluation
 
-This example shows that FlowGym's orchestration layer is not only for flow
-fields. The same evaluation path also works for density estimators.
+This example runs the repository evaluation workflow with a density
+estimator instead of a flow estimator.
 
 ## What it does
 

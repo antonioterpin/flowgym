@@ -105,7 +105,7 @@ Keep documentation responsibilities split by purpose:
   canonical landing page for humans
 - `docs/getting-started/index.md`:
   onboarding index and first-time user path
-- `docs/user-guide*.md`:
+- `docs/user-guide/`:
   concept-first package guidance beyond the quickstart
 - `docs/examples/`:
   curated walkthroughs tied to files in `examples/`

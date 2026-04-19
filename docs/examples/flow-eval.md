@@ -1,8 +1,10 @@
 # Flow evaluation
 
-This example is the first full repository-backed workflow in the ladder.
-After the direct estimator example, this is the next step when you want to
-run FlowGym the same way the repository does.
+This example runs a small repository-backed flow evaluation end to end.
+
+It uses local temporary files and the normal `src/main.py --mode eval`
+entrypoint, so you can see the full evaluation path without depending on
+shared datasets.
 
 ## What it does
 
@@ -23,7 +25,6 @@ uv run python examples/01_flow_eval.py
 
 ## What to notice
 
-- The example is self-contained and does not depend on `/shared/...` paths.
 - It uses the same `src/main.py` entrypoint as real evaluation runs.
 - The dataset config and model config are the main interface between repo
   workflows and estimator code.

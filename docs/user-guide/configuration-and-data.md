@@ -19,12 +19,12 @@ In repository-backed workflows, the orchestration layer reads these configs,
 creates the corresponding estimator and dataset objects, and dispatches into
 evaluation or training.
 
-The key entrypoints are:
+The main user-facing entrypoint is `src/main.py`.
 
-- `src/main.py`
-- `src/eval.py`
-- `src/train.py`
-- `src/train_supervised.py`
+It reads the model and dataset configurations, creates the corresponding
+objects, and dispatches into evaluation or training workflows through the
+repository scripts such as `src/eval.py`, `src/train.py`, and
+`src/train_supervised.py`.
 
 ## Where configs live
 

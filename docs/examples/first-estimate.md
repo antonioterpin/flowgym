@@ -1,11 +1,10 @@
 # First estimate
 
-This is the smallest meaningful FlowGym example in the repository. It sits
-between the minimal snippets in [Getting started](../getting-started/index.md) and
-the config-driven workflows later in this section.
+This example instantiates an estimator and runs one estimate on a pair of
+images entirely in memory.
 
-It answers one question: "Can I instantiate an estimator and run it on a
-pair of images without setting up dataset YAML files yet?"
+It is the smallest repository example that exercises the public estimator
+API without introducing dataset configuration or CLI orchestration.
 
 ## What it does
 

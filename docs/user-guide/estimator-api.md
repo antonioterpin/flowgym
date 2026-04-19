@@ -1,156 +1,187 @@
 # Estimator API overview
 
-The `Estimator` API is the center of FlowGym's public package surface.
+FlowGym organizes different methods around a common `Estimator` interface.
+Whether a method is classical or learning-based, package-level use follows
+the same basic contract for creating state, stepping through observations,
+and carrying estimator parameters.
 
-Most users start with `flowgym.make.make_estimator`, which builds an
-estimator from a configuration dictionary and returns the pieces 
-needed to run it.
+For exact signatures and docstring-level details, see:
 
-FlowGym is organized around a unified `Estimator` interface: different
-flow-field quantification methods, and even related tasks such as density
-estimation, can exist as instances of an `Estimator` as long as they expose the
-same estimation contract.
+- [Package and factory](../api/package.md) for `flowgym.make` and
+  `make_estimator(...)`
+- [Base classes and environment](../api/base.md) for the base `Estimator`
+  class and trainable-state types
+- [Estimators](../api/estimators.md) for concrete estimator implementations
 
-## The main pieces
+## What an `Estimator` is
 
-At a high level, `make_estimator` returns:
+In FlowGym, an `Estimator` is an object that maps observations to
+quantities of interest through a shared interface.
 
-- an `EstimatorTrainableState` object:
-  the learned parameters and optimizer-related state for the estimator, if
-  applicable, or an empty state if the estimator is not trainable
-- a state-construction function:
-  a helper that creates a `History` object from an input frame
-- an estimate function:
-  a helper that advances the estimator on the next frame and returns the new
-  runtime state together with metrics
-- an `Estimator` object:
-  the concrete estimator implementation
+For flow-field quantification, the observation is often a tracer-particle
+image or image pair, and the quantity of interest is a flow estimate. The
+same interface can also be used for related tasks, such as density
+estimation.
 
-This means that FlowGym separates two different kinds of state:
+The point of the interface is not that all estimators work the same way
+internally. The point is that they can be used through the same external
+contract even when their internals are very different.
 
-- trainable state:
-  model parameters, optimizer state, and other persistent learned values
-- runtime state:
-  the per-sequence history needed to estimate the next frame, such as image
-  history, estimate history, and optional RNG/history extras
+## The call signature
 
-## A mental model for the two states
-
-One useful way to think about the API is:
-
-- `trainable_state` answers:
-  "what has this estimator learned?"
-- runtime `state` answers:
-  "what does this estimator currently remember about this sequence?"
-
-`trainable_state` is the long-term part of the estimator. For learning-based
-methods, it typically contains model weights, optimizer state, and related
-training objects. For classical methods, it can simply be an empty
-container, which lets FlowGym run classical and learning-based estimators
-through the same pipeline.
-
-The runtime `state` is the short-term context propagated across successive
-calls. It changes every time you advance through a sequence of images.
-
-That is why FlowGym keeps them separate: one is long-lived model knowledge,
-the other is run-time context.
-
-## The usual flow
-
-Most package-level use follows the same pattern:
-
-1. define a `model_config`
-2. call `make_estimator(...)`
-3. initialize the runtime state from an input frame
-4. compute estimates on subsequent frames
-
-In practice, that usually looks like this:
-
-```python
-trained_state, create_state_fn, compute_estimate_fn, model = make_estimator(
-    ...
-)
-
-state = create_state_fn(first_frame, rng)
-state, metrics = compute_estimate_fn(next_frame, state, trained_state)
-```
-
-The key point is that `compute_estimate_fn(...)` does not hide state updates
-inside the estimator object. It returns the next runtime state explicitly.
-
-## Why the API is split this way
-
-By this point, the main design choice in FlowGym is hopefully visible:
-estimation is expressed as an explicit state transition, not as hidden
-mutation inside an object.
-
-To align with JAX, that contract is stateless and functional. Each
-estimation step has the shape:
+The `Estimator` interface follows JAX's functional style. Each estimation
+step has the shape:
 
 ```python
 new_state, metrics = estimator(image, state, trainable_state)
 ```
 
-That shape is deliberate. It matches how JAX works best, and it also makes
-the estimator step easy to inspect: the inputs, the evolving history, and
-the returned outputs are all visible in one place.
+Each call receives:
 
-It also brings the usual JAX benefits:
+- the latest observation
+- the current runtime `state`
+- the long-lived `trainable_state`
 
-- `jax.jit` can compile the computation ahead of time
-- the compiled function can execute efficiently on GPUs and other
-  accelerators
-- data flow is explicit, which makes batching, checkpointing, and repeated
-  evaluation easier to reason about
-- there is less hidden Python-side mutation that would interfere with JAX's
-  tracing and compilation model
+and returns:
 
-## What lives in the runtime state
+- an updated runtime `state`
+- a `metrics` dictionary for logging or inspection
 
-The runtime `state` is created by `Estimator.create_state(...)` and is
-designed as a JAX-compatible history object.
+The call is side-effect free: the input observation and the
+`trainable_state` are not mutated in place. Instead, the next runtime state
+is returned explicitly.
 
-It usually contains at least:
+That makes the data flow visible. The caller can see exactly what
+observation goes in, what context is carried forward, and what metrics come
+out.
 
-- `"images"`:
-  the image history seen so far
-- `"estimates"`:
-  the estimate history produced so far
-- optional `"keys"`:
-  per-example random keys for deterministic JAX randomness
-- optional extras:
-  estimator-specific history fields
+## Runtime state and trainable state
 
-In practice, this means the same interface can support both:
+An estimator in FlowGym has two kinds of state:
+
+- runtime `state`:
+  the short-term context needed to estimate the next observation
+- `trainable_state`:
+  the long-term parameters of the estimator
+
+### Runtime state
+
+The runtime `state` captures the context propagated across successive calls.
+For simple algorithms, that context may be limited to the current image pair
+or the rolled image and estimate history. More advanced methods may retain
+previous estimates, recurrent internal variables, or controlled randomness.
+
+In practice, the runtime state commonly includes:
+
+- image history
+- estimate history
+- optional estimator-specific extras
+- optional PRNG keys carried across calls
+
+Because the state is explicit, the same interface supports both:
 
 - one-shot estimators:
-  methods that only need the current image pair
+  methods that only need the current observation or image pair, like
+  classical PIV methods
 - recurrent estimators:
-  methods that retain short-term history, previous estimates, recurrent
-  variables, or controlled randomness across calls
+  methods that exploit short-term temporal context across calls, like 
+  learned recurrent models or classical methods with multi-frame processing
 
-The updated `state` returned by each call includes the rolled history and,
-when used, updated PRNG keys to carry controlled randomness into the next
-step.
+When image pairs are processed independently, such as during benchmarking on
+a shuffled dataset, the runtime state can simply be re-initialized before
+each estimation.
 
-## Where the pieces live
+The runtime state is created through the estimator-state helpers exposed by
+the package. The exact state object and initialization details are
+documented in [Base classes and environment](../api/base.md) and
+[Package and factory](../api/package.md).
 
-- `flowgym.make`:
-  factory helpers for building estimators, compiling the step functions, and
-  handling checkpoints
-- `flowgym.common.base`:
-  shared interfaces and state types
-- `flowgym.flow` and `flowgym.density`:
-  concrete estimator families
+### Trainable state
 
-If you want to see the exact implementation shape, the two most relevant
-places are:
+The `trainable_state` captures the long-term parameters of the estimator.
+For learning-based methods, this usually includes model weights, optimizer
+state, and related training information.
 
-- `src/flowgym/make.py`
-- `src/flowgym/common/base/estimator.py`
+Classical estimators usually do not have trainable parameters. In those cases,
+FlowGym still passes an empty trainable-state container through the same
+interface. That is what allows classical and learning-based methods to be
+swapped into the same workflow without changing the surrounding pipeline.
+
+## Why the split is useful
+
+FlowGym separates runtime state from trainable state because they change on
+different timescales and serve different roles.
+
+- runtime state changes as a sequence is processed
+- trainable state changes only when the estimator is trained, restored, or
+  otherwise updated persistently
+
+This split also matches how JAX works best:
+
+- the estimator step can be treated as a pure state transition
+- the computation can be compiled with `jax.jit`
+- batching, checkpointing, and repeated evaluation are easier to reason
+  about because the evolving context is explicit
+
+## Using `make_estimator(...)`
+
+Most users do not instantiate an `Estimator` subclass directly. They start
+with `flowgym.make.make_estimator(...)`, which builds the estimator and
+returns the pieces needed to run it in a package-level workflow.
+
+At a high level, `make_estimator(...)` returns:
+
+- a `trainable_state`
+- a `create_state_fn` helper for initializing runtime state
+- a `compute_estimate_fn` helper for stepping the estimator
+- the concrete `Estimator` object
+
+That means the usual public flow looks like this:
+
+```python
+trained_state, create_state_fn, compute_estimate_fn, estimator = make_estimator(
+    estimator_config=estimator_config,
+    ...
+)
+
+state = create_state_fn(first_frame, rng)
+next_state, metrics = compute_estimate_fn(next_frame, state, trained_state)
+```
+
+The helper functions are not a different abstraction from the `Estimator`
+contract. They are the package-level way FlowGym prepares that contract for
+real use, including shape inference, compilation, and estimator
+construction.
+
+For the generated reference docs behind this flow, see:
+
+- [Package and factory](../api/package.md) for `make_estimator(...)` and
+  the factory helpers
+- [Base classes and environment](../api/base.md) for the base estimator
+  methods and trainable-state types
+
+## Hooks around estimation
+
+The interface also gives FlowGym standard places to attach processing steps
+around estimation.
+
+- pre-processing:
+  configured on the base `Estimator` and applied before estimation
+- post-processing:
+  available on flow-field estimators through the `FlowFieldEstimator`
+  subclass
+
+This lets pre-processing, estimation, and post-processing be specified
+independently instead of being entangled inside each algorithm.
+
+The generated reference docs for those hooks are in:
+
+- [Base classes and environment](../api/base.md)
+- [Estimators](../api/estimators.md)
 
 ## Related pages
 
 - [Quick overview](../getting-started/quick-overview.md)
 - [API reference](../api/index.md)
+- [Configuration and data flow](configuration-and-data.md)
 - [Training and evaluation workflows](training-and-evaluation.md)
