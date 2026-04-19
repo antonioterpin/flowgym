@@ -12,7 +12,7 @@ from synthpix.sampler import Sampler
 
 from eval import evaluate_batches
 from flowgym.common.base import Estimator, NNEstimatorTrainableState
-from flowgym.make import save_model
+from flowgym.make import save_estimator
 from flowgym.training.caching import CacheManager, enrich_batch
 from flowgym.training.replay import ReplayBuffer
 from flowgym.types import (
@@ -25,6 +25,9 @@ from flowgym.types import (
 from flowgym.utils import DEBUG, GracefulShutdown
 
 logger = gg.get_logger(__name__, with_metrics=True)
+
+# Keep the old module attribute available for tests and external patching.
+save_model = save_estimator
 
 
 def train_supervised(
@@ -388,12 +391,12 @@ def train_supervised(
                     batch_idx % save_every == 0 or batch_idx == num_batches - 1
                 ):
                     if not save_only_best:
-                        save_model(
+                        save_estimator(
                             state=trainable_state,
                             out_dir=out_dir,
                             step=batch_idx,
-                            model=model,
-                            model_name=model.__class__.__name__,
+                            estimator=model,
+                            estimator_name=model.__class__.__name__,
                             sampler=sampler,
                         )
 
@@ -411,12 +414,12 @@ def train_supervised(
                         if current_mean_error < best_mean_error:
                             best_mean_error = current_mean_error
 
-                            save_model(
+                            save_estimator(
                                 state=trainable_state,
                                 out_dir=out_dir,
                                 step=batch_idx,
-                                model=model,
-                                model_name=model.__class__.__name__,
+                                estimator=model,
+                                estimator_name=model.__class__.__name__,
                                 sampler=sampler,
                             )
 

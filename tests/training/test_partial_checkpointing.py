@@ -1,4 +1,4 @@
-"""Integration tests for checkpoint/resume with flowgym.save_model and synthpix.
+"""Integration tests for checkpoint/resume with flowgym.save_estimator and synthpix.
 
 Tests real save/restore cycles for SyntheticImageSampler and RealImageSampler,
 validating sampler state is preserved across checkpoint boundaries.
@@ -15,7 +15,7 @@ import synthpix
 from flax.core import FrozenDict
 
 from flowgym.common.base.trainable_state import NNEstimatorTrainableState
-from flowgym.make import load_model, save_model
+from flowgym.make import load_model, save_estimator
 
 
 def _make_synthetic_config(file_list: list[str]) -> dict:
@@ -133,7 +133,7 @@ def test_synthetic_sampler_checkpoint_integration(tmp_path, npy_flow_files):
     """Test checkpoint/restore cycle for SyntheticImageSampler.
 
     Verifies that:
-    1. flowgym.save_model correctly saves sampler state alongside model state
+    1. flowgym.save_estimator correctly saves sampler state alongside model state
     2. synthpix.make(load_from=...) correctly restores sampler state
     3. The restored sampler produces identical outputs to original
     """
@@ -156,11 +156,11 @@ def test_synthetic_sampler_checkpoint_integration(tmp_path, npy_flow_files):
         model_state = _make_model_state()
         model_name = "CheckpointTest_synthetic"
 
-        save_path_str = save_model(
+        save_path_str = save_estimator(
             state=model_state,
             out_dir=tmp_path,
             step=10,
-            model_name=model_name,
+            estimator_name=model_name,
             sampler=sampler,
         )
         save_path = pathlib.Path(save_path_str)
@@ -205,7 +205,7 @@ def test_real_sampler_checkpoint_integration(tmp_path, mock_mat_files):
     """Test checkpoint/restore cycle for RealImageSampler.
 
     Verifies that:
-    1. flowgym.save_model correctly saves sampler state alongside model state
+    1. flowgym.save_estimator correctly saves sampler state alongside model state
     2. synthpix.make(load_from=...) correctly restores sampler state
     3. The restored sampler produces identical outputs to original
     """
@@ -229,11 +229,11 @@ def test_real_sampler_checkpoint_integration(tmp_path, mock_mat_files):
         model_state = _make_model_state()
         model_name = "CheckpointTest_real"
 
-        save_path_str = save_model(
+        save_path_str = save_estimator(
             state=model_state,
             out_dir=tmp_path,
             step=10,
-            model_name=model_name,
+            estimator_name=model_name,
             sampler=sampler,
         )
         save_path = pathlib.Path(save_path_str)

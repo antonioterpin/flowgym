@@ -414,7 +414,7 @@ if __name__ == "__main__":
                 create_state_fn=create_state_fn,
                 compute_estimate_fn=compute_estimate_fn,
                 trainable_state=trainable_state,
-                estimate_type=model_config["estimate_type"],
+                estimate_type=estimator_config["estimate_type"],
                 key=key,
                 print_files=dataset_config.get("print_files", False),
                 num_batches=dataset_config.get("num_batches", None),

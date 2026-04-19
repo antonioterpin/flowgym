@@ -138,7 +138,7 @@ def run_main(dataset_path: Path, model_path: Path, description: str):
         "python",
         "-m",
         "src.main",
-        "--model",
+        "--estimator",
         str(model_path),
         "--dataset",
         str(dataset_path),

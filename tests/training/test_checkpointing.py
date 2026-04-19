@@ -13,7 +13,7 @@ from flax.core import FrozenDict
 
 from flowgym.common.base.estimator import Estimator
 from flowgym.common.base.trainable_state import NNEstimatorTrainableState
-from flowgym.make import load_model, make_manager, save_model
+from flowgym.make import load_model, make_manager, save_estimator
 from flowgym.training.optimizer import build_optimizer_from_config
 
 # ---------------------------------------------------------------------------
@@ -99,11 +99,11 @@ def test_checkpoint_resume_roundtrip(clean_tmp_path):
     model_name = "DummyEstimator"
 
     # Save checkpoint
-    ckpt_dir = save_model(
+    ckpt_dir = save_estimator(
         state=state1,
         out_dir=tmp_path,
         step=step_to_save,
-        model_name=model_name,
+        estimator_name=model_name,
     )
 
     ckpt_dir = Path(ckpt_dir)
@@ -187,11 +187,11 @@ def test_checkpoint_finetune_with_new_optimizer(clean_tmp_path):
     model_name = "DummyEstimator"
 
     # Save checkpoint
-    save_model(
+    save_estimator(
         state=trained_state,
         out_dir=tmp_path,
         step=step_to_save,
-        model_name=model_name,
+        estimator_name=model_name,
     )
     ckpt_dir = tmp_path / "checkpoints" / model_name / str(step_to_save)
     time.sleep(1)
@@ -363,11 +363,11 @@ def test_checkpoint_robust_optimizer_override(clean_tmp_path):
         apply_fn=simple_apply_fn, params=params, tx=tx_adam, extras=None
     )
 
-    save_model(
+    save_estimator(
         state=state_save,
         out_dir=tmp_path,
-        model=model_adam,
-        model_name="RobustTest",
+        estimator=model_adam,
+        estimator_name="RobustTest",
         step=1,
     )
     ckpt_dir = tmp_path / "checkpoints" / "RobustTest" / "1"

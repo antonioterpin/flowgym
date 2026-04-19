@@ -69,10 +69,11 @@ class FluidEnv:
             state: The current state of the environment (sampler, gt).
 
         Returns:
-            A tuple `(obs, state, done)` where `obs` is the initial pair
-            of images, `state` is the next environment state, and `done`
-            contains per-sample episode flags with shape `(batch_size,)`.
-            If episodic mode is disabled, all values in `done` are `False`.
+            obs: The initial observation (pair of images).
+            state: The next state of the environment.
+            done: An array of booleans indicating if each
+                episode is done. Shape (batch_size,). If episodic is False,
+                this will always be False.
 
         Raises:
             ValueError: If episodic mode is enabled but sampler doesn't

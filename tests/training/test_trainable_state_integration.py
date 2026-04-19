@@ -16,7 +16,7 @@ from flowgym.common.base.trainable_state import (
 )
 from flowgym.make import (
     load_model,
-    save_model,
+    save_estimator,
 )
 
 # ---------------------------------------------------------------------------
@@ -169,12 +169,12 @@ def test_apply_gradients_updates_params_and_preserves_tx_and_extras():
 
 
 # ---------------------------------------------------------------------------
-# save_model / load_model: resumability and module-name independence
+# save_estimator / load_model: resumability and module-name independence
 # ---------------------------------------------------------------------------
 
 
 def test_save_and_load_roundtrip_resumable(tmp_path):
-    """Round-trip through save_model/load_model preserves dynamic state."""
+    """Round-trip through save_estimator/load_model preserves dynamic state."""
 
     out_dir = tmp_path
     model_name = "dummy_model"
@@ -185,7 +185,11 @@ def test_save_and_load_roundtrip_resumable(tmp_path):
 
     # Save
     # Save
-    save_model(original_state, out_dir=str(out_dir), model_name=model_name)
+    save_estimator(
+        original_state,
+        out_dir=str(out_dir),
+        estimator_name=model_name,
+    )
     assert ckpt_path.exists(), "Checkpoint directory should be created"
 
     # Build a fresh template_state (as if in a new process)
@@ -220,7 +224,7 @@ def test_save_and_load_supports_training_resumption(tmp_path):
 
     # Path B: train 1 step, save, load, train another step
     s1_b = init_state.apply_gradients(grads=grads1)
-    save_model(s1_b, out_dir=str(out_dir), model_name=model_name)
+    save_estimator(s1_b, out_dir=str(out_dir), estimator_name=model_name)
     assert ckpt_path.exists()
 
     # Fresh template to simulate new process
@@ -252,7 +256,11 @@ def test_load_model_uses_template_static_tx_not_checkpoint(tmp_path):
     tx1 = optax.adam(learning_rate=1e-3)
     original_state = _make_dummy_state(tx=tx1, global_step=10)
 
-    save_model(original_state, out_dir=str(out_dir), model_name=model_name)
+    save_estimator(
+        original_state,
+        out_dir=str(out_dir),
+        estimator_name=model_name,
+    )
     assert ckpt_path.exists()
 
     # Now build a template with *different* tx (e.g., different LR)
@@ -273,13 +281,13 @@ def test_load_model_uses_template_static_tx_not_checkpoint(tmp_path):
     assert loaded_state.tx is tx2
 
 
-def test_save_model_turns_relative_directory_into_absolute(tmp_path):
-    """save_model should convert relative out_dir to absolute path."""
+def test_save_estimator_turns_relative_directory_into_absolute(tmp_path):
+    """save_estimator should convert relative out_dir to absolute path."""
     relative_out_dir = "relative_dir"
     model_name = "test_model"
     # Expected: relative_out_dir/checkpoints/model_name/step_0...
-    # But save_model places it in relative_out_dir/checkpoints/model_name
-    # Return value of save_model is the full step path.
+    # But save_estimator places it in relative_out_dir/checkpoints/model_name
+    # Return value of save_estimator is the full step path.
     # Test checks if directory exists.
     ckpt_path = os.path.abspath(
         os.path.join(relative_out_dir, "checkpoints", model_name)
@@ -288,7 +296,11 @@ def test_save_model_turns_relative_directory_into_absolute(tmp_path):
     state = _make_dummy_state(global_step=0)
 
     # Save using relative path
-    save_model(state, out_dir=relative_out_dir, model_name=model_name)
+    save_estimator(
+        state,
+        out_dir=relative_out_dir,
+        estimator_name=model_name,
+    )
 
     # Check that the checkpoint directory was created at the absolute path
     assert os.path.exists(ckpt_path), (

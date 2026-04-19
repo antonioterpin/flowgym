@@ -10,7 +10,7 @@ from goggles import Metrics
 
 from flowgym.common.base import Estimator, NNEstimatorTrainableState
 from flowgym.environment.fluid_env import EnvState, FluidEnv, Observation
-from flowgym.make import save_model
+from flowgym.make import save_estimator
 from flowgym.training.replay import ReplayBuffer
 from flowgym.types import (
     CompiledComputeEstimateFn,
@@ -22,6 +22,9 @@ from flowgym.types import (
 from flowgym.utils import DEBUG, GracefulShutdown, log_flow_estimate
 
 logger = gg.get_logger(__name__, with_metrics=True)
+
+# Keep the old module attribute available for tests and external patching.
+save_model = save_estimator
 
 
 def train(
@@ -254,11 +257,11 @@ def train(
                 logger.info(f"Episode {episode_idx} - {k}: {avg_value}")
 
             if episode_idx % save_every == 0:
-                save_model(
+                save_estimator(
                     state=trainable_state,
                     out_dir=out_dir,
-                    model=model,
-                    model_name=f"{model.__class__.__name__}-{episode_idx}",
+                    estimator=model,
+                    estimator_name=f"{model.__class__.__name__}-{episode_idx}",
                     sampler=env_state[0],
                 )
 

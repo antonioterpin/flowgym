@@ -1,4 +1,4 @@
-"""Module for compiling, saving, and loading flow field estimator models."""
+"""Module for compiling, saving, and loading flow field estimators."""
 
 from __future__ import annotations
 
@@ -132,28 +132,33 @@ def compile_model(
     return create_state_fn, compute_estimate_fn
 
 
-def save_model(
+def save_estimator(
     state: NNEstimatorTrainableState,
     out_dir: str | Path,
     step: int | None = None,
-    model: Estimator | None = None,
-    model_name: str | None = None,
+    estimator: Estimator | None = None,
+    estimator_name: str | None = None,
     sampler: Any | None = None,
     keep: int = 3,
+    *,
+    model: Estimator | None = None,
+    model_name: str | None = None,
 ) -> str:
     """Save a training checkpoint using Orbax.
 
-    Checkpoint saved to out_dir/checkpoints/<model_name>/step_<step>.
+    Checkpoint saved to out_dir/checkpoints/<estimator_name>/step_<step>.
 
     Args:
         state: The trainable state to save (PyTree).
         out_dir: Root output directory for this experiment/run.
         step: Training step/batch index. If None, reads from `state.step`.
-        model: The model instance (to extract optimizer_config).
-        model_name: Optional model name for directory nesting.
+        estimator: The estimator instance (to extract optimizer_config).
+        estimator_name: Optional estimator name for directory nesting.
         sampler: The sampler instance to save (must be Sampler with
             Grain scheduler for full state saving).
         keep: Number of checkpoints to keep.
+        model: Backward-compatible alias for `estimator`.
+        model_name: Backward-compatible alias for `estimator_name`.
 
     Returns:
         The saved step directory path.
@@ -161,6 +166,18 @@ def save_model(
     Raises:
         ValueError: If step is not provided and state has no 'step' attr.
     """
+    if estimator is not None and model is not None:
+        raise TypeError("Pass only one of 'estimator' or 'model'.")
+    if estimator_name is not None and model_name is not None:
+        raise TypeError(
+            "Pass only one of 'estimator_name' or 'model_name'."
+        )
+
+    if estimator is None:
+        estimator = model
+    if estimator_name is None:
+        estimator_name = model_name
+
     out_dir = Path(out_dir)
     out_dir = out_dir.resolve()
 
@@ -172,10 +189,10 @@ def save_model(
             raise ValueError("step not provided and state has no 'step' attr")
     step = int(step)
 
-    # Nesting: out_dir/checkpoints/<model_name>/step_<step>
+    # Nesting: out_dir/checkpoints/<estimator_name>/step_<step>
     parts = [out_dir, "checkpoints"]
-    if model_name is not None:
-        parts.append(model_name)
+    if estimator_name is not None:
+        parts.append(estimator_name)
 
     ckpt_root = Path(*parts)
     ckpt_root.mkdir(parents=True, exist_ok=True)
@@ -194,9 +211,9 @@ def save_model(
     }
 
     # Extract and save optimizer config separately (as it contains strings)
-    if model is not None:
+    if estimator is not None:
         opt_cfg = getattr(
-            model, "optimizer_config", getattr(model, "opt_config", None)
+            estimator, "optimizer_config", getattr(estimator, "opt_config", None)
         )
         if opt_cfg is not None:
             save_args["opt_config"] = ocp.args.JsonSave(opt_cfg)  # type: ignore
@@ -217,6 +234,27 @@ def save_model(
         mngr.wait_until_finished()
 
     return str(ckpt_root / str(step))
+
+
+def save_model(
+    state: NNEstimatorTrainableState,
+    out_dir: str | Path,
+    step: int | None = None,
+    model: Estimator | None = None,
+    model_name: str | None = None,
+    sampler: Any | None = None,
+    keep: int = 3,
+) -> str:
+    """Backward-compatible wrapper for `save_estimator`."""
+    return save_estimator(
+        state=state,
+        out_dir=out_dir,
+        step=step,
+        estimator=model,
+        estimator_name=model_name,
+        sampler=sampler,
+        keep=keep,
+    )
 
 
 def load_model(
@@ -382,7 +420,7 @@ def load_model(
 
 @overload
 def make_estimator(
-    model_config: dict,
+    estimator_config: dict,
     image_shape: tuple,
     estimate_shape: tuple,
     load_from: str | None = None,
@@ -397,7 +435,7 @@ def make_estimator(
 
 @overload
 def make_estimator(
-    model_config: dict,
+    estimator_config: dict,
     image_shape: tuple,
     estimate_shape: None,
     load_from: str | None = None,
@@ -412,7 +450,7 @@ def make_estimator(
 
 @overload
 def make_estimator(
-    model_config: dict,
+    estimator_config: dict,
     image_shape: tuple | None = None,
     estimate_shape: tuple | None = None,
     load_from: str | None = None,
@@ -426,11 +464,13 @@ def make_estimator(
 
 
 def make_estimator(
-    model_config: dict,
+    estimator_config: dict | None = None,
     image_shape: tuple | None = None,
     estimate_shape: tuple | None = None,
     load_from: str | None = None,
     rng: PRNGKey | int | None = None,
+    *,
+    model_config: dict | None = None,
 ) -> tuple[
     EstimatorTrainableState | None,
     CompiledCreateStateFn | None,
@@ -441,17 +481,18 @@ def make_estimator(
 
     If load_from is not provided, a new trainable state is created.
 
-    model_config keys:
+    estimator_config keys:
     - estimator: Name of the estimator.
     - estimator_type: Type of the estimator ("flow" or "density").
     - config: Configuration dictionary for the estimator.
 
     Args:
-        model_config: Configuration dictionary for the estimator.
+        estimator_config: Configuration dictionary for the estimator.
         image_shape: Shape of the input images (B, H, W).
         estimate_shape: Shape of the estimate. Defaults to (B, H, W, 2).
         load_from: Path to load the trained model state.
         rng: Random number generator key or seed.
+        model_config: Backward-compatible alias for `estimator_config`.
 
     Returns:
         EstimatorTrainableState: The trainable state of the model.
@@ -462,15 +503,28 @@ def make_estimator(
     Raises:
         ValueError: If estimator not found or model loading fails.
     """
+    if estimator_config is not None and model_config is not None:
+        raise TypeError(
+            "Pass only one of 'estimator_config' or 'model_config'."
+        )
+    if estimator_config is None:
+        estimator_config = model_config
+    if estimator_config is None:
+        raise TypeError("Missing required config: 'estimator_config'.")
+
     # Import here to avoid circular dependency
     from flowgym import ALL_ESTIMATORS as ESTIMATORS  # noqa: PLC0415
 
     # Extract the estimator class from the config
-    if model_config["estimator"] not in ESTIMATORS:
-        raise ValueError(f"Estimator {model_config['estimator']} not found.")
-    model_class = ESTIMATORS.get(model_config["estimator"])
+    if estimator_config["estimator"] not in ESTIMATORS:
+        raise ValueError(
+            f"Estimator {estimator_config['estimator']} not found."
+        )
+    model_class = ESTIMATORS.get(estimator_config["estimator"])
     if model_class is None:
-        raise ValueError(f"Estimator {model_config['estimator']} not found.")
+        raise ValueError(
+            f"Estimator {estimator_config['estimator']} not found."
+        )
     elif isinstance(model_class, MissingDependency):
         model_class()  # Raises MissingDependency error
         # Type narrowing: model_class is not MissingDependency here
@@ -483,18 +537,18 @@ def make_estimator(
 
     # Create the model instance
     model = cast(type[Estimator], model_class).from_config(
-        model_config["config"]
+        estimator_config["config"]
         | {
             "estimate_shape": estimate_shape,
             "image_shape": image_shape,
             "rng": rng,
         }
     )
-    logger.info("Model created successfully.")
+    logger.info("Estimator created successfully.")
 
     # Load or create the trainable state
     if load_from:
-        if model_config["estimator"] == "raft_torch":
+        if estimator_config["estimator"] == "raft_torch":
             if torch is None:
                 raise ValueError("torch required for raft_torch model")
             checkpoint = torch.load(load_from, map_location="cuda")
@@ -504,7 +558,7 @@ def make_estimator(
             )
             trained_state = None
         else:
-            mode = model_config.get("load_mode", "params_only")
+            mode = estimator_config.get("load_mode", "params_only")
             template_state = model.create_trainable_state(
                 jnp.zeros(image_shape, dtype=jnp.float32), key=rng
             )
@@ -541,10 +595,10 @@ def make_estimator(
     create_state_fn, compute_estimate_fn = compile_model(
         model,
         dummy_estimates,
-        model_config["config"].get("jit", False) and not DEBUG,
-        history_size=model_config["config"].get("history_size", 1),
+        estimator_config["config"].get("jit", False) and not DEBUG,
+        history_size=estimator_config["config"].get("history_size", 1),
     )
-    logger.info("Model compiled successfully.")
+    logger.info("Estimator compiled successfully.")
 
     return trained_state, create_state_fn, compute_estimate_fn, model
 
