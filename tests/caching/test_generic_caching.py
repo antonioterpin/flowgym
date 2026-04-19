@@ -100,11 +100,11 @@ def test_enrich_generic():
 
         batch = MockBatch(np.array([100], dtype=np.uint64))
 
-        model = MagicMock()
+        estimator = MagicMock()
         # enrich returns correct dict
-        model.enrich.return_value = {"foo": np.array([99.9], dtype=np.float32)}
+        estimator.enrich.return_value = {"foo": np.array([99.9], dtype=np.float32)}
 
-        payload = enrich_batch(batch, model, cache_manager=cm)
+        payload = enrich_batch(batch, estimator, cache_manager=cm)
         assert payload is not None
         assert "foo" in payload.extras
         np.testing.assert_allclose(payload.extras["foo"], [99.9])
