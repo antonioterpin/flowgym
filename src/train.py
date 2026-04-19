@@ -10,7 +10,7 @@ from goggles import Metrics
 
 from flowgym.common.base import Estimator, NNEstimatorTrainableState
 from flowgym.environment.fluid_env import EnvState, FluidEnv, Observation
-from flowgym.make import save_estimator
+from flowgym.make import save_model
 from flowgym.training.replay import ReplayBuffer
 from flowgym.types import (
     CompiledComputeEstimateFn,
@@ -25,9 +25,8 @@ logger = gg.get_logger(__name__, with_metrics=True)
 
 
 def train(
-    estimator: Estimator,
-    estimator_config: dict,
-    *,
+    model: Estimator,
+    model_config: dict,
     trainable_state: NNEstimatorTrainableState,
     out_dir: str,
     create_state_fn: CompiledCreateStateFn,
@@ -46,16 +45,16 @@ def train(
     """Train the flow estimator.
 
     Args:
-        estimator: The flow estimator.
-        estimator_config: Configuration for the estimator.
-        trainable_state: The initial state of the estimator.
-        out_dir: Directory to save the estimator.
+        model: The flow estimator model.
+        model_config: Configuration for the model.
+        trainable_state: The initial state of the model.
+        out_dir: Directory to save the model.
         create_state_fn: Function to create the initial state of the estimator.
         compute_estimate_fn: Function to compute the flow estimate.
         env: The environment to train in.
         env_state: Initial state of the environment.
         num_episodes: Number of episodes to train for.
-        save_every: Frequency to save the estimator.
+        save_every: Frequency to save the model.
         log_every: Frequency to log the training progress.
         obs: Initial observations from the environment.
         key: Random key for JAX operations.
@@ -65,15 +64,15 @@ def train(
             enables GPU prefetch.
     """
     # Create the training step function
-    train_step_fn = estimator.create_train_step()
+    train_step_fn = model.create_train_step()
     assert isinstance(train_step_fn, RLTrainStep), (
         f"Expected RLTrainStep callable, got {type(train_step_fn)}"
     )
 
-    if estimator_config["config"].get("jit", False) and not DEBUG:
+    if model_config["config"].get("jit", False) and not DEBUG:
         train_step_fn = jax.jit(train_step_fn)
 
-    logger.info("Estimator compiled successfully.")
+    logger.info("Model compiled successfully.")
 
     # Handle randomization key
     key, subkey = jax.random.split(key)
@@ -118,7 +117,7 @@ def train(
                 t_reset = time.time() - t_reset
                 logger.info(f"Environment reset took {t_reset} seconds.")
 
-                # Reset the state of the estimator and propagate the key
+                # Reset the state of the model and propagate the key
                 key, subkey = jax.random.split(key)
                 estimation_state = create_state_fn(obs[0], subkey)
 
@@ -137,7 +136,7 @@ def train(
                 t = time.time() - t
 
                 # Post process, log and append the metrics
-                metrics = estimator.process_metrics(metrics)
+                metrics = model.process_metrics(metrics)
                 logger.push(metrics, step=episode_idx)
 
                 # Extract the action (the last estimate)
@@ -235,7 +234,7 @@ def train(
                 metrics["step_time"] = t
                 episode_metrics.append(metrics)
 
-                # Update the state of the estimator
+                # Update the state of the model
                 if len(estimation_state["images"][0]) > 1:
                     estimation_state["images"] = (
                         estimation_state["images"]
@@ -255,11 +254,11 @@ def train(
                 logger.info(f"Episode {episode_idx} - {k}: {avg_value}")
 
             if episode_idx % save_every == 0:
-                save_estimator(
+                save_model(
                     state=trainable_state,
                     out_dir=out_dir,
-                    estimator=estimator,
-                    estimator_name=f"{estimator.__class__.__name__}-{episode_idx}",
+                    model=model,
+                    model_name=f"{model.__class__.__name__}-{episode_idx}",
                     sampler=env_state[0],
                 )
 

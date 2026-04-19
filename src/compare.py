@@ -13,7 +13,7 @@ from synthpix.sampler import RealImageSampler, SyntheticImageSampler
 
 import flowgym
 
-# Estimators
+# Models
 from flowgym.common.base import Estimator, EstimatorTrainableState
 
 # Utils
@@ -30,7 +30,7 @@ logger = get_logger(__name__, with_metrics=True)
 
 
 def compare_performances_on_batches(
-    estimator: Estimator,
+    model: Estimator,
     trained_state: EstimatorTrainableState,
     create_state_fn: Callable,
     compute_flow_fn: Callable,
@@ -44,8 +44,8 @@ def compare_performances_on_batches(
         key = jax.random.PRNGKey(0)
 
     Args:
-        estimator: The estimator to evaluate.
-        trained_state: The trained state of the estimator.
+        model: The model to evaluate.
+        trained_state: The trained state of the model.
         create_state_fn: Function to create the state.
         compute_flow_fn: Function to compute the flow.
         batch1: The first batch of images.
@@ -94,8 +94,8 @@ def compare_performances_on_batches(
     t2 = time.time() - t2
 
     # Post process the metrics
-    metrics1 = estimator.process_metrics(metrics1)
-    metrics2 = estimator.process_metrics(metrics2)
+    metrics1 = model.process_metrics(metrics1)
+    metrics2 = model.process_metrics(metrics2)
 
     flow_field_1 = estimation_state1["estimates"][:, -1]
     flow_field_2 = estimation_state2["estimates"][:, -1]
@@ -124,10 +124,10 @@ def compare_performances_on_batches(
 
 
 def comparison(
-    estimator_config: dict,
+    model_config: dict,
     sampler1: SyntheticImageSampler,
     sampler2: RealImageSampler,
-    estimator: Estimator,
+    model: Estimator,
     create_state_fn: Callable,
     compute_estimate_fn: Callable,
     trainable_state: EstimatorTrainableState,
@@ -139,21 +139,21 @@ def comparison(
         key = jax.random.PRNGKey(0)
 
     Args:
-        estimator_config: Configuration of the estimator.
+        model_config: Configuration of the model.
         sampler1: The image sampler for comparison.
         sampler2: The second image sampler for comparison.
-        estimator: The estimator to evaluate.
+        model: The model to evaluate.
         create_state_fn: Function to create the state.
         compute_estimate_fn: Function to compute the estimate.
-        trainable_state: The trained state of the estimator.
+        trainable_state: The trained state of the model.
         key: Random key for JAX operations.
 
     Raises:
         ValueError: If estimate_type is not 'flow'.
     """
-    if estimator_config["estimate_type"] != "flow":
+    if model_config["estimate_type"] != "flow":
         raise ValueError(
-            f"Invalid estimate type: {estimator_config['estimate_type']}. "
+            f"Invalid estimate type: {model_config['estimate_type']}. "
             "Only 'flow' is supported for full comparison."
         )
 
@@ -173,7 +173,7 @@ def comparison(
                 break
 
             metrics = compare_performances_on_batches(
-                estimator=estimator,
+                model=model,
                 trained_state=trainable_state,
                 create_state_fn=create_state_fn,
                 compute_flow_fn=compute_estimate_fn,

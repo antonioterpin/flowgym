@@ -1,4 +1,4 @@
-"""Integration tests for checkpoint/resume with flowgym.save_estimator and synthpix.
+"""Integration tests for checkpoint/resume with flowgym.save_model and synthpix.
 
 Tests real save/restore cycles for SyntheticImageSampler and RealImageSampler,
 validating sampler state is preserved across checkpoint boundaries.
@@ -15,7 +15,7 @@ import synthpix
 from flax.core import FrozenDict
 
 from flowgym.common.base.trainable_state import NNEstimatorTrainableState
-from flowgym.make import load_estimator, save_estimator
+from flowgym.make import load_model, save_model
 
 
 def _make_synthetic_config(file_list: list[str]) -> dict:
@@ -73,7 +73,7 @@ def _make_real_config(file_list: list[str], dims: dict) -> dict:
     }
 
 
-def _make_estimator_state() -> NNEstimatorTrainableState:
+def _make_model_state() -> NNEstimatorTrainableState:
     """Create a minimal trainable state for checkpointing."""
 
     def apply_fn(params, x):
@@ -133,7 +133,7 @@ def test_synthetic_sampler_checkpoint_integration(tmp_path, npy_flow_files):
     """Test checkpoint/restore cycle for SyntheticImageSampler.
 
     Verifies that:
-    1. flowgym.save_estimator correctly saves sampler state alongside estimator state
+    1. flowgym.save_model correctly saves sampler state alongside model state
     2. synthpix.make(load_from=...) correctly restores sampler state
     3. The restored sampler produces identical outputs to original
     """
@@ -152,15 +152,15 @@ def test_synthetic_sampler_checkpoint_integration(tmp_path, npy_flow_files):
         next(sampler)
         next(sampler)
 
-        # 3. Create estimator state and save checkpoint
-        estimator_state = _make_estimator_state()
-        estimator_name = "CheckpointTest_synthetic"
+        # 3. Create model state and save checkpoint
+        model_state = _make_model_state()
+        model_name = "CheckpointTest_synthetic"
 
-        save_path_str = save_estimator(
-            state=estimator_state,
+        save_path_str = save_model(
+            state=model_state,
             out_dir=tmp_path,
             step=10,
-            estimator_name=estimator_name,
+            model_name=model_name,
             sampler=sampler,
         )
         save_path = pathlib.Path(save_path_str)
@@ -188,15 +188,13 @@ def test_synthetic_sampler_checkpoint_integration(tmp_path, npy_flow_files):
             restored_batch.flow_fields,
         ), "Flow fields should match"
 
-        # 9. Verify estimator state can also be restored independently
-        template_state = _make_estimator_state()
-        restored_estimator = load_estimator(
-            save_path, template_state, mode="resume"
-        )
-        assert restored_estimator.step == 10, "Estimator step should be restored"
+        # 9. Verify model state can also be restored independently
+        template_state = _make_model_state()
+        restored_model = load_model(save_path, template_state, mode="resume")
+        assert restored_model.step == 10, "Model step should be restored"
         assert jnp.allclose(
-            restored_estimator.params["w"], estimator_state.params["w"]
-        ), "Estimator params should be restored"
+            restored_model.params["w"], model_state.params["w"]
+        ), "Model params should be restored"
     finally:
         sampler.shutdown()
         if restored_sampler is not None:
@@ -207,7 +205,7 @@ def test_real_sampler_checkpoint_integration(tmp_path, mock_mat_files):
     """Test checkpoint/restore cycle for RealImageSampler.
 
     Verifies that:
-    1. flowgym.save_estimator correctly saves sampler state alongside estimator state
+    1. flowgym.save_model correctly saves sampler state alongside model state
     2. synthpix.make(load_from=...) correctly restores sampler state
     3. The restored sampler produces identical outputs to original
     """
@@ -227,15 +225,15 @@ def test_real_sampler_checkpoint_integration(tmp_path, mock_mat_files):
         next(sampler)
         next(sampler)
 
-        # 3. Create estimator state and save checkpoint
-        estimator_state = _make_estimator_state()
-        estimator_name = "CheckpointTest_real"
+        # 3. Create model state and save checkpoint
+        model_state = _make_model_state()
+        model_name = "CheckpointTest_real"
 
-        save_path_str = save_estimator(
-            state=estimator_state,
+        save_path_str = save_model(
+            state=model_state,
             out_dir=tmp_path,
             step=10,
-            estimator_name=estimator_name,
+            model_name=model_name,
             sampler=sampler,
         )
         save_path = pathlib.Path(save_path_str)
@@ -263,15 +261,13 @@ def test_real_sampler_checkpoint_integration(tmp_path, mock_mat_files):
             restored_batch.flow_fields,
         ), "Flow fields should match"
 
-        # 9. Verify estimator state can also be restored independently
-        template_state = _make_estimator_state()
-        restored_estimator = load_estimator(
-            save_path, template_state, mode="resume"
-        )
-        assert restored_estimator.step == 10, "Estimator step should be restored"
+        # 9. Verify model state can also be restored independently
+        template_state = _make_model_state()
+        restored_model = load_model(save_path, template_state, mode="resume")
+        assert restored_model.step == 10, "Model step should be restored"
         assert jnp.allclose(
-            restored_estimator.params["w"], estimator_state.params["w"]
-        ), "Estimator params should be restored"
+            restored_model.params["w"], model_state.params["w"]
+        ), "Model params should be restored"
     finally:
         sampler.shutdown()
         if restored_sampler is not None:

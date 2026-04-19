@@ -1,4 +1,4 @@
-"""Caching layer for derived batch data (e.g., estimator outputs, metrics)."""
+"""Caching layer for derived batch data (e.g., model estimates, metrics)."""
 
 from __future__ import annotations
 
@@ -523,7 +523,7 @@ class CacheManager:
 
 def enrich_batch(
     batch: SynthpixBatch,
-    estimator: Estimator,
+    model: Estimator,
     *,
     cache_manager: CacheManager | None = None,
     trainable_state: EstimatorTrainableState | None = None,
@@ -532,7 +532,7 @@ def enrich_batch(
 
     This function orchestrates the read-through cache flow:
     1. Lookup cached entries via CacheManager
-    2. Call estimator.enrich() for missing entries
+    2. Call model.enrich() for missing entries
     3. Write newly computed entries to cache
     4. Return complete payload
 
@@ -540,15 +540,15 @@ def enrich_batch(
 
     Args:
         batch: The batch to enrich.
-        estimator: The estimator to use for enrichment.
+        model: The estimator to use for enrichment.
         cache_manager: Optional CacheManager for storage.
-        trainable_state: Current trainable state (passed to estimator.enrich).
+        trainable_state: Current trainable state (passed to model.enrich).
 
     Returns:
         A CachePayload with enriched data.
 
     Raises:
-        Exception: If estimator.enrich() or cache_manager.write() raise.
+        Exception: If model.enrich() or cache_manager.write() raise.
     """
     if cache_manager is None:
         return CachePayload()
@@ -576,13 +576,13 @@ def enrich_batch(
         miss_idxs_relative = np.where(~hit)[0]
         miss_idxs_absolute = valid_indices[miss_idxs_relative]
 
-        # Call estimator.enrich for missing entries
+        # Call model.enrich for missing entries
         try:
-            payload_miss = estimator.enrich(
+            payload_miss = model.enrich(
                 batch, miss_idxs_absolute, trainable_state=trainable_state
             )
         except Exception as e:
-            logger.error(f"Error in estimator.enrich: {e}")
+            logger.error(f"Error in model.enrich: {e}")
             logger.error(f"miss_idxs: {miss_idxs_absolute}")
             raise e
 
@@ -620,22 +620,22 @@ def enrich_batch(
 
 
 def build_cache_id(
-    estimator: Estimator,
+    model: Estimator,
     trainable_state: Any,
     caching_config: dict,
 ) -> str:
-    """Build a cache ID from estimator, state, and config.
+    """Build a cache ID from model, state, and config.
 
     Args:
-        estimator: The estimator to build cache ID for.
+        model: The estimator to build cache ID for.
         trainable_state: Current trainable state (for suffix generation).
         caching_config: Caching configuration dict (contains base cache_id).
 
     Returns:
         The constructed cache ID string.
     """
-    suffix = estimator.get_cache_id_suffix(trainable_state)
+    suffix = model.get_cache_id_suffix(trainable_state)
     if "cache_id" in caching_config:
         base = caching_config["cache_id"]
         return f"{base}{suffix}" if suffix else base
-    return f"{estimator.__class__.__name__}{suffix}"
+    return f"{model.__class__.__name__}{suffix}"

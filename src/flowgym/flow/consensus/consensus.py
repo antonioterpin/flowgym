@@ -136,7 +136,7 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
             else:
                 subkey = None
             (trainable_state, _, compute_estimate_fn, _) = make_estimator(
-                estimator_config=cfg,
+                model_config=cfg,
                 load_from=cfg.get("load_from"),
                 rng=subkey,
             )
