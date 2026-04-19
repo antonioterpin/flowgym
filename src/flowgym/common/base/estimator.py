@@ -493,7 +493,7 @@ class Estimator(abc.ABC):
 
         Args:
             experience: The experience to prepare.
-            trainable_state: Current trainable state of the estimator.
+            trainable_state: Current trainable state of the model.
 
         Returns:
             The prepared experience (may be the same or enriched).
@@ -516,7 +516,7 @@ class Estimator(abc.ABC):
 
         Rules for Meta-Estimators:
             Meta-estimators can override this to aggregate cached data from
-            their sub-estimator caches, returning a combined payload
+            their sub-model caches, returning a combined payload
             (e.g., `"epe_all"`, `"epe_mask"`).
 
         Args:
@@ -545,7 +545,7 @@ class Estimator(abc.ABC):
         This method provides a unified interface for cache preloading. The
         default implementation is a no-op.
 
-        Meta-estimators can override this to load their sub-estimator caches
+        Meta-estimators can override this to load their sub-model caches
         into memory at startup for fast aggregation during training.
 
         Args:
@@ -559,17 +559,17 @@ class Estimator(abc.ABC):
         self,
         trainable_state: EstimatorTrainableState | None,
     ) -> str:
-        """Get a suffix for the cache ID based on the estimator state.
+        """Get a suffix for the cache ID based on the model state.
 
         This allows the cache to be invalidated or namespaced based on the
-        specific weights or configuration of the estimator. The returned string
+        specific weights or configuration of the model. The returned string
         is appended to the base class name to form a unique `cache_id`.
 
         Standard practice is to hash the `trainable_state.params` and the
         estimator's internal configuration.
 
         Args:
-            trainable_state: The current trainable state, or None if the estimator
+            trainable_state: The current trainable state, or None if the model
                 is not trainable or parameters are not yet initialized.
 
         Returns:

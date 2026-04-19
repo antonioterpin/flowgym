@@ -263,13 +263,13 @@ def test_cache_manager_enrich():
             tmp_dir, cache_id, spec={"values": (np.float32, (2,))}
         )
 
-        # Mock batch and estimator
+        # Mock batch and model
         class MockBatch:
             def __init__(self, keys):
                 self.keys = keys
 
         batch = MockBatch(np.array([1, 2], dtype=np.uint64))
-        estimator = MagicMock()
+        model = MagicMock()
 
         # Define enrich behavior
         # miss_idxs will be [0, 1] for the first call
@@ -280,24 +280,24 @@ def test_cache_manager_enrich():
                 ]
             }
 
-        estimator.enrich.side_effect = enrich_fn
+        model.enrich.side_effect = enrich_fn
 
         # 1. First call (all misses)
-        payload = enrich_batch(batch, estimator, cache_manager=cm)
+        payload = enrich_batch(batch, model, cache_manager=cm)
         assert payload is not None
         np.testing.assert_allclose(
             payload.extras["values"], [[0.1, 0.1], [0.2, 0.2]]
         )
-        assert estimator.enrich.call_count == 1
+        assert model.enrich.call_count == 1
 
         # 2. Second call (all hits)
-        estimator.enrich.reset_mock()
-        payload2 = enrich_batch(batch, estimator, cache_manager=cm)
+        model.enrich.reset_mock()
+        payload2 = enrich_batch(batch, model, cache_manager=cm)
         assert payload2 is not None
         np.testing.assert_allclose(
             payload2.extras["values"], [[0.1, 0.1], [0.2, 0.2]]
         )
-        assert estimator.enrich.call_count == 0
+        assert model.enrich.call_count == 0
 
         # 3. Mixed hits/misses
         batch_mixed = MockBatch(np.array([1, 3], dtype=np.uint64))
@@ -306,10 +306,10 @@ def test_cache_manager_enrich():
             # Only index 1 in batch_mixed is a miss (key 3)
             return {"values": np.array([[0.3, 0.3]], dtype=np.float32)}
 
-        estimator.enrich.side_effect = enrich_mixed
-        payload3 = enrich_batch(batch_mixed, estimator, cache_manager=cm)
+        model.enrich.side_effect = enrich_mixed
+        payload3 = enrich_batch(batch_mixed, model, cache_manager=cm)
         assert payload3 is not None
         np.testing.assert_allclose(
             payload3.extras["values"], [[0.1, 0.1], [0.3, 0.3]]
         )
-        assert estimator.enrich.call_count == 1
+        assert model.enrich.call_count == 1

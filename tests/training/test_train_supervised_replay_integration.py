@@ -9,8 +9,8 @@ from train_supervised import train_supervised
 
 def test_train_supervised_integration_with_replay():
     """Verify train_supervised uses the replay buffer."""
-    # Mock estimator
-    estimator = MagicMock()
+    # Mock model
+    model = MagicMock()
     train_step_fn = MagicMock()
 
     # Return dummy values: loss, trainable_state, metrics
@@ -19,10 +19,10 @@ def test_train_supervised_integration_with_replay():
         MagicMock(),
         {"m": jnp.array(0.0)},
     )
-    estimator.create_train_step.return_value = train_step_fn
-    estimator.process_metrics.side_effect = lambda x: x
+    model.create_train_step.return_value = train_step_fn
+    model.process_metrics.side_effect = lambda x: x
     # Mock prepare_experience_for_replay to just return the experience
-    estimator.prepare_experience_for_replay.side_effect = lambda exp, state: exp
+    model.prepare_experience_for_replay.side_effect = lambda exp, state: exp
 
     # Mock sampler
     batch = MagicMock()
@@ -41,8 +41,8 @@ def test_train_supervised_integration_with_replay():
 
     # Call train_supervised
     train_supervised(
-        estimator=estimator,
-        estimator_config={"config": {"jit": False}},
+        model=model,
+        model_config={"config": {"jit": False}},
         trainable_state=MagicMock(),
         out_dir="/tmp",
         # Use a real dict for state so it can be tree_mapped/stacked

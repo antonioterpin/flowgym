@@ -1,4 +1,4 @@
-"""Tests for estimator checkpointing."""
+"""Tests for sampler checkpointing"""
 
 import pathlib
 
@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import orbax.checkpoint as ocp
 
 from flowgym.environment.fluid_env import FluidEnv
-from flowgym.make import save_estimator
+from flowgym.make import save_model
 
 
 class DummyState:
@@ -42,8 +42,8 @@ class MockManager:
         pass
 
 
-def test_save_estimator_is_atomic(monkeypatch):
-    """Test that save_estimator is atomic."""
+def test_save_model_is_atomic(monkeypatch):
+    """Test that save_model is atomic"""
     manager_instances = []
 
     def mock_init(ckpt_dir, options=None):
@@ -64,19 +64,19 @@ def test_save_estimator_is_atomic(monkeypatch):
 
     out_dir = "/tmp/test_ckpt"
 
-    save_estimator(
+    save_model(
         state=state,
         out_dir=out_dir,
         step=10,
         sampler=sampler,
-        estimator_name="TestEstimator",
+        model_name="TestModel",
     )
 
     assert len(manager_instances) == 1
     mngr = manager_instances[0]
 
     expected_path = pathlib.Path(
-        "/tmp/test_ckpt/checkpoints/TestEstimator"
+        "/tmp/test_ckpt/checkpoints/TestModel"
     ).resolve()
     assert pathlib.Path(mngr.ckpt_dir).resolve() == expected_path
 
@@ -91,8 +91,8 @@ def test_save_estimator_is_atomic(monkeypatch):
     assert "grain" in args._items
 
 
-def test_save_estimator_skips_non_grain_sampler(monkeypatch):
-    """Test that save_estimator skips non-grain samplers."""
+def test_save_model_skips_non_grain_sampler(monkeypatch):
+    """Test that save_model skips non-grain samplers"""
     manager_instances = []
 
     def mock_init(ckpt_dir, options=None):
@@ -110,12 +110,12 @@ def test_save_estimator_skips_non_grain_sampler(monkeypatch):
 
     out_dir = "/tmp/test_ckpt_no_grain"
 
-    save_estimator(
+    save_model(
         state=state,
         out_dir=out_dir,
         step=10,
         sampler=sampler,
-        estimator_name="TestEstimatorNoGrain",
+        model_name="TestModelNoGrain",
     )
 
     mngr = manager_instances[0]

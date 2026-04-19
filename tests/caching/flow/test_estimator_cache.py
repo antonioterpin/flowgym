@@ -104,7 +104,7 @@ class TestCacheManagerEnrich:
     """Test CacheManager.enrich integration with estimators."""
 
     def test_enrich_computes_misses(self, mock_cache_dir, mock_synthpix_batch):
-        """Test that enrich_batch calls estimator.enrich for misses."""
+        """Test that enrich_batch calls model.enrich for misses."""
         from unittest.mock import MagicMock
 
         from flowgym.training.caching import enrich_batch
@@ -116,25 +116,25 @@ class TestCacheManagerEnrich:
             spec=spec,
         )
 
-        # Mock estimator
-        estimator = MagicMock()
+        # Mock model
+        model = MagicMock()
         B = mock_synthpix_batch.images1.shape[0]
 
         def compute_miss(batch, miss_idxs, **kwargs):
             return {"epe": np.ones(len(miss_idxs), dtype=np.float32) * 0.5}
 
-        estimator.enrich.side_effect = compute_miss
+        model.enrich.side_effect = compute_miss
 
         # First call - all misses
-        payload = enrich_batch(mock_synthpix_batch, estimator, cache_manager=cm)
+        payload = enrich_batch(mock_synthpix_batch, model, cache_manager=cm)
         assert payload is not None
-        assert estimator.enrich.call_count == 1
+        assert model.enrich.call_count == 1
         np.testing.assert_allclose(payload.epe, np.ones(B) * 0.5)
 
         # Second call - all hits
-        estimator.enrich.reset_mock()
-        payload2 = enrich_batch(mock_synthpix_batch, estimator, cache_manager=cm)
-        assert estimator.enrich.call_count == 0  # No misses
+        model.enrich.reset_mock()
+        payload2 = enrich_batch(mock_synthpix_batch, model, cache_manager=cm)
+        assert model.enrich.call_count == 0  # No misses
         np.testing.assert_allclose(payload2.epe, np.ones(B) * 0.5)
 
     def test_enrich_mixed_hits_misses(self, mock_cache_dir):
@@ -169,16 +169,16 @@ class TestCacheManagerEnrich:
             ),  # 100 is cached, 200 is not
         )
 
-        estimator = MagicMock()
+        model = MagicMock()
 
         def compute_miss(batch, miss_idxs, **kwargs):
             # Only the second sample (index 1) should be a miss
             return {"epe": np.array([0.2], dtype=np.float32)}
 
-        estimator.enrich.side_effect = compute_miss
+        model.enrich.side_effect = compute_miss
 
-        payload = enrich_batch(batch, estimator, cache_manager=cm)
-        assert estimator.enrich.call_count == 1
+        payload = enrich_batch(batch, model, cache_manager=cm)
+        assert model.enrich.call_count == 1
 
         # Check merged result
         np.testing.assert_allclose(payload.epe[0], 0.1)  # From cache

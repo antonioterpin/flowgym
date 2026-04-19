@@ -119,7 +119,7 @@ class DummyEstimator(FlowFieldEstimator):
 
         Args:
             experience: The experience to prepare.
-            trainable_state: Current trainable state of the estimator.
+            trainable_state: Current trainable state of the model.
 
         Returns:
             The prepared experience (may have marker added to state).
