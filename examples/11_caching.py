@@ -1,4 +1,4 @@
-"""Example of how to use caching with RAFT model and temporary .mat files."""
+"""Example of how to use caching with RAFT estimator and temporary .mat files."""
 
 import os
 import subprocess
@@ -20,7 +20,7 @@ def setup_configs(temp_dir: str) -> tuple[Path, Path]:
         temp_dir: Temporary directory path for data and configs.
 
     Returns:
-        Tuple of (dataset_path, model_path) for the created configs.
+        Tuple of (dataset_path, estimator_path) for the created configs.
     """
 
     data_dir = Path(temp_dir) / "test"
@@ -92,15 +92,15 @@ def setup_configs(temp_dir: str) -> tuple[Path, Path]:
     with open(dataset_path, "w") as f:
         yaml.dump(dataset_config, f)
 
-    # 2. Model Config
-    model_config = {
+    # 2. Estimator Config
+    estimator_config = {
         "estimator": "raft_jax",
         "estimate_type": "flow",
         "config": {
             "iters": 4,  # Low iters for speed in example
             "patch_size": 32,
             "patch_stride": 32,  # Increased stride for speed/memory
-            "hidden_dim": 64,  # Small model
+            "hidden_dim": 64,  # Small estimator
             "context_dim": 64,
             "corr_levels": 2,
             "corr_radius": 2,
@@ -112,19 +112,19 @@ def setup_configs(temp_dir: str) -> tuple[Path, Path]:
         },
     }
 
-    model_path = Path(temp_dir) / "model.yaml"
-    with open(model_path, "w") as f:
-        yaml.dump(model_config, f)
+    estimator_path = Path(temp_dir) / "estimator.yaml"
+    with open(estimator_path, "w") as f:
+        yaml.dump(estimator_config, f)
 
-    return dataset_path, model_path
+    return dataset_path, estimator_path
 
 
-def run_main(dataset_path: Path, model_path: Path, description: str):
+def run_main(dataset_path: Path, estimator_path: Path, description: str):
     """Run src/main.py via subprocess.
 
     Args:
         dataset_path: Path to dataset configuration YAML.
-        model_path: Path to model configuration YAML.
+        estimator_path: Path to estimator configuration YAML.
         description: Description of this run for logging.
 
     Returns:
@@ -139,7 +139,7 @@ def run_main(dataset_path: Path, model_path: Path, description: str):
         "-m",
         "src.main",
         "--estimator",
-        str(model_path),
+        str(estimator_path),
         "--dataset",
         str(dataset_path),
         "--mode",
@@ -174,21 +174,23 @@ def run_main(dataset_path: Path, model_path: Path, description: str):
 
     # Verify that cache ID was updated
     for line in result.stderr.splitlines() + result.stdout.splitlines():
-        if "Updated cache_id with model suffix" in line:
+        if "Updated cache_id with estimator suffix" in line:
             print(f"Verified: {line.strip()}")
 
     return duration
 
 
 def run_example():
-    print("=== RAFT Model Caching Example ===")
+    print("=== RAFT Estimator Caching Example ===")
 
     with tempfile.TemporaryDirectory() as temp_dir:
         print(f"Using temporary directory: {temp_dir}")
-        dataset_path, model_path = setup_configs(temp_dir)
+        dataset_path, estimator_path = setup_configs(temp_dir)
 
         # Run 1: Cold Start
-        duration_1 = run_main(dataset_path, model_path, "Run 1: Cold Start")
+        duration_1 = run_main(
+            dataset_path, estimator_path, "Run 1: Cold Start"
+        )
 
         # Modify config to use warm_start="all" for Run 2
         with open(dataset_path) as f:
@@ -201,7 +203,9 @@ def run_example():
             yaml.dump(config, f)
 
         # Run 2: Warm Start
-        duration_2 = run_main(dataset_path, model_path, "Run 2: Warm Start")
+        duration_2 = run_main(
+            dataset_path, estimator_path, "Run 2: Warm Start"
+        )
 
         # Analysis
         if duration_2 < duration_1:
