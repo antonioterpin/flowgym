@@ -21,14 +21,14 @@ class EstimatorTrainableState:
     """Base class for trainable states.
 
     - Can be instantiated and carried around as an "empty" state.
-    - Safe to use for non-trainable estimators (e.g. eval-only models).
+    - Safe to use for non-trainable estimators (e.g. eval-only estimators).
     - If you actually try to *train* with this base instance
       (apply_gradients / replace), it will fail loudly.
 
     Attributes:
         step: Current training step.
-        apply_fn: Callable used to compute model outputs.
-        params: Trainable model parameters.
+        apply_fn: Callable used to compute estimator outputs.
+        params: Trainable estimator parameters.
         extras: Additional estimator state.
     """
 

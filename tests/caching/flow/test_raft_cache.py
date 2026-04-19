@@ -129,7 +129,7 @@ class TestRaftCacheIntegration:
 
     @pytest.mark.run_explicitly
     def test_raft_enrich_cycle(self, mock_cache_dir):
-        """Test full enrich cycle with RAFT model."""
+        """Test full enrich cycle with RAFT Estimator."""
         from flowgym.flow.raft.raft_jax import RaftJaxEstimator
 
         estimator = RaftJaxEstimator(

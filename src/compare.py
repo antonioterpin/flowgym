@@ -13,7 +13,7 @@ from synthpix.sampler import RealImageSampler, SyntheticImageSampler
 
 import flowgym
 
-# Models
+# Estimators
 from flowgym.common.base import Estimator, EstimatorTrainableState
 
 # Utils

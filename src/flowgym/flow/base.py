@@ -93,7 +93,7 @@ class FlowFieldEstimator(Estimator):
             Args:
                 image: The input image.
                 state: The state object containing historical images.
-                trainable_state: Current trainable state of the model.
+                trainable_state: Current trainable state of the estimator.
                 extras: Additional extras dictionary.
 
             Returns:

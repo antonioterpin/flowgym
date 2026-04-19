@@ -357,7 +357,7 @@ def test_checkpoint_robust_optimizer_override(clean_tmp_path):
     # 1) Save with Basic Adam
     adam_config = {"name": "adam", "learning_rate": 1e-3}
     tx_adam = build_optimizer_from_config(adam_config)
-    model_adam = MockEstimator(optimizer_config=adam_config)
+    estimator_adam = MockEstimator(optimizer_config=adam_config)
 
     state_save = NNEstimatorTrainableState.create(
         apply_fn=simple_apply_fn, params=params, tx=tx_adam, extras=None
@@ -366,7 +366,7 @@ def test_checkpoint_robust_optimizer_override(clean_tmp_path):
     save_estimator(
         state=state_save,
         out_dir=tmp_path,
-        estimator=model_adam,
+        estimator=estimator_adam,
         estimator_name="RobustTest",
         step=1,
     )

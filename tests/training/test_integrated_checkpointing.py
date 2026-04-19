@@ -79,7 +79,7 @@ def test_real_integration_checkpointing(tmp_path):
     next(sampler)
     next(sampler)
 
-    # 4. Prepare Mock Model State
+    # 4. Prepare Mock Estimator State
     def apply_fn(params, x):
         return params["w"] * x
 
