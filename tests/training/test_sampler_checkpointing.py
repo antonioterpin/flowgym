@@ -69,14 +69,14 @@ def test_save_estimator_is_atomic(monkeypatch):
         out_dir=out_dir,
         step=10,
         sampler=sampler,
-        estimator_name="TestModel",
+        estimator_name="TestEstimator",
     )
 
     assert len(manager_instances) == 1
     mngr = manager_instances[0]
 
     expected_path = pathlib.Path(
-        "/tmp/test_ckpt/checkpoints/TestModel"
+        "/tmp/test_ckpt/checkpoints/TestEstimator"
     ).resolve()
     assert pathlib.Path(mngr.ckpt_dir).resolve() == expected_path
 
@@ -115,7 +115,7 @@ def test_save_estimator_skips_non_grain_sampler(monkeypatch):
         out_dir=out_dir,
         step=10,
         sampler=sampler,
-        estimator_name="TestModelNoGrain",
+        estimator_name="TestEstimatorNoGrain",
     )
 
     mngr = manager_instances[0]
