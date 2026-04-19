@@ -1,28 +1,15 @@
 # Project docs
 
-This page links the repository documentation that already lives under
-`docs/`, so you have one place to browse everything locally.
+This section is for contributors and agent operators working inside the
+repository. It gathers the internal reference material that sits behind the
+main contributor guide.
 
-## Guides
-
-Use these when you want orientation and deeper explanation.
-
-- [Architecture guide](guides/architecture.md)
-- [Contributing guide](guides/contributing.md)
-- [Agent development](guides/agent-development.md)
-
-```{toctree}
-:hidden:
-:maxdepth: 1
-
-guides/architecture
-guides/contributing
-guides/agent-development
-```
+If you are looking for setup or the day-to-day development workflow, start
+with the [Contributing guide](guides/contributing.md).
 
 ## Standards
 
-Use these as the repository's rules of engagement.
+Use standards as the repository's rules of engagement.
 
 - [API design](standards/api-design.md)
 - [Change scope](standards/change-scope.md)
@@ -59,7 +46,7 @@ standards/version-control
 
 ## Workflows
 
-Use these when you already know the kind of task you are doing.
+Use workflows when you already know the kind of task you are doing.
 
 - [API validation](workflows/api-validation.md)
 - [Bugfix](workflows/bugfix.md)
@@ -80,9 +67,12 @@ workflows/orientation
 workflows/refactor
 ```
 
-## Agent docs
+## Agent-facing references
 
-These pages describe the repository's specialized agent roles.
+These pages are maintained for contributor tooling and agent-oriented
+workflows. They are not part of the main human docs path.
+
+The maintained agent role pages live under `docs/agents/`.
 
 - [Implementer](agents/implementer.md)
 - [Reviewer](agents/reviewer.md)
@@ -95,12 +85,14 @@ agents/implementer
 agents/reviewer
 ```
 
-## Docs-native entry points
+## Maintenance notes
 
-These are the best places to jump deeper without leaving the docs site.
-
-- [Architecture guide entry points](guides/architecture.md)
-- [Package and factory API](api/package.md)
-- [Estimator base and environment API](api/base.md)
-- [Evaluation and caching API](api/evaluation.md)
-- [Optimizer and schedules API](api/optimization.md)
+- Human-facing docs start at [docs/index.md](index.md).
+- The contributor workflow starts at
+  [docs/guides/contributing.md](guides/contributing.md).
+- User-facing concepts live under [docs/user-guide/index.md](user-guide/index.md).
+- Example workflows live in [docs/examples/](examples/index.md) and should
+  stay aligned with files in `examples/`.
+- Compatibility wrappers in `.claude/`, `.github/`, `.agent/`, and the
+  root `agents/` directory should link back here rather than duplicating
+  full instructions.

@@ -1,35 +1,34 @@
 # API reference
 
-This section is intentionally small and curated for a first pass. It gives
-you a browsable local entry point into the package while keeping the docs
-site easy to maintain.
+This page summarizes the public FlowGym API. For learning-oriented material,
+start with [Getting started](../getting-started/index.md) or the
+[User guide](../user-guide/index.md).
 
-## Browse by area
+- [Top-level package and factory](package.md)
+  - [Package surface](package.md#package-surface)
+  - [Factory helpers](package.md#factory-helpers)
 
-- [Package and factory](package.md):
-  top-level imports and estimator creation helpers.
-- [Base classes and environment](base.md):
-  the base estimator interface and the training environment wrapper.
-- [Estimators](estimators.md):
-  the flow and density estimator implementations that are most central to
-  the current repository.
-- [Evaluation and caching](evaluation.md):
-  evaluation helpers and cache-backed data reuse.
-- [Optimization](optimization.md):
-  optimizer setup and learning-rate schedule construction.
+- [Base interfaces and environment](base.md)
+  - [Base estimator API](base.md#base-estimator-api)
+  - [Environment](base.md#environment)
 
-## Quick jumps
+- [Estimator implementations](estimators.md)
+  - [Flow estimator base](estimators.md#flow-estimator-base)
+  - [DIS JAX estimator](estimators.md#dis-jax-estimator)
+  - [RAFT JAX estimator](estimators.md#raft-jax-estimator)
+  - [OpenPIV JAX estimator](estimators.md#openpiv-jax-estimator)
+  - [Density estimators](estimators.md#density-estimators)
 
-- [flowgym](package.md#package-surface)
-- [flowgym.make](package.md#factory-helpers)
-- [flowgym.common.base.estimator](base.md#base-estimator-api)
-- [flowgym.environment.fluid_env](base.md#environment)
-- [flowgym.flow.dis.dis_jax](estimators.md#dis-jax-estimator)
-- [flowgym.flow.raft.raft_jax](estimators.md#raft-jax-estimator)
-- [flowgym.common.evaluation](evaluation.md#evaluation-helpers)
-- [flowgym.training.optimizer](optimization.md#optimizer-setup)
+- [Evaluation helpers and caching](evaluation.md)
+  - [Evaluation helpers](evaluation.md#evaluation-helpers)
+  - [Caching](evaluation.md#caching)
+
+- [Training and optimization](optimization.md)
+  - [Optimizer setup](optimization.md#optimizer-setup)
+  - [Schedules](optimization.md#schedules)
 
 ```{toctree}
+:hidden:
 :maxdepth: 1
 :titlesonly:
 

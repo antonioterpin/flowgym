@@ -1,0 +1,103 @@
+# Overview: Why FlowGym?
+
+FlowGym exists to make flow-field quantification from tracer-particle images
+easier to develop, compare, reproduce, and deploy.
+
+Particle Image Velocimetry (PIV) and related optical-flow methods are widely
+used in experimental fluid mechanics. Over time, the field has accumulated a
+mix of classical methods, learning-based methods, custom training code,
+dataset-specific evaluation scripts, and one-off deployment pipelines.
+
+Implementations often live in different libraries, expose incompatible
+interfaces, and make different choices about pre-processing,
+post-processing, and evaluation. As a result, fair comparison and repeatable
+benchmarking become harder than they need to be.
+
+FlowGym is meant to reduce that friction by giving these workflows a shared
+software shape.
+
+## What problem it is trying to solve
+
+FlowGym is built around a simple idea: providing a shared interface and 
+common workflows for a broad range of flow estimation methods in order to 
+make it easier to evaluate, train, and deploy them in a consistent way.
+
+The project tries to make it easier to:
+
+- compare classical and learning-based estimators within the same pipeline
+- reuse evaluation and training logic across methods
+- rerun experiments from configuration rather than ad hoc glue code
+- benchmark methods more fairly by sharing surrounding workflow code
+- carry the same method from offline evaluation to practical deployment
+
+This is the same kind of benefit that shared interfaces and benchmark-driven
+software ecosystems have brought to neighboring fields such as computer
+vision and reinforcement learning: less glue code, clearer comparisons, and
+better reproducibility.
+
+## What FlowGym provides
+
+- A shared estimator interface:
+  classical and learning-based methods expose a consistent shape for state
+  creation and estimate computation.
+- JAX-first implementations:
+  core estimators and training utilities are organized around JAX and Flax
+  for accelerator-friendly execution.
+- Interoperable wrappers:
+  FlowGym can still integrate representative external methods from libraries
+  such as OpenCV, PyTorch, and OpenPIV.
+- Shared workflows:
+  `src/main.py` and the related scripts handle training, evaluation,
+  benchmarking, and comparison from config files.
+- Reusable data processing:
+  pre-processing and post-processing steps can be shared across methods
+  instead of being reimplemented in each experiment.
+- Cache-backed execution:
+  repeated dataset passes can reuse expensive derived quantities when that
+  makes experiments cheaper or easier to reproduce.
+
+The same interface is also used beyond flow estimation itself. The repo
+includes related estimators such as tracer-particle density estimation.
+
+## The core API shape
+
+The part of FlowGym most users touch first is the estimator API.
+
+At a high level, you:
+
+1. configure and build an estimator
+2. create an estimator state from an input frame
+3. compute an estimate on the next frame
+
+The public factory for this is `flowgym.make.make_estimator`, which returns
+the trained state together with helper callables for state creation and
+estimate computation.
+
+That interface is designed to support both:
+
+- consecutive or recurrent workflows, where a method carries short-term state
+  across frames
+- independent workflows, where each estimate is computed without relying on
+  sequence memory
+
+This lets FlowGym use the same mental model for a broad range of methods.
+
+## Goals and aspirations
+
+- Keep the public API small enough to learn, but broad enough to support
+  multiple estimator families.
+- Make benchmarking and training easier to repeat from configuration.
+- Support both package-level use and repository-backed experimentation.
+- Improve reproducibility without forcing all methods into one
+  implementation style.
+- Lower the barrier between research prototypes and real experimental use.
+- Give users and contributors a shared mental model instead of a collection
+  of one-off scripts.
+
+## Next step
+
+Continue to [Installation](installation.md) if you want to
+set up the package locally, or jump to the
+[Quick overview](quick-overview.md) if you want to see the API right away.
+For a deeper explanation of the estimator model and common workflows,
+continue to the [User guide](../user-guide/index.md).

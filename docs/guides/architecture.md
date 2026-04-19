@@ -1,112 +1,141 @@
-# Repository guide: architecture and navigation
+# Architecture guide
 
-This guide provides an overview of the repository's architecture, helping contributors and agents navigate the codebase and understand the responsibilities of each component.
+This guide is for readers who want to understand how FlowGym is organized
+ before making changes. It favors the current mental model of the repo over
+ historical detail.
 
-## 1. Overview
+## The mental model
 
-The **Flow Gym** repository is a JAX-based framework for estimating physical quantities in fluid dynamics, primarily focusing on **flow fields (PIV)** and **seeding densities**. It provides a unified interface for various estimation algorithms (traditional and neural-network based), supports synthetic data generation via `synthpix`, and offers both Reinforcement Learning (RL) and supervised training pipelines.
+FlowGym has three layers that matter most for navigation:
 
----
+- Package layer:
+  `src/flowgym/` contains estimators, environments, shared utilities,
+  configuration loaders, and training helpers.
+- Orchestration layer:
+  `src/main.py`, `src/train.py`, `src/train_supervised.py`, `src/eval.py`,
+  and `src/compare.py` wire configs, samplers, estimators, and output
+  handling together.
+- Verification layer:
+  `tests/` mirrors the package shape and covers both unit and integration
+  workflows.
 
-## 2. Repository layout
+If you are unsure where a change belongs, start by identifying whether it is
+about package behavior, orchestration, or verification.
+
+## Repository layout
 
 ```text
 .
-├── src/                                                # Source code
-│   ├── flowgym/                                        # Core package: estimators, envs, and logic
-│   ├── [compare.py](@src/compare.py)                   # Data comparison entry point
-│   ├── [eval.py](@src/eval.py)                         # Evaluation orchestration
-│   ├── [main.py](@src/main.py)                         # Unified CLI entry point
-│   ├── [train.py](@src/train.py)                       # RL training orchestration
-│   └── [train_supervised.py](@src/train_supervised.py) # Supervised training orchestration
-├── [tests/](@tests/)                                   # Test suite (mirrors src/flowgym structure)
-│   ├── [conftest.py](@tests/conftest.py)               # Shared pytest fixtures
-│   └── ...                                             # Unit and integration tests
-├── [docs/](@docs/)                                     # Supplementary architectural documentation
-├── [examples/](@examples/)                             # Usage examples and integration demos
-├── [experiments/](@experiments/)                       # Experiment-specific scripts and artifacts
-├── [pyproject.toml](@pyproject.toml)                   # Build and dependency configuration
-└── [.agent/rules/rules.md](@.agent/rules/rules.md)     # Development and coding standards
+├── src/
+│   ├── flowgym/          # Package code
+│   ├── main.py           # Top-level CLI orchestration
+│   ├── train.py          # Reinforcement-learning training loop
+│   ├── train_supervised.py
+│   ├── eval.py
+│   └── compare.py
+├── tests/                # Unit and integration tests
+├── examples/             # Repository-backed walkthrough scripts
+├── experiments/          # One-off or method-specific experiments
+├── docs/                 # Human-facing docs and contributor docs
+└── pyproject.toml        # Dependencies, test config, lint config
 ```
 
----
+## Package map
 
-## 3. Core package: `flowgym`
+### Estimators and shared interfaces
 
-The `flowgym` package is organized into several functional subpackages:
+- `flowgym.common.base`:
+  base estimator interfaces and trainable-state types.
+- `flowgym.flow`:
+  flow-field estimators and algorithm-specific implementations.
+- `flowgym.density`:
+  density estimators.
+- `flowgym.make`:
+  estimator construction, compilation, checkpoint loading, and checkpoint
+  saving.
 
-- **`common`**: Owns base classes and shared utilities.
-  - `common.base`: Contains `Estimator` (abstract base for all models) and `TrainableState` (JAX PyTree for model parameters and optimizer state).
+This is the most important package area for public API navigation.
 
-  > [!TIP]
-  > **TrainableState Architecture**: Two classes exist for different use cases:
-  > - `EstimatorTrainableState`: Concrete "empty" state for non-trainable/eval-only estimators. Manually registered as PyTree.
-  > - `NNEstimatorTrainableState(TrainState, EstimatorTrainableState)`: For trainable models. Subclasses Flax's `TrainState` and adds `extras` via `struct.field()`. **No custom `__init__` is needed**—Flax's dataclass machinery handles all fields automatically through `.create()`.
+### Environment and data flow
 
-  - `common.preprocess` / `common.filters`: Image processing and signal filtering utilities.
-  - `common.evaluation`: Metrics calculation (e.g., EPE, density loss).
-- **`config`**: Owns all YAML-based configurations for models, datasets, and experiments.
-- **`density`**: Owns estimators specifically for seeding density (e.g., `nn.py`, `simple.py`).
-- **`environment`**: Owns the `FluidEnv`, a Gym-like interface that wraps `synthpix` samplers for reinforcement learning.
-- **`flow`**: Owns flow field (PIV) estimators. Subpackages like `dis`, `raft`, and `open_piv` contain algorithm-specific implementations.
-- **`nn`**: Owns neural network architectures.
-  > [!NOTE]
-  > The repository prioritizes the **JAX ecosystem** (via **Flax**, **Orbax**, **Optax**, etc.) for all new developments. While some legacy or comparative models exist in Torch (`raft_torch_nn/`), future extensions should leverage JAX-compatible libraries.
-- **`training`**: Owns optimization logic, learning rate schedules, and training-specific utilities.
-  - `training.caching`: Contains the `CacheManager`, a read-through on-disk cache designed to avoid recomputation of expensive derived data (like EPEs or model estimates) for `SynthpixBatch` items. It uses Parquet files for storage and supports multiple warm-start strategies (none, index-only, or full data in RAM).
+- `flowgym.environment.fluid_env`:
+  training-oriented wrapper around `synthpix` samplers.
+- `flowgym.common.preprocess`, `flowgym.common.filters`,
+  `flowgym.flow.postprocess`:
+  transformation helpers around raw images and estimates.
+- `flowgym.common.evaluation`:
+  metric computation and evaluation helpers.
 
----
+### Training and optimization
 
-## 4. Entry points & scripts
+- `flowgym.training.optimizer`:
+  optimizer construction from config.
+- `flowgym.training.schedules`:
+  learning-rate schedules.
+- `flowgym.training.caching`:
+  cache-backed reuse of expensive derived quantities.
+- `flowgym.training.replay`, `flowgym.training.losses`,
+  `flowgym.training.target_transforms`:
+  training support modules used by the orchestration scripts.
 
-The repository uses a functional separation for its main scripts in `src/`:
+### Configuration
 
-- **`main.py`**: The primary user-facing CLI. Use it to run training, evaluation, or comparison by selecting a `--mode`. It acts as the high-level orchestrator.
-- **`train.py`**: Implements the Reinforcement Learning training loop. It is called by `main.py` when `--mode train` is used.
-- **`train_supervised.py`**: Implements supervised training loops for models with ground-truth data. Called via `main.py --mode train-supervised`. It supports integration with `CacheManager` to speed up training when specific derived data is required.
-- **`eval.py`**: Contains the logic for evaluating models on batches of data and calculating performance statistics. It integrates with `CacheManager` to enable fast evaluation by loading pre-computed results.
-- **`compare.py`**: A specialized script for comparing estimator performance across different data distributions (e.g., synthetic vs. real PIV images).
+- `src/flowgym/config/`:
+  YAML configs for datasets, estimators, and experiments.
+- `src/flowgym/config/estimators/`:
+  model-specific defaults.
+- top-level dataset configs like `piv_dataset_class1_eval.yaml`:
+  ready-made CLI inputs for `src/main.py`.
 
-### Caching integration
-The caching system is integrated into the `main -> [eval, train_supervised]` flow:
-1. `main.py` parses the `caching` configuration from the dataset YAML and initializes the `CacheManager`.
-2. The `CacheManager` is passed to `eval_full_dataset` (in `eval.py`) or `train_supervised` (in `train_supervised.py`).
-3. During evaluation/training iterations, the `CacheManager.enrich` method is used to look up results by batch keys. If a miss occurs, the model's `compute_cache_miss` hook is called, and the results are written back to the cache.
+## Entry points that matter
 
----
+- `src/main.py`:
+  parse CLI arguments, load dataset/model configs, create samplers, and
+  dispatch into eval or training modes.
+- `src/train.py`:
+  reinforcement-learning training loop.
+- `src/train_supervised.py`:
+  supervised training loop.
+- `src/eval.py`:
+  evaluation helpers and full-dataset evaluation flow.
+- `src/compare.py`:
+  sampler comparison workflow.
 
-## 5. Testing structure
+If you are documenting or debugging a user-facing workflow, start with
+`src/main.py`.
 
-Tests are located in the `tests/` directory and largely mirror the structure of `src/flowgym/`.
+## Common navigation shortcuts
 
-- **Unit Tests**: Test individual functions and classes (e.g., `test_filters.py`, `test_median.py`).
-- **Integration Tests**: Test the full estimation or training flow (e.g., `tests/training/test_integrated_checkpointing.py`).
-- **`conftest.py`**: Defines shared fixtures, such as mock data samplers or estimator instances, ensuring consistent testing environments.
-- **Organization**: Subdirectories like `tests/base_estimator/` or `tests/consensus/` isolate tests for specific architecture components.
+- "I need the public estimator API":
+  start with `flowgym.make` and `flowgym.common.base`.
+- "I need to understand a model implementation":
+  start under `flowgym.flow/` or `flowgym.density/`.
+- "I need dataset or experiment defaults":
+  start in `src/flowgym/config/`.
+- "I need the closest tests":
+  look for the matching module name under `tests/`.
+- "I need a real workflow example":
+  check `examples/` and the docs pages under `docs/examples/`.
 
----
+## Testing shape
 
-## 6. Common change patterns
+Tests live in `tests/` and largely follow the package structure.
 
-### Adding a new model
-1. Create a new subclass of `Estimator` (found in `src/flowgym/common/base/estimator.py`) in `src/flowgym/flow/` or `src/flowgym/density/`. If the model is a flow field estimator, it should inherit from `FlowFieldEstimator` (found in `src/flowgym/flow/base.py`).
-2. Implement `_estimate` and (optionally) `create_train_step`.
-3. Register the new model in `src/flowgym/__init__.py`.
-4. Add a corresponding YAML configuration in `src/flowgym/config/estimators/`.
+- top-level tests:
+  cross-cutting behavior such as preprocessing, filtering, or configuration
+  handling
+- focused subdirectories:
+  `tests/base_estimator/`, `tests/training/`, `tests/caching/`,
+  `tests/consensus/`, and `tests/nn/`
+- `tests/conftest.py`:
+  shared fixtures
 
-### Modifying training behavior
+When adding code, the nearest existing test file is usually the right place
+to start.
 
-> [!IMPORTANT]
-> Agents should avoid modifying core training files unless fixing bugs. Any changes should be general enough to support all estimators without breaking existing functionality.
+## Related docs
 
-- **Optimizer/Schedules**: Change `src/flowgym/training/optimizer.py` or `src/flowgym/training/schedules.py`.
-- **Training Loop**: Modify `src/train.py` (for RL) or `src/train_supervised.py` (for supervised).
-
-### Adding evaluation metrics
-- Add the metric calculation logic to `src/flowgym/common/evaluation.py`.
-- Update the relevant `eval_*` function in `src/eval.py` to include the new metric.
-
-### Changing configuration
-- All default settings reside in `src/flowgym/config/`. When running experiments, pass a customized YAML via the `--estimator` or `--dataset` flags in `main.py`.
-
----
+- [Getting started](../getting-started/index.md)
+- [Example workflows](../examples/index.md)
+- [Contributing guide](contributing.md)
+- [Project docs](../project-docs.md)

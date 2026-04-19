@@ -1,42 +1,38 @@
 # FlowGym documentation
 
-FlowGym is a research toolkit for flow quantification, model evaluation,
-and training workflows in fluid dynamics. This site is the local starting
-point for package usage, API browsing, and the repository's existing
-project documentation.
+FlowGym is a research toolkit for flow-field quantification from
+tracer-particle images. It is designed to make method development,
+benchmarking, training, and deployment more reproducible by giving
+classical and learning-based estimators a shared software interface.
+
+These docs are a good place to start if you want to use the package,
+understand the estimator model, or navigate the repository.
 
 ![The Flow Gym environment](flowgym.jpg)
 
-## Start here
+## Explore the documentation
 
-- New to FlowGym:
-  [Getting started](getting-started.md) gives you the fastest path from
-  install to first estimator.
-- Looking for imports and modules:
-  [API reference](api/index.md) organizes the public Python surface by task.
-- Working inside the repository:
-  [Project docs](project-docs.md) links the guides, workflows, standards,
-  and agent notes that already live in `docs/`.
-
-## Browse by goal
-
-- Use FlowGym:
-  start with [Getting started](getting-started.md), then continue into the
-  [API reference](api/index.md).
-- Understand the codebase:
-  read the [Architecture guide](guides/architecture.md) and then the
-  [Contributing guide](guides/contributing.md).
-- Follow repository rules and workflows:
-  open [Project docs](project-docs.md) for standards, workflows, and
-  agent-specific notes in one place.
+- [Get Started!](getting-started/index.md):
+  New to FlowGym? Start here for the motivation behind the project and the
+  quickest path to a first estimator run.
+- [User guide](user-guide/index.md):
+  Ready to go deeper? Visit the user guide for the Estimator API, runtime
+  state model, workflows, and configuration concepts.
+- [API reference](api/index.md):
+  Looking for a specific class, function, or module? The API reference is
+  the quickest way to find the public Python surface.
+- [Contribute](contribute.md):
+  Want to contribute to the project? Start here for local setup, development
+  workflow, and contributor-facing docs.
 
 ```{toctree}
+:hidden:
 :maxdepth: 2
 :titlesonly:
 :caption: Documentation
 
-getting-started
+getting-started/index
+user-guide/index
 api/index
-project-docs
-guides/architecture
+contribute
 ```
