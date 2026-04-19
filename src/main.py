@@ -57,10 +57,10 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--model",
+        "--estimator",
         type=str,
         required=True,
-        help="Configuration of the model to use.",
+        help="Configuration of the estimator to use.",
     )
 
     parser.add_argument(
@@ -100,8 +100,8 @@ def prepare_configs(
     validation_settings = None
     caching_config = None
 
-    # Load the model
-    model_config = load_configuration(args.model)
+    # Load the estimator
+    estimator_config = load_configuration(args.estimator)
 
     # output directory
     out_dir = None
@@ -193,10 +193,10 @@ def prepare_configs(
             caching_config["spec"] = parsed_spec
 
     if args.mode in {"train", "train-supervised"}:
-        # Prepare the output directory to save the model
-        out_dir = model_config.get("out_dir", "output")
+        # Prepare the output directory to save the estimator
+        out_dir = estimator_config.get("out_dir", "output")
         out_dir = os.path.join(
-            out_dir, model_config["estimator"], str(dataset_config["seed"])
+            out_dir, estimator_config["estimator"], str(dataset_config["seed"])
         )
         os.makedirs(out_dir, exist_ok=True)
     elif args.mode == "compare-samplers":
@@ -206,23 +206,23 @@ def prepare_configs(
         dataset_config2["loop"] = False
         dataset_config2["randomize"] = False
 
-    log_model_config = {**model_config}
-    log_model_config["config"] = {**model_config["config"]}
-    for k, v in log_model_config["config"].items():
+    log_estimator_config = {**estimator_config}
+    log_estimator_config["config"] = {**estimator_config["config"]}
+    for k, v in log_estimator_config["config"].items():
         if isinstance(v, str) and v.endswith(".yaml"):
-            log_model_config["config"][k] = load_configuration(v)
+            log_estimator_config["config"][k] = load_configuration(v)
 
-    if model_config.get("run_name", None) is None:
-        model_config["run_name"] = (
-            f"{args.mode}_{model_config['estimator']}_{args.dataset.split('/')[-1].split('.')[0]}"
+    if estimator_config.get("run_name", None) is None:
+        estimator_config["run_name"] = (
+            f"{args.mode}_{estimator_config['estimator']}_{args.dataset.split('/')[-1].split('.')[0]}"
         )
 
     gg.attach(
         gg.WandBHandler(
             project="Art_of_PIV",
-            run_name=model_config["run_name"],
+            run_name=estimator_config["run_name"],
             config={
-                "model_config": log_model_config,
+                "estimator_config": log_estimator_config,
                 "dataset_config": dataset_config,
                 "dataset_config2": dataset_config2,
                 "validation": validation_settings,
@@ -235,7 +235,7 @@ def prepare_configs(
     return (
         dataset_config,
         dataset_config2,
-        model_config,
+        estimator_config,
         out_dir,
         validation_settings,
         caching_config,
@@ -249,7 +249,7 @@ if __name__ == "__main__":
     (
         dataset_config,
         dataset_config_to_compare,
-        model_config,
+        estimator_config,
         out_dir,
         validation_settings,
         caching_config,
@@ -264,8 +264,8 @@ if __name__ == "__main__":
             step=0,
         )
         logger.artifact(  # pyright: ignore[reportAttributeAccessIssue]
-            data=model_config,
-            name="model_config",
+            data=estimator_config,
+            name="estimator_config",
             format="yaml",
             step=0,
         )
@@ -312,7 +312,7 @@ if __name__ == "__main__":
             raise  # Re-raise the exception after shutdown
 
         gt = select_gt(
-            model_config["estimate_type"],
+            estimator_config["estimate_type"],
             batch,
         )
     else:
@@ -347,7 +347,7 @@ if __name__ == "__main__":
             sampler.shutdown()
             gg.finish()
 
-    estimate_shape = model_config.get("estimate_shape", None)
+    estimate_shape = estimator_config.get("estimate_shape", None)
     if estimate_shape is not None:
         estimate_shape = (batch.images1.shape[0], *tuple(estimate_shape))
     else:
@@ -356,13 +356,13 @@ if __name__ == "__main__":
     # Create the estimator
     (trainable_state, create_state_fn, compute_estimate_fn, model) = (
         make_estimator(
-            model_config,
+            estimator_config,
             image_shape=(
                 batch.images1.shape[0],
                 *dataset_config["image_shape"],
             ),
             estimate_shape=estimate_shape,
-            load_from=model_config.get("load_from", None),
+            load_from=estimator_config.get("load_from", None),
             rng=subkey,
         )
     )
@@ -409,7 +409,7 @@ if __name__ == "__main__":
 
         try:
             eval_full_dataset(
-                model=model,
+                estimator=model,
                 sampler=sampler,
                 create_state_fn=create_state_fn,
                 compute_estimate_fn=compute_estimate_fn,
@@ -446,8 +446,8 @@ if __name__ == "__main__":
 
         try:
             train(
-                model=model,
-                model_config=model_config,
+                estimator=model,
+                estimator_config=estimator_config,
                 trainable_state=trainable_state,
                 out_dir=out_dir,
                 create_state_fn=create_state_fn,
@@ -459,16 +459,16 @@ if __name__ == "__main__":
                 log_every=dataset_config.get("log_every", 100),
                 obs=obs,
                 key=key,
-                replay_buffer_capacity=model_config["config"]
+                replay_buffer_capacity=estimator_config["config"]
                 .get("replay_buffer_config", {})
                 .get(
                     "capacity",
                     dataset_config.get("replay_buffer_capacity", 10000),
                 ),
-                replay_ratio=model_config["config"]
+                replay_ratio=estimator_config["config"]
                 .get("replay_buffer_config", {})
                 .get("replay_ratio", dataset_config.get("replay_ratio", 0.0)),
-                prefetch_replay_size=model_config["config"]
+                prefetch_replay_size=estimator_config["config"]
                 .get("replay_buffer_config", {})
                 .get(
                     "prefetch_replay_size",
@@ -524,8 +524,8 @@ if __name__ == "__main__":
 
         try:
             train_supervised(
-                model=model,
-                model_config=model_config,
+                estimator=model,
+                estimator_config=estimator_config,
                 trainable_state=trainable_state,
                 out_dir=out_dir,
                 create_state_fn=create_state_fn,
@@ -535,21 +535,21 @@ if __name__ == "__main__":
                 val_interval=val_interval,
                 val_num_batches=val_num_batches,
                 num_batches=dataset_config.get("num_batches", 1000),
-                estimate_type=model_config["estimate_type"],
+                estimate_type=estimator_config["estimate_type"],
                 save_every=dataset_config.get("save_every", 100),
                 log_every=dataset_config.get("log_every", 1),
                 save_only_best=dataset_config.get("save_only_best", False),
                 key=key,
-                replay_buffer_capacity=model_config["config"]
+                replay_buffer_capacity=estimator_config["config"]
                 .get("replay_buffer_config", {})
                 .get(
                     "capacity",
                     dataset_config.get("replay_buffer_capacity", 0),
                 ),
-                replay_ratio=model_config["config"]
+                replay_ratio=estimator_config["config"]
                 .get("replay_buffer_config", {})
                 .get("replay_ratio", dataset_config.get("replay_ratio", 0.0)),
-                prefetch_replay_size=model_config["config"]
+                prefetch_replay_size=estimator_config["config"]
                 .get("replay_buffer_config", {})
                 .get(
                     "prefetch_replay_size",
@@ -606,7 +606,7 @@ if __name__ == "__main__":
             batch2 = next(sampler2)
             assert trainable_state is not None
             comparison(
-                model_config=model_config,
+                model_config=estimator_config,
                 sampler1=sampler,
                 sampler2=sampler2,
                 model=model,
