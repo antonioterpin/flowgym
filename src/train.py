@@ -23,9 +23,6 @@ from flowgym.utils import DEBUG, GracefulShutdown, log_flow_estimate
 
 logger = gg.get_logger(__name__, with_metrics=True)
 
-# Keep the old module attribute available for tests and external patching.
-save_model = save_estimator
-
 
 def train(
     model: Estimator,

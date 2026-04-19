@@ -140,9 +140,6 @@ def save_estimator(
     estimator_name: str | None = None,
     sampler: Any | None = None,
     keep: int = 3,
-    *,
-    model: Estimator | None = None,
-    model_name: str | None = None,
 ) -> str:
     """Save a training checkpoint using Orbax.
 
@@ -157,8 +154,6 @@ def save_estimator(
         sampler: The sampler instance to save (must be Sampler with
             Grain scheduler for full state saving).
         keep: Number of checkpoints to keep.
-        model: Backward-compatible alias for `estimator`.
-        model_name: Backward-compatible alias for `estimator_name`.
 
     Returns:
         The saved step directory path.
@@ -166,18 +161,6 @@ def save_estimator(
     Raises:
         ValueError: If step is not provided and state has no 'step' attr.
     """
-    if estimator is not None and model is not None:
-        raise TypeError("Pass only one of 'estimator' or 'model'.")
-    if estimator_name is not None and model_name is not None:
-        raise TypeError(
-            "Pass only one of 'estimator_name' or 'model_name'."
-        )
-
-    if estimator is None:
-        estimator = model
-    if estimator_name is None:
-        estimator_name = model_name
-
     out_dir = Path(out_dir)
     out_dir = out_dir.resolve()
 
@@ -234,27 +217,6 @@ def save_estimator(
         mngr.wait_until_finished()
 
     return str(ckpt_root / str(step))
-
-
-def save_model(
-    state: NNEstimatorTrainableState,
-    out_dir: str | Path,
-    step: int | None = None,
-    model: Estimator | None = None,
-    model_name: str | None = None,
-    sampler: Any | None = None,
-    keep: int = 3,
-) -> str:
-    """Backward-compatible wrapper for `save_estimator`."""
-    return save_estimator(
-        state=state,
-        out_dir=out_dir,
-        step=step,
-        estimator=model,
-        estimator_name=model_name,
-        sampler=sampler,
-        keep=keep,
-    )
 
 
 def load_model(
@@ -464,13 +426,11 @@ def make_estimator(
 
 
 def make_estimator(
-    estimator_config: dict | None = None,
+    estimator_config: dict,
     image_shape: tuple | None = None,
     estimate_shape: tuple | None = None,
     load_from: str | None = None,
     rng: PRNGKey | int | None = None,
-    *,
-    model_config: dict | None = None,
 ) -> tuple[
     EstimatorTrainableState | None,
     CompiledCreateStateFn | None,
@@ -492,7 +452,6 @@ def make_estimator(
         estimate_shape: Shape of the estimate. Defaults to (B, H, W, 2).
         load_from: Path to load the trained model state.
         rng: Random number generator key or seed.
-        model_config: Backward-compatible alias for `estimator_config`.
 
     Returns:
         EstimatorTrainableState: The trainable state of the model.
@@ -503,15 +462,6 @@ def make_estimator(
     Raises:
         ValueError: If estimator not found or model loading fails.
     """
-    if estimator_config is not None and model_config is not None:
-        raise TypeError(
-            "Pass only one of 'estimator_config' or 'model_config'."
-        )
-    if estimator_config is None:
-        estimator_config = model_config
-    if estimator_config is None:
-        raise TypeError("Missing required config: 'estimator_config'.")
-
     # Import here to avoid circular dependency
     from flowgym import ALL_ESTIMATORS as ESTIMATORS  # noqa: PLC0415
 

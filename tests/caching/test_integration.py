@@ -44,8 +44,8 @@ def mock_sampler(num_batches, keys_list):
         yield MockBatch(batch_size=len(keys), keys=keys)
 
 
-@patch("src.train_supervised.save_model")
-def test_train_supervised_caching_integration(mock_save_model):
+@patch("src.train_supervised.save_estimator")
+def test_train_supervised_caching_integration(mock_save_estimator):
     """Integration test for caching in train_supervised."""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -159,8 +159,8 @@ def test_train_supervised_caching_integration(mock_save_model):
         assert payload_5["values"][0, 0] == 5.0
 
 
-@patch("src.train_supervised.save_model")
-def test_estimator_enrich(mock_save_model):
+@patch("src.train_supervised.save_estimator")
+def test_estimator_enrich(mock_save_estimator):
     """Test that Estimator.enrich is called for cache misses."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         cache_manager = CacheManager(

@@ -30,8 +30,8 @@ class MiniRaftBatch:
         return self
 
 
-@patch("src.train_supervised.save_model")
-def test_raft_integration_caching(mock_save_model):
+@patch("src.train_supervised.save_estimator")
+def test_raft_integration_caching(mock_save_estimator):
     """Test RaftJaxEstimator caching in the real training loop."""
 
     with tempfile.TemporaryDirectory() as tmp_dir:

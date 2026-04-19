@@ -3,7 +3,7 @@
 These tests exercise all training features using DummyEstimator:
 - Replay buffer (initialization, push, sample)
 - Replay buffer enrichment via prepare_experience_for_replay
-- Checkpointing (save_model / load_model)
+- Checkpointing (save_estimator / load_model)
 - Validation (for train_supervised)
 - Metrics processing
 """
@@ -27,13 +27,13 @@ from train_supervised import train_supervised
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _mock_save_model(
-    state, out_dir, step=None, model=None, model_name=None, **kwargs
+def _mock_save_estimator(
+    state, out_dir, step=None, estimator=None, estimator_name=None, **kwargs
 ):
-    """Mock save_model that creates checkpoint directories without writing."""
+    """Mock save_estimator that creates checkpoint directories without writing."""
     out_dir = Path(out_dir)
-    if model_name:
-        ckpt_dir = out_dir / "checkpoints" / model_name
+    if estimator_name:
+        ckpt_dir = out_dir / "checkpoints" / estimator_name
     else:
         ckpt_dir = out_dir / "checkpoints"
     ckpt_dir.mkdir(parents=True, exist_ok=True)
@@ -75,10 +75,13 @@ def test_train_supervised_full_integration(
     out_dir = tmp_path / "checkpoints"
     out_dir.mkdir()
 
-    # Mock both evaluate_batches and save_model
+    # Mock both evaluate_batches and save_estimator
     with (
         patch("train_supervised.evaluate_batches") as mock_eval,
-        patch("train_supervised.save_model", side_effect=_mock_save_model),
+        patch(
+            "train_supervised.save_estimator",
+            side_effect=_mock_save_estimator,
+        ),
     ):
         mock_eval.return_value = {
             "mean_error": 0.1,
@@ -195,10 +198,10 @@ def test_train_supervised_checkpointing_roundtrip(
 
     def tracking_save(*args, **kwargs):
         save_calls.append((args, kwargs))
-        return _mock_save_model(*args, **kwargs)
+        return _mock_save_estimator(*args, **kwargs)
 
     # Run training to create a checkpoint
-    with patch("train_supervised.save_model", side_effect=tracking_save):
+    with patch("train_supervised.save_estimator", side_effect=tracking_save):
         train_supervised(
             model=model,
             model_config={"config": {"jit": False}},
@@ -212,8 +215,8 @@ def test_train_supervised_checkpointing_roundtrip(
             key=jax.random.PRNGKey(42),
         )
 
-    # Verify save_model was called at expected intervals (batch 3)
-    assert len(save_calls) >= 1, "Expected at least one save_model call"
+    # Verify save_estimator was called at expected intervals (batch 3)
+    assert len(save_calls) >= 1, "Expected at least one save_estimator call"
 
 
 def test_train_supervised_no_enrichment_without_flag(
@@ -298,8 +301,11 @@ def test_train_rl_full_integration(tmp_path, mock_env):
     out_dir = tmp_path / "checkpoints"
     out_dir.mkdir()
 
-    # Run training with mocked save_model
-    with patch("train.save_model", side_effect=_mock_save_model):
+    # Run training with mocked save_estimator
+    with (
+        patch("train.save_estimator", side_effect=_mock_save_estimator),
+        patch("train.log_flow_estimate"),
+    ):
         train(
             model=model,
             model_config={"config": {"jit": False}},
@@ -350,7 +356,10 @@ def test_train_rl_replay_buffer_used(tmp_path, mock_env):
         return state, {"dummy": jnp.array(0.0)}
 
     # Track ReplayBuffer initialization
-    with patch("train.ReplayBuffer", wraps=ReplayBuffer) as mock_buffer:
+    with (
+        patch("train.ReplayBuffer", wraps=ReplayBuffer) as mock_buffer,
+        patch("train.log_flow_estimate"),
+    ):
         train(
             model=model,
             model_config={"config": {"jit": False}},
@@ -404,8 +413,11 @@ def test_train_rl_replay_buffer_samples(tmp_path, mock_env):
         train_step_calls.append((args, kwargs))
         return original_train_step(*args, **kwargs)
 
-    with patch.object(
-        model, "create_train_step", return_value=tracking_train_step
+    with (
+        patch.object(
+            model, "create_train_step", return_value=tracking_train_step
+        ),
+        patch("train.log_flow_estimate"),
     ):
         train(
             model=model,
@@ -530,11 +542,11 @@ def test_train_supervised_save_only_best(
 
     def tracking_save(*args, **kwargs):
         save_calls.append((args, kwargs))
-        return _mock_save_model(*args, **kwargs)
+        return _mock_save_estimator(*args, **kwargs)
 
     with (
         patch("train_supervised.evaluate_batches", side_effect=mock_evaluate),
-        patch("train_supervised.save_model", side_effect=tracking_save),
+        patch("train_supervised.save_estimator", side_effect=tracking_save),
     ):
         train_supervised(
             model=model,
