@@ -10,12 +10,12 @@ from train import train
 
 
 def test_train_replay_initialization(mock_dependencies):
-    model, env, obs, env_state = mock_dependencies
+    estimator, env, obs, env_state = mock_dependencies
 
     # We want to check if ReplayBuffer is initialized
     with patch("train.ReplayBuffer", wraps=ReplayBuffer) as mock_buffer:
         train(
-            estimator=model,
+            estimator=estimator,
             estimator_config={"config": {"jit": False}},
             trainable_state=MagicMock(),
             out_dir="tmp",
@@ -39,11 +39,11 @@ def test_train_replay_initialization(mock_dependencies):
 
 
 def test_train_replay_execution(mock_dependencies):
-    model, env, obs, env_state = mock_dependencies
-    train_step_fn = model.create_train_step.return_value
+    estimator, env, obs, env_state = mock_dependencies
+    train_step_fn = estimator.create_train_step.return_value
 
     train(
-        estimator=model,
+        estimator=estimator,
         estimator_config={"config": {"jit": False}},
         trainable_state=MagicMock(),
         out_dir="tmp",

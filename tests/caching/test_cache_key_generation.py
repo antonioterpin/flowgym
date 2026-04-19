@@ -44,14 +44,14 @@ class TestCacheKeyGenerationForRealImages:
             files=["path/to/image_001.mat", "path/to/image_002.mat"]
         )
 
-        model = MagicMock()
-        model.enrich.return_value = {
+        estimator = MagicMock()
+        estimator.enrich.return_value = {
             "epe": np.array([0.1, 0.2], dtype=np.float32)
         }
 
         # First enrich call
-        payload1 = enrich_batch(batch, model, cache_manager=cm)
-        assert model.enrich.call_count == 1
+        payload1 = enrich_batch(batch, estimator, cache_manager=cm)
+        assert estimator.enrich.call_count == 1
 
         # Same filenames, different random keys (simulating different epoch)
         batch2 = SynthpixBatch(
@@ -65,11 +65,11 @@ class TestCacheKeyGenerationForRealImages:
         )
 
         # Reset mock and call again
-        model.enrich.reset_mock()
-        payload2 = enrich_batch(batch2, model, cache_manager=cm)
+        estimator.enrich.reset_mock()
+        payload2 = enrich_batch(batch2, estimator, cache_manager=cm)
 
         # Should be cache hit - same filenames means same cache keys
-        assert model.enrich.call_count == 0
+        assert estimator.enrich.call_count == 0
         np.testing.assert_allclose(payload1.epe, payload2.epe)
 
     def test_real_image_key_ignores_path_prefix(self, mock_cache_dir):
@@ -89,12 +89,12 @@ class TestCacheKeyGenerationForRealImages:
         )
         batch1 = batch1.update(files=["/absolute/path/to/test_file.mat"])
 
-        model = MagicMock()
-        model.enrich.return_value = {"epe": np.array([0.5], dtype=np.float32)}
+        estimator = MagicMock()
+        estimator.enrich.return_value = {"epe": np.array([0.5], dtype=np.float32)}
 
         # First enrich
-        enrich_batch(batch1, model, cache_manager=cm)
-        assert model.enrich.call_count == 1
+        enrich_batch(batch1, estimator, cache_manager=cm)
+        assert estimator.enrich.call_count == 1
 
         # Same filename but different path prefix
         batch2 = SynthpixBatch(
@@ -107,11 +107,11 @@ class TestCacheKeyGenerationForRealImages:
             files=["different/dir/test_file.mat"]
         )  # Same basename
 
-        model.enrich.reset_mock()
-        enrich_batch(batch2, model, cache_manager=cm)
+        estimator.enrich.reset_mock()
+        enrich_batch(batch2, estimator, cache_manager=cm)
 
         # Should be cache hit - same basename = same cache key
-        assert model.enrich.call_count == 0
+        assert estimator.enrich.call_count == 0
 
     def test_different_filenames_produce_different_keys(self, mock_cache_dir):
         """Test that different filenames produce different cache keys."""
@@ -130,11 +130,11 @@ class TestCacheKeyGenerationForRealImages:
         )
         batch1 = batch1.update(files=["file_A.mat"])
 
-        model = MagicMock()
-        model.enrich.return_value = {"epe": np.array([0.5], dtype=np.float32)}
+        estimator = MagicMock()
+        estimator.enrich.return_value = {"epe": np.array([0.5], dtype=np.float32)}
 
-        enrich_batch(batch1, model, cache_manager=cm)
-        assert model.enrich.call_count == 1
+        enrich_batch(batch1, estimator, cache_manager=cm)
+        assert estimator.enrich.call_count == 1
 
         # Different filename
         batch2 = SynthpixBatch(
@@ -145,11 +145,11 @@ class TestCacheKeyGenerationForRealImages:
         )
         batch2 = batch2.update(files=["file_B.mat"])  # Different filename
 
-        model.enrich.reset_mock()
-        enrich_batch(batch2, model, cache_manager=cm)
+        estimator.enrich.reset_mock()
+        enrich_batch(batch2, estimator, cache_manager=cm)
 
         # Should be cache miss - different filename = different cache key
-        assert model.enrich.call_count == 1
+        assert estimator.enrich.call_count == 1
 
 
 class TestCacheKeyGenerationForSyntheticImages:
@@ -176,13 +176,13 @@ class TestCacheKeyGenerationForSyntheticImages:
         # Add params to signal synthetic batch
         batch1 = batch1.update(params={"some": "generation_params"})
 
-        model = MagicMock()
-        model.enrich.return_value = {
+        estimator = MagicMock()
+        estimator.enrich.return_value = {
             "epe": np.array([0.1, 0.2], dtype=np.float32)
         }
 
-        enrich_batch(batch1, model, cache_manager=cm)
-        assert model.enrich.call_count == 1
+        enrich_batch(batch1, estimator, cache_manager=cm)
+        assert estimator.enrich.call_count == 1
 
         # Same keys should hit cache
         batch2 = SynthpixBatch(
@@ -193,11 +193,11 @@ class TestCacheKeyGenerationForSyntheticImages:
         )
         batch2 = batch2.update(params={"different": "params"})
 
-        model.enrich.reset_mock()
-        enrich_batch(batch2, model, cache_manager=cm)
+        estimator.enrich.reset_mock()
+        enrich_batch(batch2, estimator, cache_manager=cm)
 
         # Should hit cache - same keys
-        assert model.enrich.call_count == 0
+        assert estimator.enrich.call_count == 0
 
     def test_synthetic_different_keys_produce_miss(self, mock_cache_dir):
         """Test that different batch.keys produce cache misses."""
@@ -216,13 +216,13 @@ class TestCacheKeyGenerationForSyntheticImages:
         )
         batch1 = batch1.update(params={"gen": "params"})
 
-        model = MagicMock()
-        model.enrich.return_value = {
+        estimator = MagicMock()
+        estimator.enrich.return_value = {
             "epe": np.array([0.1, 0.2], dtype=np.float32)
         }
 
-        enrich_batch(batch1, model, cache_manager=cm)
-        assert model.enrich.call_count == 1
+        enrich_batch(batch1, estimator, cache_manager=cm)
+        assert estimator.enrich.call_count == 1
 
         # Different keys
         batch2 = SynthpixBatch(
@@ -233,11 +233,11 @@ class TestCacheKeyGenerationForSyntheticImages:
         )
         batch2 = batch2.update(params={"gen": "params"})
 
-        model.enrich.reset_mock()
-        enrich_batch(batch2, model, cache_manager=cm)
+        estimator.enrich.reset_mock()
+        enrich_batch(batch2, estimator, cache_manager=cm)
 
         # Should be cache miss - different keys
-        assert model.enrich.call_count == 1
+        assert estimator.enrich.call_count == 1
 
 
 class TestBatchTypeDetection:
@@ -264,30 +264,30 @@ class TestBatchTypeDetection:
         )
         batch = batch.update(files=[f"some/path/{filename}"])
 
-        model = MagicMock()
+        estimator = MagicMock()
         captured_miss_idxs = []
 
         def capture_call(b, miss_idxs, **kwargs):
             captured_miss_idxs.append(miss_idxs)
             return {"epe": np.array([0.1], dtype=np.float32)}
 
-        model.enrich.side_effect = capture_call
-        enrich_batch(batch, model, cache_manager=cm)
+        estimator.enrich.side_effect = capture_call
+        enrich_batch(batch, estimator, cache_manager=cm)
 
         # Verify the internal key assignment happened
         # The key used should be based on the hash, not the original batch.keys
         # We verify by checking if the same filename produces same result
-        model.enrich.reset_mock()
+        estimator.enrich.reset_mock()
         batch2 = batch.update(
             keys=jnp.array([99999], dtype=jnp.uint32)
         )  # Different key
         batch2 = batch2.update(
             files=[f"different/path/{filename}"]
         )  # Same basename
-        enrich_batch(batch2, model, cache_manager=cm)
+        enrich_batch(batch2, estimator, cache_manager=cm)
 
         # Should be cache hit because same filename
-        assert model.enrich.call_count == 0
+        assert estimator.enrich.call_count == 0
 
     def test_files_with_params_uses_batch_keys(self, mock_cache_dir):
         """Test batch with files AND params uses batch.keys, not filenames."""
@@ -312,11 +312,11 @@ class TestBatchTypeDetection:
             },  # Having params means synthetic
         )
 
-        model = MagicMock()
-        model.enrich.return_value = {"epe": np.array([0.1], dtype=np.float32)}
+        estimator = MagicMock()
+        estimator.enrich.return_value = {"epe": np.array([0.1], dtype=np.float32)}
 
-        enrich_batch(batch, model, cache_manager=cm)
-        assert model.enrich.call_count == 1
+        enrich_batch(batch, estimator, cache_manager=cm)
+        assert estimator.enrich.call_count == 1
 
         # Same filename but different key - should miss
         batch2 = SynthpixBatch(
@@ -330,11 +330,11 @@ class TestBatchTypeDetection:
             params={"generation": "parameters"},
         )
 
-        model.enrich.reset_mock()
-        enrich_batch(batch2, model, cache_manager=cm)
+        estimator.enrich.reset_mock()
+        enrich_batch(batch2, estimator, cache_manager=cm)
 
         # Should be cache miss - params present means we use batch.keys
-        assert model.enrich.call_count == 1
+        assert estimator.enrich.call_count == 1
 
 
 if __name__ == "__main__":

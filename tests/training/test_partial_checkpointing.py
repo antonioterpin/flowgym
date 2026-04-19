@@ -15,7 +15,7 @@ import synthpix
 from flax.core import FrozenDict
 
 from flowgym.common.base.trainable_state import NNEstimatorTrainableState
-from flowgym.make import load_model, save_estimator
+from flowgym.make import load_estimator, save_estimator
 
 
 def _make_synthetic_config(file_list: list[str]) -> dict:
@@ -190,11 +190,13 @@ def test_synthetic_sampler_checkpoint_integration(tmp_path, npy_flow_files):
 
         # 9. Verify model state can also be restored independently
         template_state = _make_model_state()
-        restored_model = load_model(save_path, template_state, mode="resume")
-        assert restored_model.step == 10, "Model step should be restored"
+        restored_estimator = load_estimator(
+            save_path, template_state, mode="resume"
+        )
+        assert restored_estimator.step == 10, "Estimator step should be restored"
         assert jnp.allclose(
-            restored_model.params["w"], model_state.params["w"]
-        ), "Model params should be restored"
+            restored_estimator.params["w"], model_state.params["w"]
+        ), "Estimator params should be restored"
     finally:
         sampler.shutdown()
         if restored_sampler is not None:
@@ -263,11 +265,13 @@ def test_real_sampler_checkpoint_integration(tmp_path, mock_mat_files):
 
         # 9. Verify model state can also be restored independently
         template_state = _make_model_state()
-        restored_model = load_model(save_path, template_state, mode="resume")
-        assert restored_model.step == 10, "Model step should be restored"
+        restored_estimator = load_estimator(
+            save_path, template_state, mode="resume"
+        )
+        assert restored_estimator.step == 10, "Estimator step should be restored"
         assert jnp.allclose(
-            restored_model.params["w"], model_state.params["w"]
-        ), "Model params should be restored"
+            restored_estimator.params["w"], model_state.params["w"]
+        ), "Estimator params should be restored"
     finally:
         sampler.shutdown()
         if restored_sampler is not None:

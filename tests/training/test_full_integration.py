@@ -3,7 +3,7 @@
 These tests exercise all training features using DummyEstimator:
 - Replay buffer (initialization, push, sample)
 - Replay buffer enrichment via prepare_experience_for_replay
-- Checkpointing (save_estimator / load_model)
+- Checkpointing (save_estimator)
 - Validation (for train_supervised)
 - Metrics processing
 """
