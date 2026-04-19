@@ -73,7 +73,7 @@ def _make_real_config(file_list: list[str], dims: dict) -> dict:
     }
 
 
-def _make_model_state() -> NNEstimatorTrainableState:
+def _make_estimator_state() -> NNEstimatorTrainableState:
     """Create a minimal trainable state for checkpointing."""
 
     def apply_fn(params, x):
@@ -153,7 +153,7 @@ def test_synthetic_sampler_checkpoint_integration(tmp_path, npy_flow_files):
         next(sampler)
 
         # 3. Create estimator state and save checkpoint
-        estimator_state = _make_model_state()
+        estimator_state = _make_estimator_state()
         estimator_name = "CheckpointTest_synthetic"
 
         save_path_str = save_estimator(
@@ -189,7 +189,7 @@ def test_synthetic_sampler_checkpoint_integration(tmp_path, npy_flow_files):
         ), "Flow fields should match"
 
         # 9. Verify estimator state can also be restored independently
-        template_state = _make_model_state()
+        template_state = _make_estimator_state()
         restored_estimator = load_estimator(
             save_path, template_state, mode="resume"
         )
@@ -228,7 +228,7 @@ def test_real_sampler_checkpoint_integration(tmp_path, mock_mat_files):
         next(sampler)
 
         # 3. Create estimator state and save checkpoint
-        estimator_state = _make_model_state()
+        estimator_state = _make_estimator_state()
         estimator_name = "CheckpointTest_real"
 
         save_path_str = save_estimator(
@@ -264,7 +264,7 @@ def test_real_sampler_checkpoint_integration(tmp_path, mock_mat_files):
         ), "Flow fields should match"
 
         # 9. Verify estimator state can also be restored independently
-        template_state = _make_model_state()
+        template_state = _make_estimator_state()
         restored_estimator = load_estimator(
             save_path, template_state, mode="resume"
         )
