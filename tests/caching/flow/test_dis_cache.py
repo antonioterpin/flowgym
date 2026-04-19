@@ -42,8 +42,8 @@ def test_cache_manager_spec_storage(cache_dir):
 
 def test_dis_get_config():
     """Test get_config method of DIS estimator."""
-    model = DISJAXFlowFieldEstimator(preset=PresetType.FAST)
-    config = model.get_config()
+    estimator = DISJAXFlowFieldEstimator(preset=PresetType.FAST)
+    config = estimator.get_config()
 
     assert config["preset"] == "FAST"
     assert config["patch_size"] == 9
@@ -53,8 +53,8 @@ def test_dis_get_config():
 
 def test_dis_enrich(tmp_path):
     """Test enrich returns correct EPE payload."""
-    # Setup model
-    model = DISJAXFlowFieldEstimator(preset=PresetType.ULTRAFAST)
+    # Setup estimator
+    estimator = DISJAXFlowFieldEstimator(preset=PresetType.ULTRAFAST)
 
     # Create fake batch
     B, H, W = 2, 32, 32
@@ -80,7 +80,7 @@ def test_dis_enrich(tmp_path):
     miss_idxs = jnp.array([0, 1])
 
     # Run enrich
-    payload = model.enrich(batch, miss_idxs)
+    payload = estimator.enrich(batch, miss_idxs)
 
     assert payload is not None
     assert payload["epe"] is not None
@@ -89,15 +89,15 @@ def test_dis_enrich(tmp_path):
 
     # Check partial miss
     miss_idxs_partial = jnp.array([0])
-    payload_partial = model.enrich(batch, miss_idxs_partial)
+    payload_partial = estimator.enrich(batch, miss_idxs_partial)
     assert payload_partial is not None
     assert payload_partial["epe"].shape == (1,)
 
 
 def test_integration_enrich(cache_dir):
-    """Test full enrich flow with CacheManager and DIS model."""
+    """Test full enrich flow with CacheManager and DIS estimator."""
     spec = {"epe": (np.dtype("float32"), ())}
-    model = DISJAXFlowFieldEstimator(preset=PresetType.ULTRAFAST)
+    estimator = DISJAXFlowFieldEstimator(preset=PresetType.ULTRAFAST)
 
     cm = CacheManager(
         root_dir=str(cache_dir),
@@ -120,7 +120,7 @@ def test_integration_enrich(cache_dir):
     )
 
     # 1. Enrich (should be miss -> compute -> write)
-    payload = enrich_batch(batch, model, cache_manager=cm)
+    payload = enrich_batch(batch, estimator, cache_manager=cm)
     assert payload is not None
     assert payload.epe is not None
     assert payload.epe.shape == (B,)
@@ -144,7 +144,7 @@ def test_integration_enrich(cache_dir):
 
 def test_dis_uses_cached_metrics_without_running_flow(monkeypatch):
     """DIS should short-circuit when cache provides precomputed metrics."""
-    model = DISJAXFlowFieldEstimator(preset=PresetType.ULTRAFAST)
+    estimator = DISJAXFlowFieldEstimator(preset=PresetType.ULTRAFAST)
 
     B, H, W = 2, 32, 32
     key = jax.random.PRNGKey(7)
@@ -153,10 +153,10 @@ def test_dis_uses_cached_metrics_without_running_flow(monkeypatch):
     images2 = jax.random.uniform(k2, (B, H, W))
 
     init_flow = jnp.zeros((B, H, W, 2), dtype=jnp.float32)
-    state = model.create_state(
+    state = estimator.create_state(
         images1, init_flow, image_history_size=2, rng=key
     )
-    trainable_state = model.create_trainable_state(images1, key)
+    trainable_state = estimator.create_trainable_state(images1, key)
 
     cache_payload = CachePayload(
         has_precomputed_errors=True,
@@ -174,7 +174,7 @@ def test_dis_uses_cached_metrics_without_running_flow(monkeypatch):
         fail_if_called,
     )
 
-    new_state, metrics = model(
+    new_state, metrics = estimator(
         images2,
         state,
         trainable_state,

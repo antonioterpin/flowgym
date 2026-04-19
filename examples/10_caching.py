@@ -1,4 +1,4 @@
-"""Example of how to use caching with DIS model and temporary .mat files."""
+"""Example of how to use caching with DIS estimator and temporary .mat files."""
 
 import os
 import subprocess
@@ -20,7 +20,7 @@ def setup_configs(temp_dir: str) -> tuple[Path, Path]:
         temp_dir: Temporary directory path for data and configs.
 
     Returns:
-        Tuple of (dataset_path, model_path) for the created configs.
+        Tuple of (dataset_path, estimator_path) for the created configs.
     """
 
     data_dir = Path(temp_dir) / "test"
@@ -92,8 +92,8 @@ def setup_configs(temp_dir: str) -> tuple[Path, Path]:
     with open(dataset_path, "w") as f:
         yaml.dump(dataset_config, f)
 
-    # 2. Model Config
-    model_config = {
+    # 2. Estimator Config
+    estimator_config = {
         "estimator": "dis_jax",
         "estimate_type": "flow",
         "config": {
@@ -103,19 +103,19 @@ def setup_configs(temp_dir: str) -> tuple[Path, Path]:
         },
     }
 
-    model_path = Path(temp_dir) / "model.yaml"
-    with open(model_path, "w") as f:
-        yaml.dump(model_config, f)
+    estimator_path = Path(temp_dir) / "estimator.yaml"
+    with open(estimator_path, "w") as f:
+        yaml.dump(estimator_config, f)
 
-    return dataset_path, model_path
+    return dataset_path, estimator_path
 
 
-def run_main(dataset_path: Path, model_path: Path, description: str):
+def run_main(dataset_path: Path, estimator_path: Path, description: str):
     """Run src/main.py via subprocess.
 
     Args:
         dataset_path: Path to dataset configuration YAML.
-        model_path: Path to model configuration YAML.
+        estimator_path: Path to estimator configuration YAML.
         description: Description of this run for logging.
 
     Returns:
@@ -129,8 +129,8 @@ def run_main(dataset_path: Path, model_path: Path, description: str):
         "python",
         "-m",
         "src.main",
-        "--model",
-        str(model_path),
+        "--estimator",
+        str(estimator_path),
         "--dataset",
         str(dataset_path),
         "--mode",
@@ -165,14 +165,16 @@ def run_main(dataset_path: Path, model_path: Path, description: str):
 
 
 def run_example():
-    print("=== DIS Model Caching Example ===")
+    print("=== DIS Estimator Caching Example ===")
 
     with tempfile.TemporaryDirectory() as temp_dir:
         print(f"Using temporary directory: {temp_dir}")
-        dataset_path, model_path = setup_configs(temp_dir)
+        dataset_path, estimator_path = setup_configs(temp_dir)
 
         # Run 1: Cold Start
-        duration_1 = run_main(dataset_path, model_path, "Run 1: Cold Start")
+        duration_1 = run_main(
+            dataset_path, estimator_path, "Run 1: Cold Start"
+        )
 
         # Modify config to use warm_start="all" for Run 2
         # We rewrite the dataset yaml
@@ -186,7 +188,9 @@ def run_example():
             yaml.dump(config, f)
 
         # Run 2: Warm Start
-        duration_2 = run_main(dataset_path, model_path, "Run 2: Warm Start")
+        duration_2 = run_main(
+            dataset_path, estimator_path, "Run 2: Warm Start"
+        )
 
         # Analysis
         if duration_2 < duration_1:

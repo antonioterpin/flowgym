@@ -12,17 +12,17 @@ def test_eval_full_dataset_with_caching():
     """Test that eval_full_dataset correctly uses the cache manager."""
 
     # Mock dependencies
-    mock_model = MagicMock(spec=Estimator)
+    mock_estimator = MagicMock(spec=Estimator)
     # Mock default return for process_metrics to avoid iteration errors
-    mock_model.process_metrics.return_value = {"errors": np.array([0.1])}
-    mock_model.finalize_metrics.return_value = {}
-    mock_model.is_oracle.return_value = False
+    mock_estimator.process_metrics.return_value = {"errors": np.array([0.1])}
+    mock_estimator.finalize_metrics.return_value = {}
+    mock_estimator.is_oracle.return_value = False
 
     # Mock enrich to return payload for missing keys
     def enrich_fn(batch, miss_idxs, **kwargs):
         return {"cached_value": np.array([123])}
 
-    mock_model.enrich.side_effect = enrich_fn
+    mock_estimator.enrich.side_effect = enrich_fn
 
     # Create a dummy batch
     batch = SynthpixBatch(
@@ -62,7 +62,7 @@ def test_eval_full_dataset_with_caching():
     # Run eval_full_dataset
     try:
         eval_full_dataset(
-            model=mock_model,
+            estimator=mock_estimator,
             sampler=mock_sampler,
             create_state_fn=mock_create_state_fn,
             compute_estimate_fn=mock_compute_estimate_fn,
@@ -84,8 +84,8 @@ def test_eval_full_dataset_with_caching():
     # 2. Verify cache lookup was called
     mock_cache_manager.lookup.assert_called()
 
-    # 3. Verify model.enrich was called for cache misses
-    mock_model.enrich.assert_called()
+    # 3. Verify estimator.enrich was called for cache misses
+    mock_estimator.enrich.assert_called()
 
     # 4. Verify sampler was iterated
     mock_sampler.__iter__.assert_called()

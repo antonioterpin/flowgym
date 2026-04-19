@@ -9,11 +9,11 @@ import synthpix
 from flax.core import FrozenDict
 
 from flowgym.common.base.trainable_state import NNEstimatorTrainableState
-from flowgym.make import load_model, save_model
+from flowgym.make import load_estimator, save_estimator
 
 
 def test_real_integration_checkpointing(tmp_path):
-    """Test integration between flowgym.save_model and synthpix.make.
+    """Test integration between flowgym.save_estimator and synthpix.make.
 
     Uses SyntheticImageSampler with real Grain-based scheduler for
     checkpointing.
@@ -79,7 +79,7 @@ def test_real_integration_checkpointing(tmp_path):
     next(sampler)
     next(sampler)
 
-    # 4. Prepare Mock Model State
+    # 4. Prepare Mock Estimator State
     def apply_fn(params, x):
         return params["w"] * x
 
@@ -90,12 +90,12 @@ def test_real_integration_checkpointing(tmp_path):
     )
 
     # 5. SAVE ATOMIC
-    model_name = "IntegrationTest"
-    save_path_str = save_model(
+    estimator_name = "IntegrationTest"
+    save_path_str = save_estimator(
         state=state,
         out_dir=tmp_path,
         step=10,
-        model_name=model_name,
+        estimator_name=estimator_name,
         sampler=sampler,
     )
     save_path = pathlib.Path(save_path_str)
@@ -134,10 +134,12 @@ def test_real_integration_checkpointing(tmp_path):
         )
         print(f"  Batch {i}: ✓ identical")
 
-    # 8. RESTORE MODEL via load_model (Partial Restoring)
+    # 8. RESTORE ESTIMATOR via load_estimator (Partial Restoring)
     template_state = NNEstimatorTrainableState.create(
         apply_fn=apply_fn, params=params, tx=tx
     )
-    restored_model = load_model(save_path, template_state, mode="resume")
-    assert restored_model.step == 10
-    assert jnp.allclose(restored_model.params["w"], state.params["w"])
+    restored_estimator = load_estimator(
+        save_path, template_state, mode="resume"
+    )
+    assert restored_estimator.step == 10
+    assert jnp.allclose(restored_estimator.params["w"], state.params["w"])
