@@ -184,7 +184,6 @@ def test_save_and_load_roundtrip_resumable(tmp_path):
     original_state = _make_dummy_state(global_step=7)
 
     # Save
-    # Save
     save_estimator(
         original_state,
         out_dir=str(out_dir),

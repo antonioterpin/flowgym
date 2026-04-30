@@ -3,8 +3,8 @@
 This module tests that the caching system follows the standards defined in
 docs/CACHING.md, including:
 - Unique cache ID generation
-- Meta-estimator delegation to sub-estimator caches
-- Sub-estimator cache write-back
+- Meta-estimator delegation to component estimator caches
+- Component estimator cache write-back
 """
 
 
@@ -37,8 +37,8 @@ class TestUniqueCacheIds:
         class MinimalAoP:
             def __init__(self, configs):
                 self.estimator_configs = configs
-                self.sub_estimators = []
-                self.sub_estimator_states = []
+                self.component_estimators = []
+                self.component_estimator_states = []
 
         est1 = MinimalAoP([{"estimator": "raft", "config": config1}])
         est2 = MinimalAoP([{"estimator": "raft", "config": config2}])

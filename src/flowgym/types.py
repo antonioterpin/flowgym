@@ -43,7 +43,7 @@ class CachePayload:
         has_precomputed_errors: Whether per-sample EPE data is available.
         epe: Per-sample EPE (B,) for regular estimators.
         relative_epe: Relative EPE (B,) for regular estimators.
-        epe_all: Per-sub-estimator EPE (B, K) for meta-estimators.
+        epe_all: Per-component-estimator EPE (B, K) for meta-estimators.
         epe_mask: Validity mask (B, K) aligned with epe_all.
         estimates: Pre-computed flow estimates (B, ...).
         extras: Opaque estimator-specific data (e.g., candidate flows for

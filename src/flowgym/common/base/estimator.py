@@ -516,7 +516,7 @@ class Estimator(abc.ABC):
 
         Rules for Meta-Estimators:
             Meta-estimators can override this to aggregate cached data from
-            their sub-estimator caches, returning a combined payload
+            their component estimator caches, returning a combined payload
             (e.g., `"epe_all"`, `"epe_mask"`).
 
         Args:
@@ -545,8 +545,8 @@ class Estimator(abc.ABC):
         This method provides a unified interface for cache preloading. The
         default implementation is a no-op.
 
-        Meta-estimators can override this to load their sub-estimator caches
-        into memory at startup for fast aggregation during training.
+        Meta-estimators can override this to load their component estimator
+        caches into memory at startup for fast aggregation during training.
 
         Args:
             root_dir: Root directory containing cache files.

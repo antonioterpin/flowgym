@@ -146,7 +146,7 @@ def save_estimator(
 ) -> str:
     """Save a training checkpoint using Orbax.
 
-    Checkpoint saved to out_dir/checkpoints/<estimator_name>/step_<step>.
+    Checkpoint saved to out_dir/checkpoints/<estimator_name>/<step>.
 
     Args:
         state: The trainable state to save (PyTree).
@@ -175,7 +175,7 @@ def save_estimator(
             raise ValueError("step not provided and state has no 'step' attr")
     step = int(step)
 
-    # Nesting: out_dir/checkpoints/<estimator_name>/step_<step>
+    # Nesting: out_dir/checkpoints/<estimator_name>/<step>
     parts = [out_dir, "checkpoints"]
     if estimator_name is not None:
         parts.append(estimator_name)

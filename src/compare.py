@@ -40,9 +40,6 @@ def compare_performances_on_batches(
 ) -> Metrics:
     """Compare the estimator on two batches using the provided estimator.
 
-    if key is None:
-        key = jax.random.PRNGKey(0)
-
     Args:
         estimator: The estimator to evaluate.
         trained_state: The trained state of the estimator.
@@ -134,9 +131,6 @@ def comparison(
     key: PRNGKey | None = None,
 ) -> None:
     """Compare the flow field between real and synthetic images.
-
-    if key is None:
-        key = jax.random.PRNGKey(0)
 
     Args:
         estimator_config: Configuration of the estimator.

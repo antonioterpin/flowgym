@@ -584,7 +584,7 @@ def enrich_batch(
         except Exception as e:
             logger.error(f"Error in estimator.enrich: {e}")
             logger.error(f"miss_idxs: {miss_idxs_absolute}")
-            raise e
+            raise
 
         if payload_miss is not None:
             # Merge into valid payload

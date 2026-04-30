@@ -79,7 +79,7 @@ def test_real_integration_checkpointing(tmp_path):
     next(sampler)
     next(sampler)
 
-    # 4. Prepare Mock Estimator State
+    # 4. Prepare mock estimator state
     def apply_fn(params, x):
         return params["w"] * x
 
@@ -89,7 +89,7 @@ def test_real_integration_checkpointing(tmp_path):
         apply_fn=apply_fn, params=params, tx=tx
     )
 
-    # 5. SAVE ATOMIC
+    # 5. Save atomically
     estimator_name = "IntegrationTest"
     save_path_str = save_estimator(
         state=state,
@@ -101,7 +101,7 @@ def test_real_integration_checkpointing(tmp_path):
     save_path = pathlib.Path(save_path_str)
     assert save_path.exists()
 
-    # 6. RESTORE SAMPLER via synthpix.make
+    # 6. Restore sampler via synthpix.make
     restored_sampler = synthpix.make(
         dataset_config, use_grain_scheduler=True, load_from=save_path.parent
     )
@@ -134,7 +134,7 @@ def test_real_integration_checkpointing(tmp_path):
         )
         print(f"  Batch {i}: ✓ identical")
 
-    # 8. RESTORE ESTIMATOR via load_estimator (Partial Restoring)
+    # 8. Restore estimator via load_estimator (partial restore)
     template_state = NNEstimatorTrainableState.create(
         apply_fn=apply_fn, params=params, tx=tx
     )
