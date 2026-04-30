@@ -12,7 +12,7 @@ from synthpix.sampler import Sampler
 
 from eval import evaluate_batches
 from flowgym.common.base import Estimator, NNEstimatorTrainableState
-from flowgym.make import save_model
+from flowgym.make import save_estimator
 from flowgym.training.caching import CacheManager, enrich_batch
 from flowgym.training.replay import ReplayBuffer
 from flowgym.types import (
@@ -28,8 +28,9 @@ logger = gg.get_logger(__name__, with_metrics=True)
 
 
 def train_supervised(
-    model: Estimator,
-    model_config: dict,
+    estimator: Estimator,
+    estimator_config: dict,
+    *,
     trainable_state: NNEstimatorTrainableState,
     out_dir: str,
     create_state_fn: CompiledCreateStateFn,
@@ -52,21 +53,21 @@ def train_supervised(
     """Train the flow estimator.
 
     Args:
-        model: The flow estimator model.
-        model_config: Configuration for the model.
-        trainable_state: The initial state of the model.
-        out_dir: Directory to save the model.
+        estimator: The flow estimator.
+        estimator_config: Configuration for the estimator.
+        trainable_state: The initial state of the estimator.
+        out_dir: Directory to save the estimator.
         create_state_fn: Function to create the initial state of the estimator.
         compute_estimate_fn: Function to compute the estimate.
         sampler: The sampler to use to generate images.
         val_sampler: The sampler to use to generate images for validation.
-        val_interval: Frequency to validate the model.
+        val_interval: Frequency to validate the estimator.
         val_num_batches: Number of batches to validate for.
         num_batches: Number of batches to train for.
         estimate_type: Type of estimate to compute.
-        save_every: Frequency to save the model.
+        save_every: Frequency to save the estimator.
         log_every: Frequency to log the training progress.
-        save_only_best: Whether to save only the best model
+        save_only_best: Whether to save only the best estimator
                     by evaluating it on the validation set.
         key: Random key for JAX operations.
         replay_buffer_capacity: Capacity of the replay buffer.
@@ -84,12 +85,12 @@ def train_supervised(
         key = jax.random.PRNGKey(0)
 
     # Create the training step function
-    train_step_fn = model.create_train_step()
+    train_step_fn = estimator.create_train_step()
     assert isinstance(train_step_fn, SupervisedTrainStep), (
         "Expected SupervisedTrainStep callable"
     )
 
-    if model_config["config"].get("jit", False) and not DEBUG:
+    if estimator_config["config"].get("jit", False) and not DEBUG:
         train_step_fn = jax.jit(train_step_fn)
 
     logger.info("Training step function compiled successfully.")
@@ -128,7 +129,7 @@ def train_supervised(
             key, val_key = jax.random.split(key)
             try:
                 val_metrics = evaluate_batches(
-                    model=model,
+                    estimator=estimator,
                     sampler=val_sampler,
                     create_state_fn=create_state_fn,
                     compute_estimate_fn=compute_estimate_fn,
@@ -207,7 +208,7 @@ def train_supervised(
                 t_enrich = time.time()
                 cache_payload = enrich_batch(
                     batch,
-                    model,
+                    estimator,
                     cache_manager=cache_manager,
                     trainable_state=trainable_state,
                 )
@@ -252,8 +253,8 @@ def train_supervised(
 
                 # Store experience in the replay buffer
                 if replay_buffer is not None:
-                    # Allow model to enrich experience before storing
-                    enriched_experience = model.prepare_experience_for_replay(
+                    # Allow estimator to enrich experience before storing
+                    enriched_experience = estimator.prepare_experience_for_replay(
                         experience, trainable_state
                     )
                     # We store unbatched experiences
@@ -320,7 +321,7 @@ def train_supervised(
 
                     try:
                         val_metrics = evaluate_batches(
-                            model=model,
+                            estimator=estimator,
                             sampler=val_sampler,
                             create_state_fn=create_state_fn,
                             compute_estimate_fn=compute_estimate_fn,
@@ -388,18 +389,18 @@ def train_supervised(
                     batch_idx % save_every == 0 or batch_idx == num_batches - 1
                 ):
                     if not save_only_best:
-                        save_model(
+                        save_estimator(
                             state=trainable_state,
                             out_dir=out_dir,
                             step=batch_idx,
-                            model=model,
-                            model_name=model.__class__.__name__,
+                            estimator=estimator,
+                            estimator_name=estimator.__class__.__name__,
                             sampler=sampler,
                         )
 
                     elif last_val_metrics is None:
                         logger.info(
-                            f"Skipping best-model save at batch {batch_idx}: "
+                            f"Skipping best-estimator save at batch {batch_idx}: "
                             f"no validation computed yet."
                         )
                     else:
@@ -411,17 +412,17 @@ def train_supervised(
                         if current_mean_error < best_mean_error:
                             best_mean_error = current_mean_error
 
-                            save_model(
+                            save_estimator(
                                 state=trainable_state,
                                 out_dir=out_dir,
                                 step=batch_idx,
-                                model=model,
-                                model_name=model.__class__.__name__,
+                                estimator=estimator,
+                                estimator_name=estimator.__class__.__name__,
                                 sampler=sampler,
                             )
 
                             logger.info(
-                                f"New best model saved at batch {batch_idx} "
+                                f"New best estimator saved at batch {batch_idx} "
                                 f"(mean_error={current_mean_error:.6f})"
                             )
 
@@ -442,7 +443,7 @@ def train_supervised(
             key, val_key = jax.random.split(key)
             try:
                 final_val_metrics = evaluate_batches(
-                    model=model,
+                    estimator=estimator,
                     sampler=val_sampler,
                     create_state_fn=create_state_fn,
                     compute_estimate_fn=compute_estimate_fn,

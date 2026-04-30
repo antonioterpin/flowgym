@@ -23,7 +23,7 @@ RUN_CMD = [
     "python",
     "-m",
     "src.main",
-    "--model",
+    "--estimator",
     str(CONFIG_PATH),
     "--dataset",
     "src/flowgym/config/piv_dataset_class1_eval_original.yaml",

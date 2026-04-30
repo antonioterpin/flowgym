@@ -14,7 +14,7 @@ from goggles.shutdown import GracefulShutdown
 from synthpix import SynthpixBatch
 from synthpix.sampler import Sampler
 
-# Models
+# Estimators
 from flowgym.common.base import Estimator, EstimatorTrainableState
 from flowgym.common.evaluation import loss_supervised_density
 from flowgym.training.caching import CacheManager, enrich_batch
@@ -30,7 +30,8 @@ logger = get_logger(__name__, with_metrics=True)
 
 
 def eval_flow(
-    model: Estimator,
+    estimator: Estimator,
+    *,
     trained_state: EstimatorTrainableState,
     create_state_fn: CompiledCreateStateFn,
     compute_flow_fn: CompiledComputeEstimateFn,
@@ -38,11 +39,11 @@ def eval_flow(
     key: PRNGKey | None = None,
     cache_payload: CachePayload | None = None,
 ) -> Metrics:
-    """Evaluate the model using the provided sampler.
+    """Evaluate the estimator using the provided sampler.
 
     Args:
-        model: The model to evaluate.
-        trained_state: The trained state of the model.
+        estimator: The estimator to evaluate.
+        trained_state: The trained state of the estimator.
         create_state_fn: Function to create the state.
         compute_flow_fn: Function to compute the flow.
         batch: A batch of images and flow fields.
@@ -65,8 +66,8 @@ def eval_flow(
     # Compute the flow field estimate
     t = time.time()
 
-    if model.is_oracle():
-        # If the model is an oracle, provide the ground truth flow field
+    if estimator.is_oracle():
+        # If the estimator is an oracle, provide the ground truth flow field
         estimation_state["estimates"] = (
             estimation_state["estimates"].at[:, -1].set(flow_field_gt)
         )
@@ -80,7 +81,7 @@ def eval_flow(
     t = time.time() - t
 
     # Post process the metrics
-    metrics = model.process_metrics(metrics)
+    metrics = estimator.process_metrics(metrics)
 
     # Extract the flow field from the estimation state
     flow_field = estimation_state["estimates"][:, -1]
@@ -106,7 +107,8 @@ def eval_flow(
 
 
 def eval_density(
-    model: Estimator,
+    estimator: Estimator,
+    *,
     trained_state: EstimatorTrainableState | None,
     create_state_fn: Callable,
     compute_estimate_fn: Callable,
@@ -114,11 +116,11 @@ def eval_density(
     key: PRNGKey | None = None,
     cache_payload: CachePayload | None = None,
 ) -> Metrics:
-    """Evaluate the model using the provided sampler.
+    """Evaluate the estimator using the provided sampler.
 
     Args:
-        model: The model to evaluate.
-        trained_state: The trained state of the model.
+        estimator: The estimator to evaluate.
+        trained_state: The trained state of the estimator.
         create_state_fn: Function to create the state.
         compute_estimate_fn: Function to compute the estimate.
         batch: A batch of images and flow fields.
@@ -152,7 +154,7 @@ def eval_density(
     t = time.time() - t
 
     # Post process the metrics
-    metrics = model.process_metrics(metrics)
+    metrics = estimator.process_metrics(metrics)
 
     # Compute the supervised loss if not already provided (e.g., from cache)
     if "errors" not in metrics:
@@ -168,7 +170,8 @@ def eval_density(
 
 
 def eval(
-    model: Estimator,
+    estimator: Estimator,
+    *,
     trainable_state: EstimatorTrainableState,
     create_state_fn: CompiledCreateStateFn,
     compute_estimate_fn: CompiledComputeEstimateFn,
@@ -179,11 +182,11 @@ def eval(
     time_sample: float | None = None,
     time_enriching: float | None = None,
 ) -> Metrics:
-    """Evaluate the model on a SynthpixBatch.
+    """Evaluate the estimator on a SynthpixBatch.
 
     Args:
-        model: The model to evaluate.
-        trainable_state: The trained state of the model.
+        estimator: The estimator to evaluate.
+        trainable_state: The trained state of the estimator.
         create_state_fn: Function to create the state.
         compute_estimate_fn: Function to compute the estimate.
         batch: A batch of images and flow fields.
@@ -200,7 +203,7 @@ def eval(
         key = jax.random.PRNGKey(0)
     if estimate_type == "flow":
         metrics = eval_flow(
-            model=model,
+            estimator=estimator,
             trained_state=trainable_state,
             create_state_fn=create_state_fn,
             compute_flow_fn=compute_estimate_fn,
@@ -210,7 +213,7 @@ def eval(
         )
     else:
         metrics = eval_density(
-            model=model,
+            estimator=estimator,
             trained_state=trainable_state,
             create_state_fn=create_state_fn,
             compute_estimate_fn=compute_estimate_fn,
@@ -240,7 +243,8 @@ def eval(
 
 
 def evaluate_batches(
-    model: Estimator,
+    estimator: Estimator,
+    *,
     sampler: Sampler,
     create_state_fn: CompiledCreateStateFn,
     compute_estimate_fn: CompiledComputeEstimateFn,
@@ -255,7 +259,7 @@ def evaluate_batches(
     metrics.
 
     Args:
-        model: Estimator to evaluate.
+        estimator: Estimator to evaluate.
         sampler: Data sampler producing SynthpixBatch items.
         create_state_fn: Function that initializes estimator state.
         compute_estimate_fn: Function that computes estimates.
@@ -293,13 +297,13 @@ def evaluate_batches(
 
         cache_payload = enrich_batch(
             batch,
-            model,
+            estimator,
             cache_manager=cache_manager,
             trainable_state=trainable_state,
         )
 
         metrics = eval(
-            model=model,
+            estimator=estimator,
             trainable_state=trainable_state,
             create_state_fn=create_state_fn,
             compute_estimate_fn=compute_estimate_fn,
@@ -380,14 +384,15 @@ def evaluate_batches(
         summary[f"{metric_name}/max"] = jnp.nanmax(arr)
         summary[f"{metric_name}/min"] = jnp.nanmin(arr)
 
-    # Allow model to add derived metrics to the summary
-    processed = model.process_metrics(dict(summary))
+    # Allow estimator to add derived metrics to the summary
+    processed = estimator.process_metrics(dict(summary))
     summary.update(processed)
     return Metrics(summary)
 
 
 def eval_full_dataset(
-    model: Estimator,
+    estimator: Estimator,
+    *,
     sampler: Sampler,
     create_state_fn: CompiledCreateStateFn,
     compute_estimate_fn: CompiledComputeEstimateFn,
@@ -398,14 +403,14 @@ def eval_full_dataset(
     num_batches: int | None = None,
     cache_manager: CacheManager | None = None,
 ) -> None:
-    """Run the full evaluation of the model.
+    """Run the full evaluation of the estimator.
 
     Args:
-        model: The model to evaluate.
+        estimator: The estimator to evaluate.
         sampler: The image sampler for evaluation.
         create_state_fn: Function to create the state.
         compute_estimate_fn: Function to compute the estimate.
-        trainable_state: The trained state of the model.
+        trainable_state: The trained state of the estimator.
         estimate_type: Type of the estimator ("flow" or "density").
         key: Random key for JAX operations.
             Defaults to jax.random.PRNGKey(0).
@@ -460,7 +465,7 @@ def eval_full_dataset(
             t_enrich_start = time.time()
             cache_payload = enrich_batch(
                 batch,
-                model,
+                estimator,
                 cache_manager=cache_manager,
                 trainable_state=trainable_state,
             )
@@ -469,7 +474,7 @@ def eval_full_dataset(
 
             t_evaluate_start = time.time()
             metrics = eval(
-                model=model,
+                estimator=estimator,
                 trainable_state=trainable_state,
                 create_state_fn=create_state_fn,
                 compute_estimate_fn=compute_estimate_fn,
@@ -607,7 +612,7 @@ def eval_full_dataset(
             )
 
         # Push finalized metrics to logger
-        logger.push(model.finalize_metrics(), step=batches_processed)
+        logger.push(estimator.finalize_metrics(), step=batches_processed)
 
         wall_time = time.time() - t_start
         logger.info(

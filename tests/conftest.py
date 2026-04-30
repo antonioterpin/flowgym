@@ -100,12 +100,12 @@ def npy_flow_files(tmp_path):
 
 @pytest.fixture
 def mock_dependencies():
-    """Fixture providing mock model, env, observations for training tests."""
-    model = MagicMock()
-    model.create_train_step.return_value = MagicMock(
+    """Fixture providing mock estimator, env, observations for training tests."""
+    estimator = MagicMock()
+    estimator.create_train_step.return_value = MagicMock(
         return_value=(0.1, MagicMock(), {})
     )
-    model.process_metrics.side_effect = lambda x: x
+    estimator.process_metrics.side_effect = lambda x: x
 
     env = MagicMock()
     # env.reset returns (obs, state, done)
@@ -119,7 +119,7 @@ def mock_dependencies():
     reward = jnp.array([0.0, 0.0])
     env.step.return_value = (obs, env_state, reward, jnp.array([True, True]))
 
-    return model, env, obs, env_state
+    return estimator, env, obs, env_state
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -159,7 +159,7 @@ def mock_sampler():
     sampler.__iter__.return_value = iter([batch] * 10)
     sampler.shutdown = MagicMock()
     sampler.reset = MagicMock()
-    # Set grain_iterator to None so save_model skips sampler serialization
+    # Set grain_iterator to None so save_estimator skips sampler serialization
     sampler.grain_iterator = None
     return sampler
 

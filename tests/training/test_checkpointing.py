@@ -1,4 +1,4 @@
-"""Tests for model checkpointing"""
+"""Tests for estimator checkpointing."""
 
 import time
 from pathlib import Path
@@ -13,7 +13,7 @@ from flax.core import FrozenDict
 
 from flowgym.common.base.estimator import Estimator
 from flowgym.common.base.trainable_state import NNEstimatorTrainableState
-from flowgym.make import load_model, make_manager, save_model
+from flowgym.make import load_estimator, make_manager, save_estimator
 from flowgym.training.optimizer import build_optimizer_from_config
 
 # ---------------------------------------------------------------------------
@@ -96,14 +96,14 @@ def test_checkpoint_resume_roundtrip(clean_tmp_path):
     )
     state1 = state0.apply_gradients(grads=grads1)  # step should be 1
     step_to_save = int(state1.step)
-    model_name = "DummyEstimator"
+    estimator_name = "DummyEstimator"
 
     # Save checkpoint
-    ckpt_dir = save_model(
+    ckpt_dir = save_estimator(
         state=state1,
         out_dir=tmp_path,
         step=step_to_save,
-        model_name=model_name,
+        estimator_name=estimator_name,
     )
 
     ckpt_dir = Path(ckpt_dir)
@@ -130,7 +130,7 @@ def test_checkpoint_resume_roundtrip(clean_tmp_path):
     )
 
     # Restore from checkpoint
-    restored_state = load_model(
+    restored_state = load_estimator(
         ckpt_dir=ckpt_dir,
         template_state=template_state,
         mode="resume",
@@ -184,16 +184,16 @@ def test_checkpoint_finetune_with_new_optimizer(clean_tmp_path):
     )
     trained_state = state0.apply_gradients(grads=grads)
     step_to_save = int(trained_state.step)
-    model_name = "DummyEstimator"
+    estimator_name = "DummyEstimator"
 
     # Save checkpoint
-    save_model(
+    save_estimator(
         state=trained_state,
         out_dir=tmp_path,
         step=step_to_save,
-        model_name=model_name,
+        estimator_name=estimator_name,
     )
-    ckpt_dir = tmp_path / "checkpoints" / model_name / str(step_to_save)
+    ckpt_dir = tmp_path / "checkpoints" / estimator_name / str(step_to_save)
     time.sleep(1)
     assert ckpt_dir.exists()
 
@@ -207,7 +207,7 @@ def test_checkpoint_finetune_with_new_optimizer(clean_tmp_path):
     )
 
     # Load only parameters from checkpoint
-    restored_state = load_model(
+    restored_state = load_estimator(
         ckpt_dir=ckpt_dir,
         template_state=template_state,
         mode="params_only",
@@ -259,7 +259,7 @@ def test_finetune_from_params_only_checkpoint_structure_mismatch(
       1) Save checkpoint with *only* params (no TrainState structure).
       2) Build full NNEstimatorTrainableState template
          (params+opt_state+extras).
-      3) Load with load_model(..., mode='params_only'), which currently still
+      3) Load with load_estimator(..., mode='params_only'), which currently still
          builds abstract tree from *full* template_state and hands it to Orbax.
       4) Orbax complains that tree structure on disk (params-only) and the
          requested tree (full state) do not match -> ValueError, as in
@@ -280,7 +280,7 @@ def test_finetune_from_params_only_checkpoint_structure_mismatch(
         )
         mngr.wait_until_finished()
 
-    # We pass the ROOT to load_model so it finds step 0
+    # We pass the ROOT to load_estimator so it finds step 0
     ckpt_to_load = ckpt_root
 
     # 3) Build a full trainable-state template (params + opt_state + extras)
@@ -295,7 +295,7 @@ def test_finetune_from_params_only_checkpoint_structure_mismatch(
     # 4) Try to fine-tune: mode='params_only' but template_state is a full
     #    NNEstimatorTrainableState. With partial_restore=True, this now SUCCEEDS
     #    and restores what it can (params).
-    restored_state = load_model(
+    restored_state = load_estimator(
         ckpt_dir=ckpt_to_load,
         template_state=template_state,
         mode="params_only",
@@ -330,7 +330,7 @@ def test_finetune_from_params_only_checkpoint_works(clean_tmp_path):
     )
 
     # 4) Fine-tune: mode='params_only' should now succeed and give us params
-    restored_state = load_model(
+    restored_state = load_estimator(
         ckpt_dir=ckpt_root,
         template_state=template_state,
         mode="params_only",
@@ -357,17 +357,17 @@ def test_checkpoint_robust_optimizer_override(clean_tmp_path):
     # 1) Save with Basic Adam
     adam_config = {"name": "adam", "learning_rate": 1e-3}
     tx_adam = build_optimizer_from_config(adam_config)
-    model_adam = MockEstimator(optimizer_config=adam_config)
+    estimator_adam = MockEstimator(optimizer_config=adam_config)
 
     state_save = NNEstimatorTrainableState.create(
         apply_fn=simple_apply_fn, params=params, tx=tx_adam, extras=None
     )
 
-    save_model(
+    save_estimator(
         state=state_save,
         out_dir=tmp_path,
-        model=model_adam,
-        model_name="RobustTest",
+        estimator=estimator_adam,
+        estimator_name="RobustTest",
         step=1,
     )
     ckpt_dir = tmp_path / "checkpoints" / "RobustTest" / "1"
@@ -392,7 +392,7 @@ def test_checkpoint_robust_optimizer_override(clean_tmp_path):
     assert leaves_ema > leaves_adam, "EMA should have more leaves"
 
     # 3) Restore should override EMA with Adam from checkpoint
-    restored = load_model(
+    restored = load_estimator(
         ckpt_dir=ckpt_dir, template_state=template_ema, mode="resume"
     )
 

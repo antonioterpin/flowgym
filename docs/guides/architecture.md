@@ -107,6 +107,6 @@ Tests are located in the `tests/` directory and largely mirror the structure of 
 - Update the relevant `eval_*` function in `src/eval.py` to include the new metric.
 
 ### Changing configuration
-- All default settings reside in `src/flowgym/config/`. When running experiments, pass a customized YAML via the `--model` or `--dataset` flags in `main.py`.
+- All default settings reside in `src/flowgym/config/`. When running experiments, pass a customized YAML via the `--estimator` or `--dataset` flags in `main.py`.
 
 ---

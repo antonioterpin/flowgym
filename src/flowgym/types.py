@@ -43,7 +43,7 @@ class CachePayload:
         has_precomputed_errors: Whether per-sample EPE data is available.
         epe: Per-sample EPE (B,) for regular estimators.
         relative_epe: Relative EPE (B,) for regular estimators.
-        epe_all: Per-sub-model EPE (B, K) for meta-estimators (ArtOfPIV).
+        epe_all: Per-component-estimator EPE (B, K) for meta-estimators.
         epe_mask: Validity mask (B, K) aligned with epe_all.
         estimates: Pre-computed flow estimates (B, ...).
         extras: Opaque estimator-specific data (e.g., candidate flows for
@@ -272,8 +272,8 @@ class CompiledCreateStateFn(Protocol):
     """Protocol for the compiled state creation function.
 
     NOTE: This protocol is for the create-state callable returned by
-    `make_estimator`/`compile_model`, not `Estimator.create_state`.
-    `compile_model` binds `estimates` and history sizes ahead of time.
+    `make_estimator`/`compile_estimator`, not `Estimator.create_state`.
+    `compile_estimator` binds `estimates` and history sizes ahead of time.
     """
 
     def __call__(
@@ -308,7 +308,7 @@ class CompiledComputeEstimateFn(Protocol):
         Args:
             images: Input images.
             state: Current estimator state.
-            trainable_state: Trainable model state.
+            trainable_state: Trainable estimator state.
             cache_payload: Optional precomputed data.
 
         Returns:

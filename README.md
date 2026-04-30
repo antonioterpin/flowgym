@@ -45,15 +45,15 @@ There you can also find help if you have any issues installing Flow Gym.
 ```python
 from flowgym.make import make_estimator
 # Define the config (or load from YAML)
-model_config = {
+estimator_config = {
     "estimator": "dis_jax",
     "estimate_type": "flow",
     "config": {"jit": True, ..., },
 }
 
 # Create the estimator and associated functions
-trained_state, create_state_fn, compute_estimate_fn, model = make_estimator(
-    model_config=model_config,
+trained_state, create_state_fn, compute_estimate_fn, estimator = make_estimator(
+    estimator_config=estimator_config,
     image_shape=image_shape
 )
 

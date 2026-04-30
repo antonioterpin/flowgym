@@ -3,8 +3,8 @@
 This module tests that the caching system follows the standards defined in
 docs/CACHING.md, including:
 - Unique cache ID generation
-- Meta-estimator delegation to sub-model caches
-- Sub-model cache write-back
+- Meta-estimator delegation to component estimator caches
+- Component estimator cache write-back
 """
 
 
@@ -15,7 +15,7 @@ class TestUniqueCacheIds:
     """Tests for CACHING.md Rule 1: Estimators provide stable, unique IDs."""
 
     def test_different_configs_produce_different_cache_ids(self):
-        """Cache ID should change when model config changes."""
+        """Cache ID should change when estimator config changes."""
 
         # Create two estimators with different configs
         config1 = {
@@ -37,8 +37,8 @@ class TestUniqueCacheIds:
         class MinimalAoP:
             def __init__(self, configs):
                 self.estimator_configs = configs
-                self.sub_models = []
-                self.sub_model_states = []
+                self.component_estimators = []
+                self.component_estimator_states = []
 
         est1 = MinimalAoP([{"estimator": "raft", "config": config1}])
         est2 = MinimalAoP([{"estimator": "raft", "config": config2}])
@@ -81,7 +81,7 @@ class TestUniqueCacheIds:
     def test_different_estimator_types_produce_different_cache_ids(self):
         """Different estimator types should have different cache IDs."""
         # This is enforced by class name being part of cache_id
-        # cache_id = f"{model.__class__.__name__}{suffix}"
+        # cache_id = f"{estimator.__class__.__name__}{suffix}"
 
         class EstimatorA:
             pass

@@ -30,13 +30,13 @@ class MiniRaftBatch:
         return self
 
 
-@patch("src.train_supervised.save_model")
-def test_raft_integration_caching(mock_save_model):
+@patch("src.train_supervised.save_estimator")
+def test_raft_integration_caching(mock_save_estimator):
     """Test RaftJaxEstimator caching in the real training loop."""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         # 1. Initialize a mini RAFT estimator
-        model = RaftJaxEstimator(
+        estimator = RaftJaxEstimator(
             patch_size=32,
             patch_stride=32,  # Single patch for 64x64
             hidden_dim=8,  # Tiny
@@ -50,9 +50,13 @@ def test_raft_integration_caching(mock_save_model):
         # Create a dummy batch to initialize state
         init_batch = MiniRaftBatch(batch_size=1)
         key = jax.random.PRNGKey(42)
-        trainable_state = model.create_trainable_state(init_batch.images1, key)
+        trainable_state = estimator.create_trainable_state(
+            init_batch.images1, key
+        )
 
-        cache_id = f"raft_test_{model.get_cache_id_suffix(trainable_state)}"
+        cache_id = (
+            f"raft_test_{estimator.get_cache_id_suffix(trainable_state)}"
+        )
         cache_manager = CacheManager(
             root_dir=tmp_dir, cache_id=cache_id, spec={"epe": (np.float32, ())}
         )
@@ -87,12 +91,12 @@ def test_raft_integration_caching(mock_save_model):
             )
             return h
 
-        def compute_estimate_fn(model, state, params, rng):
+        def compute_estimate_fn(estimator, state, params, rng):
             return jnp.zeros((len(state.history_images), 64, 64, 2))
 
         train_supervised(
-            model=model,
-            model_config={"config": {"jit": True}},
+            estimator=estimator,
+            estimator_config={"config": {"jit": True}},
             trainable_state=trainable_state,
             out_dir=tmp_dir,
             create_state_fn=create_state_fn,
@@ -119,14 +123,14 @@ def test_raft_integration_caching(mock_save_model):
         assert payload["epe"].shape == (2,)
 
         # 4. Verify that second batch (101, 102) utilized cache for 101
-        # We can check enrich call count on model
+        # We can check enrich call count on estimator
         # But RaftJaxEstimator.enrich is called per batch with miss_idxs
         # If batch 2 had 101 cached, miss_idxs should be [1] (only for 102)
 
         with patch.object(
             RaftJaxEstimator,
             "enrich",
-            wraps=model.enrich,
+            wraps=estimator.enrich,
         ) as mock_miss:
             # Reset sampler for a second "epoch" or another run
             sampler.__iter__.return_value = iter([batch2])
@@ -140,8 +144,8 @@ def test_raft_integration_caching(mock_save_model):
             )
 
             train_supervised(
-                model=model,
-                model_config={"config": {"jit": True}},
+                estimator=estimator,
+                estimator_config={"config": {"jit": True}},
                 trainable_state=trainable_state,
                 out_dir=tmp_dir,
                 create_state_fn=create_state_fn,

@@ -44,8 +44,8 @@ def mock_sampler(num_batches, keys_list):
         yield MockBatch(batch_size=len(keys), keys=keys)
 
 
-@patch("src.train_supervised.save_model")
-def test_train_supervised_caching_integration(mock_save_model):
+@patch("src.train_supervised.save_estimator")
+def test_train_supervised_caching_integration(mock_save_estimator):
     """Integration test for caching in train_supervised."""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -58,8 +58,8 @@ def test_train_supervised_caching_integration(mock_save_model):
         )
 
         # 1. Setup Mock Components
-        model = MockEstimator()
-        model_config = {"config": {"jit": False}}
+        estimator = MockEstimator()
+        estimator_config = {"config": {"jit": False}}
         trainable_state = MagicMock(spec=NNEstimatorTrainableState)
         trainable_state.params = {}
         trainable_state.opt_state = {}
@@ -68,15 +68,15 @@ def test_train_supervised_caching_integration(mock_save_model):
         create_state_fn = MagicMock(return_value=MagicMock())
         compute_estimate_fn = MagicMock()
 
-        # Define model.enrich to compute payload for missing keys
-        def model_enrich(batch, miss_idxs, **kwargs):
+        # Define estimator.enrich to compute payload for missing keys
+        def estimator_enrich(batch, miss_idxs, **kwargs):
             keys = np.asarray(batch.keys)
             miss_keys = keys[miss_idxs]
             # Payload values: [[key, key], ...] just to verify
             values = np.stack([miss_keys, miss_keys], axis=1).astype(np.float32)
             return {"values": values}
 
-        model.enrich = MagicMock(side_effect=model_enrich)
+        estimator.enrich = MagicMock(side_effect=estimator_enrich)
 
         # 2. Run Training - Pass 1 (All Misses)
         # 2 batches: [1, 2], [3, 4]
@@ -92,8 +92,8 @@ def test_train_supervised_caching_integration(mock_save_model):
         sampler_pass1.shutdown = MagicMock()
 
         train_supervised(
-            model=model,
-            model_config=model_config,
+            estimator=estimator,
+            estimator_config=estimator_config,
             trainable_state=trainable_state,
             out_dir=tmp_dir,
             create_state_fn=create_state_fn,
@@ -107,7 +107,7 @@ def test_train_supervised_caching_integration(mock_save_model):
         # Verification Pass 1:
         # Check that enrich was called for all 4 items
         # It's called per batch.
-        assert model.enrich.call_count == 2
+        assert estimator.enrich.call_count == 2
 
         # Flush pending writes before verification
         cache_manager.flush()
@@ -131,11 +131,11 @@ def test_train_supervised_caching_integration(mock_save_model):
         )
         sampler_pass2.shutdown = MagicMock()
 
-        model.enrich.reset_mock()
+        estimator.enrich.reset_mock()
 
         train_supervised(
-            model=model,
-            model_config=model_config,
+            estimator=estimator,
+            estimator_config=estimator_config,
             trainable_state=trainable_state,
             out_dir=tmp_dir,
             create_state_fn=create_state_fn,
@@ -147,11 +147,11 @@ def test_train_supervised_caching_integration(mock_save_model):
         )
 
         # Verification Pass 2:
-        # model.enrich should be called ONCE for the batch
+        # estimator.enrich should be called ONCE for the batch
         # And inside, it receives miss_idxs.
         # But our mock side_effect handles the partial return.
 
-        assert model.enrich.call_count == 1
+        assert estimator.enrich.call_count == 1
 
         # Verify 5 is now in cache
         payload_5, hit_5 = cm_verify.lookup(np.array([5], dtype=np.uint64))
@@ -159,8 +159,8 @@ def test_train_supervised_caching_integration(mock_save_model):
         assert payload_5["values"][0, 0] == 5.0
 
 
-@patch("src.train_supervised.save_model")
-def test_estimator_enrich(mock_save_model):
+@patch("src.train_supervised.save_estimator")
+def test_estimator_enrich(mock_save_estimator):
     """Test that Estimator.enrich is called for cache misses."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         cache_manager = CacheManager(
@@ -171,15 +171,15 @@ def test_estimator_enrich(mock_save_model):
         )
 
         # Mock Estimator that returns a payload
-        model = MagicMock(spec=MockEstimator)
-        model.create_train_step.return_value = MockTrainStep()
+        estimator = MagicMock(spec=MockEstimator)
+        estimator.create_train_step.return_value = MockTrainStep()
 
         def enrich_fn(batch, miss_idxs, **kwargs):
             # Return fixed value 99.0 for misses
             N = len(miss_idxs)
             return {"values": np.full((N, 1), 99.0, dtype=np.float32)}
 
-        model.enrich.side_effect = enrich_fn
+        estimator.enrich.side_effect = enrich_fn
 
         # Batch with missing key
         batch = MockBatch(keys=np.array([10], dtype=np.uint64))
@@ -194,8 +194,8 @@ def test_estimator_enrich(mock_save_model):
         trainable_state.extras = {}
 
         train_supervised(
-            model=model,
-            model_config={"config": {"jit": False}},
+            estimator=estimator,
+            estimator_config={"config": {"jit": False}},
             trainable_state=trainable_state,
             out_dir=tmp_dir,
             create_state_fn=MagicMock(),
@@ -207,7 +207,7 @@ def test_estimator_enrich(mock_save_model):
         )
 
         # Verify
-        assert model.enrich.call_count == 1
+        assert estimator.enrich.call_count == 1
 
         # Flush before verification
         cache_manager.flush()
