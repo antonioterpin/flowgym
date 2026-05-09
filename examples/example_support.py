@@ -15,7 +15,15 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def write_yaml(path: Path, data: dict[str, Any]) -> Path:
-    """Write a YAML file and return its path."""
+    """Write a YAML file and return its path.
+
+    Args:
+        path: Destination path for the YAML file.
+        data: Dictionary to serialize.
+
+    Returns:
+        The path the file was written to.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as handle:
         yaml.safe_dump(data, handle, sort_keys=False)
@@ -28,7 +36,20 @@ def make_flow_files(
     num_files: int = 2,
     shape: tuple[int, int, int] = (48, 48, 2),
 ) -> list[str]:
-    """Create small synthetic flow fields for synthpix-backed examples."""
+    """Create small synthetic flow fields for synthpix-backed examples.
+
+    Args:
+        directory: Directory the .npy files are written to.
+        num_files: How many flow fields to generate.
+        shape: ``(height, width, channels)`` of each flow field; channels
+            must be 2.
+
+    Returns:
+        Paths of the written .npy files, as strings.
+
+    Raises:
+        ValueError: If ``shape`` does not end in 2 channels.
+    """
     directory.mkdir(parents=True, exist_ok=True)
     height, width, channels = shape
     if channels != 2:
@@ -60,7 +81,20 @@ def make_synthetic_dataset_config(
     loop: bool = False,
     randomize: bool = False,
 ) -> dict[str, Any]:
-    """Return a small synthetic dataset config suitable for local examples."""
+    """Return a small synthetic dataset config suitable for local examples.
+
+    Args:
+        file_list: Paths of the flow .npy files to feed the sampler.
+        batch_size: Number of samples per batch.
+        image_shape: ``(height, width)`` of the synthetic images.
+        num_batches: Optional cap on the number of batches; omitted from
+            the config when ``None``.
+        loop: Whether the sampler should loop the file list.
+        randomize: Whether the sampler should randomize file ordering.
+
+    Returns:
+        A dataset configuration dict ready to serialize to YAML.
+    """
     height, width = image_shape
     return {
         "seed": 0,
@@ -109,7 +143,20 @@ def run_main(
     dataset_path: Path,
     extra_env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    """Run the repository CLI entrypoint for an example."""
+    """Run the repository CLI entrypoint for an example.
+
+    Args:
+        mode: ``--mode`` value passed to ``src/main.py``.
+        estimator_path: Path to the estimator YAML config.
+        dataset_path: Path to the dataset YAML config.
+        extra_env: Additional environment variables to set for the call.
+
+    Returns:
+        The completed subprocess result.
+
+    Raises:
+        RuntimeError: If the CLI exits with a non-zero status.
+    """
     cmd = [
         "uv",
         "run",
