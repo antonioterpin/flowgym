@@ -172,9 +172,7 @@ def run_example():
         dataset_path, estimator_path = setup_configs(temp_dir)
 
         # Run 1: Cold Start
-        duration_1 = run_main(
-            dataset_path, estimator_path, "Run 1: Cold Start"
-        )
+        duration_1 = run_main(dataset_path, estimator_path, "Run 1: Cold Start")
 
         # Modify config to use warm_start="all" for Run 2
         # We rewrite the dataset yaml
@@ -188,9 +186,7 @@ def run_example():
             yaml.dump(config, f)
 
         # Run 2: Warm Start
-        duration_2 = run_main(
-            dataset_path, estimator_path, "Run 2: Warm Start"
-        )
+        duration_2 = run_main(dataset_path, estimator_path, "Run 2: Warm Start")
 
         # Analysis
         if duration_2 < duration_1:
