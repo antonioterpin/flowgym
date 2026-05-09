@@ -8,13 +8,15 @@ Start with the [Contributor's guide](contributing.md) for environment
 setup, daily commands, code conventions, testing, and the steps to
 open a pull request. Use the [Architecture guide](architecture.md)
 when you need to understand how the codebase is organized before
-making changes.
+making changes. If you plan to use an AI assistant to help, see
+[Using AI assistants](ai-assistants.md) for how the repo is wired.
 
 ```{toctree}
 :hidden:
 
 contributing
 architecture
+ai-assistants
 ```
 
 ```{toctree}
