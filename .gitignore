@@ -205,3 +205,6 @@ results/**/checkpoints/**
 
 # Parquet files
 *.parquet
+
+# Per-run experiment temp configs (PID-suffixed, regenerated on each run)
+experiments/**/temp_*_pid_*.yaml
