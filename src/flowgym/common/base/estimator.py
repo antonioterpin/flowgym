@@ -469,7 +469,7 @@ class Estimator(abc.ABC):
             Processed metrics.
         """
         # Convert JAX arrays to numpy arrays
-        return Metrics(**{k: np.asarray(v) for k, v in metrics.items()})
+        return {k: np.asarray(v) for k, v in metrics.items()}
 
     def finalize_metrics(self) -> Metrics:
         """Finalize metrics after evaluation.
@@ -477,7 +477,7 @@ class Estimator(abc.ABC):
         Returns:
             Finalized metrics.
         """
-        return Metrics()
+        return {}
 
     def prepare_experience_for_replay(
         self,

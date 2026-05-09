@@ -81,7 +81,7 @@ def eval_flow(
     t = time.time() - t
 
     # Post process the metrics
-    metrics = estimator.process_metrics(metrics)
+    metrics = dict(estimator.process_metrics(metrics))
 
     # Extract the flow field from the estimation state
     flow_field = estimation_state["estimates"][:, -1]
@@ -154,7 +154,7 @@ def eval_density(
     t = time.time() - t
 
     # Post process the metrics
-    metrics = estimator.process_metrics(metrics)
+    metrics = dict(estimator.process_metrics(metrics))
 
     # Compute the supervised loss if not already provided (e.g., from cache)
     if "errors" not in metrics:
@@ -228,7 +228,7 @@ def eval(
     else:
         avg_error = np.asarray(metrics["errors"]).mean()
         log += f"Average Density Error: {avg_error:.5f} - "
-    time_evaluating = float(metrics.pop("time"))
+    time_evaluating = float(metrics["time"])
     if time_sample is not None and time_enriching is not None:
         log += (
             f"time_sample: {time_sample:.5f}s - "
@@ -387,7 +387,7 @@ def evaluate_batches(
     # Allow estimator to add derived metrics to the summary
     processed = estimator.process_metrics(dict(summary))
     summary.update(processed)
-    return Metrics(summary)
+    return dict(summary)
 
 
 def eval_full_dataset(
@@ -473,17 +473,19 @@ def eval_full_dataset(
             total_time_enriching += time_enriching
 
             t_evaluate_start = time.time()
-            metrics = eval(
-                estimator=estimator,
-                trainable_state=trainable_state,
-                create_state_fn=create_state_fn,
-                compute_estimate_fn=compute_estimate_fn,
-                batch=batch,
-                estimate_type=estimate_type,
-                key=batch_key,
-                cache_payload=cache_payload,
-                time_sample=time_sample,
-                time_enriching=time_enriching,
+            metrics = dict(
+                eval(
+                    estimator=estimator,
+                    trainable_state=trainable_state,
+                    create_state_fn=create_state_fn,
+                    compute_estimate_fn=compute_estimate_fn,
+                    batch=batch,
+                    estimate_type=estimate_type,
+                    key=batch_key,
+                    cache_payload=cache_payload,
+                    time_sample=time_sample,
+                    time_enriching=time_enriching,
+                )
             )
             time_evaluating = time.time() - t_evaluate_start
             total_time_evaluating += time_evaluating

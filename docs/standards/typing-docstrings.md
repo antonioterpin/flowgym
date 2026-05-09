@@ -6,6 +6,17 @@
 - **Do not include type hints in `Args:` or `Returns:` sections.**
 - Use **Google-style docstrings** with descriptions only.
 
+## Metrics boundary types
+
+- Use plain mutable `dict` objects while building metrics locally.
+- Use Goggles `Metrics` at function boundaries, especially return types and
+  logger-facing APIs.
+- Treat `Metrics` as a read-only mapping. Consumers that need to add or change
+  fields should copy it first with `dict(metrics)`.
+
+This keeps metric construction simple while preventing downstream consumers from
+accidentally mutating producer-owned metric data.
+
 ## Example
 
 ```python

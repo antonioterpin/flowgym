@@ -171,7 +171,7 @@ def train_supervised(
                     elif isinstance(v, np.ndarray) and v.ndim == 0:
                         init_val_msg += f", {k}={float(v):.5f}"
                 logger.info(init_val_msg)
-                last_val_metrics = val_metrics
+                last_val_metrics = dict(val_metrics)
                 best_mean_error = mean_error
             except Exception as e:
                 logger.error(f"Initial validation failed: {e}")
@@ -371,7 +371,7 @@ def train_supervised(
                         elif isinstance(v, np.ndarray) and v.ndim == 0:
                             val_msg += f", {k}={float(v):.5f}"
                     logger.info(val_msg)
-                    last_val_metrics = val_metrics
+                    last_val_metrics = dict(val_metrics)
 
                 if batch_idx % log_every == 0:
                     logger.scalar("loss", float(loss), step=batch_idx)
