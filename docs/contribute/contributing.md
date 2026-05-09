@@ -37,10 +37,10 @@ Sync the development environment:
 uv sync --group dev
 ```
 
-Add the docs group when you intend to build documentation:
+Add the docs extra when you intend to build documentation:
 
 ```bash
-uv sync --group dev --group docs
+uv sync --group dev --extra docs
 ```
 
 ### Optional extras
@@ -57,7 +57,7 @@ installed by default. Pull them in with `--extra <name>`:
 Combine groups and extras as needed:
 
 ```bash
-uv sync --group dev --group docs --extra other_methods
+uv sync --group dev --extra docs --extra other_methods
 ```
 
 ### Git and pre-commit setup
@@ -130,20 +130,20 @@ A change is not finished until both invocations pass.
 A standard build:
 
 ```bash
-uv run --group docs make -C docs html
+uv run --extra docs make -C docs html
 ```
 
 A strict build that treats warnings as errors (this is what the docs
 review checklist requires):
 
 ```bash
-uv run --group docs sphinx-build -b html docs docs/build/html -W --keep-going
+uv run --extra docs sphinx-build -b html docs docs/build/html -W --keep-going
 ```
 
 A live-reload preview that rebuilds on save:
 
 ```bash
-uv run --group docs --with sphinx-autobuild \
+uv run --extra docs --with sphinx-autobuild \
     sphinx-autobuild docs docs/build/live --watch docs --ignore "docs/build/*"
 ```
 
