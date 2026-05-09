@@ -82,7 +82,7 @@ def test_median_correctness(fn, dim, seed, shape):
 
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
+    reason="User is not connected to the server.",
 )
 @pytest.mark.parametrize(
     "fn, dim, limit_time, shape, cmp_std",
@@ -120,7 +120,6 @@ def test_median_correctness(fn, dim, seed, shape):
     ],
 )
 @pytest.mark.parametrize("seed", [0])
-@pytest.mark.speed
 def test_median_time(fn, dim, limit_time, seed, shape, cmp_std):
     compare_to_standard = cmp_std
     key = jax.random.PRNGKey(seed)

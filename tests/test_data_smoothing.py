@@ -104,7 +104,7 @@ def test_methods_match_naive_version(seed, shape, method, method_naive, kwargs):
 
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
+    reason="User is not connected to the server.",
 )
 @pytest.mark.parametrize(
     "B, H, W, radius, limit_time",
@@ -119,7 +119,6 @@ def test_methods_match_naive_version(seed, shape, method, method_naive, kwargs):
         (32, 1024, 1024, 2, 1.3e-3),
     ],
 )
-@pytest.mark.speed
 def test_average_time(B, H, W, radius, limit_time):
     """Just makes sure compilation/shape handling hold for >1M voxels."""
     rng = jrandom.PRNGKey(0)
@@ -154,7 +153,7 @@ def test_average_time(B, H, W, radius, limit_time):
 
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
+    reason="User is not connected to the server.",
 )
 @pytest.mark.parametrize(
     "B, H, W, radius, limit_time",
@@ -169,7 +168,6 @@ def test_average_time(B, H, W, radius, limit_time):
         (16, 1024, 1024, 2, 9e-3),
     ],
 )
-@pytest.mark.speed
 def test_median_time(B, H, W, radius, limit_time):
     """Just makes sure compilation/shape handling hold for >1M voxels."""
     rng = jrandom.PRNGKey(0)
