@@ -1,4 +1,4 @@
-"""Example of how to use caching with RAFT estimator and temporary .mat files."""
+"""Example of caching with RAFT estimator and temporary .mat files."""
 
 import os
 import subprocess
@@ -188,9 +188,7 @@ def run_example():
         dataset_path, estimator_path = setup_configs(temp_dir)
 
         # Run 1: Cold Start
-        duration_1 = run_main(
-            dataset_path, estimator_path, "Run 1: Cold Start"
-        )
+        duration_1 = run_main(dataset_path, estimator_path, "Run 1: Cold Start")
 
         # Modify config to use warm_start="all" for Run 2
         with open(dataset_path) as f:
@@ -203,9 +201,7 @@ def run_example():
             yaml.dump(config, f)
 
         # Run 2: Warm Start
-        duration_2 = run_main(
-            dataset_path, estimator_path, "Run 2: Warm Start"
-        )
+        duration_2 = run_main(dataset_path, estimator_path, "Run 2: Warm Start")
 
         # Analysis
         if duration_2 < duration_1:
