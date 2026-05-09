@@ -3,9 +3,12 @@
 from collections.abc import Mapping
 from typing import Any
 
+import goggles as gg
 import optax
 
 from .schedules import build_schedule_from_config
+
+logger = gg.get_logger(__name__)
 
 OPTIMIZER_REGISTRY: dict[str, Any] = {
     "adam": optax.adam,
@@ -46,7 +49,7 @@ def _build_hyperparams(hcfg: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def build_optimizer_from_config(
-    config: dict[str, Any],
+    config: dict[str, Any] | None,
 ) -> optax.GradientTransformation:
     """Build a GradientTransformation from a config mapping.
 
@@ -74,6 +77,11 @@ def build_optimizer_from_config(
     Raises:
         ValueError: If config is invalid or optimizer name is unknown.
     """
+    if config is None:
+        config = {"name": "set_to_zero"}
+        logger.warning(
+            "No optimizer_config provided; defaulting to 'set_to_zero'."
+        )
     cfg = config.copy()
     if "name" not in cfg:
         raise ValueError("optimizer_config must contain a 'name' field.")
