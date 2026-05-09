@@ -18,10 +18,3 @@ contributing
 architecture
 ai-assistants
 ```
-
-```{toctree}
-:hidden:
-:caption: Reference (transitional)
-
-../project-docs
-```

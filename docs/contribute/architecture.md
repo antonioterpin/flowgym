@@ -142,4 +142,3 @@ to start.
 - [Getting started](../getting-started/index.md)
 - [Example workflows](../examples/index.md)
 - [Contributor's guide](contributing.md)
-- [Project docs](../project-docs.md)
