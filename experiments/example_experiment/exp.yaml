@@ -1,0 +1,13 @@
+# uv run python experiments/run.py --exp example_experiment
+project: flowgym
+mode: eval
+
+dataset: dataset.yaml
+
+models:
+  - models/dummy_a.yaml
+  - models/dummy_b.yaml
+
+seeds: [0]
+
+entrypoint: src/main.py

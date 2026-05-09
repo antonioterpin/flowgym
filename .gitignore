@@ -1,0 +1,8 @@
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# Experiment outputs
+experiments/*/runs/
+experiments/*/_generated/

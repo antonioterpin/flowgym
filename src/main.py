@@ -26,7 +26,8 @@ from train_supervised import train_supervised  # noqa: E402
 from synthpix.sampler import SyntheticImageSampler, RealImageSampler  # noqa: E402
 
 # Utils
-from flowgym.utils import load_configuration, setup_logging  # noqa: E402
+from flowgym.run_setup import prepare_configs, setup_study_run  # noqa: E402
+from flowgym.utils import setup_logging  # noqa: E402
 from flowgym.make import make_estimator, select_gt  # noqa: E402
 from eval import eval_full_dataset, eval  # noqa: E402
 from compare import comparison  # noqa: E402
@@ -66,83 +67,32 @@ def parse_args():
     return parser.parse_args()
 
 
-def prepare_configs(
-    args: argparse.Namespace,
-) -> tuple[dict, dict | None, dict, str | None]:
-    """Prepare dataset and model configurations based on command line arguments.
-
-    Args:
-        args (argparse.Namespace): Parsed command line arguments.
-
-    Returns:
-        - Dataset configuration dictionary.
-        - Second dataset configuration dictionary for comparison,
-            if in compare mode.
-        - Model configuration dictionary.
-        - Output directory path if in training mode, else None.
-    """
-    # Load the dataset
-    dataset_config = load_configuration(args.dataset)
-    dataset_config2 = None
-
-    # Load the model
-    model_config = load_configuration(args.model)
-
-    # output directory
-    out_dir = None
-
-    if args.mode == "compare_samplers":
-        dataset_config["randomize"] = False
-        dataset_config["include_images"] = False
-    if args.mode not in ["train", "train_supervised"]:
-        dataset_config["loop"] = False
-
-    # Handle the seed for reproducibility
-    if "seed" not in dataset_config or not isinstance(dataset_config["seed"], int):
-        logger.warning("Dataset configuration does not contain a valid integer seed.")
-        dataset_config["seed"] = 0
-
-    if args.mode == "train" or args.mode == "train_supervised":
-        # Prepare the output directory to save the model
-        out_dir = dataset_config.get("out_dir", "output")
-        out_dir = os.path.join(
-            out_dir, model_config["estimator"], str(dataset_config["seed"])
-        )
-        os.makedirs(out_dir, exist_ok=True)
-    elif args.mode == "compare_samplers":
-        # create a second sampler to load real images from files
-        dataset_config2 = load_configuration(args.dataset)
-        dataset_config2["include_images"] = True
-        dataset_config2["loop"] = False
-        dataset_config2["randomize"] = False
-
-    return dataset_config, dataset_config2, model_config, out_dir
-
-
 if __name__ == "__main__":
     args = parse_args()
 
-    # Load the dataset
-    (dataset_config, dataset_config_to_compare, model_config, out_dir) = (
-        prepare_configs(args)
-    )
+    # Load and validate configs (also writes resolved configs for non-study
+    # training runs; study runs defer that until `setup_study_run` so the
+    # output directory can include the captured git state label).
+    (
+        dataset_config,
+        dataset_config_to_compare,
+        model_config,
+        out_dir,
+        validation_settings,
+        caching_config,
+        wandb_setup,
+    ) = prepare_configs(args)
 
-    # Log the configurations
-    logger.artifact(
-        data=dataset_config,
-        name="dataset_config",
-        format="yaml",
-    )
-    logger.artifact(
-        data=model_config,
-        name="model_config",
-        format="yaml",
-    )
-    if dataset_config_to_compare is not None:
-        logger.artifact(
-            data=dataset_config_to_compare,
-            name="dataset_config_to_compare",
-            format="yaml",
+    # Only study runs attach W&B (with native code capture). Non-study runs
+    # keep the existing public behavior of running without wandb.
+    if isinstance(wandb_setup["config"].get("study"), dict):
+        out_dir = setup_study_run(
+            args,
+            wandb_setup,
+            dataset_config,
+            dataset_config_to_compare,
+            model_config,
+            validation_settings,
         )
     if out_dir is not None:
         logger.info(f"Saving models in directory: {out_dir}")
