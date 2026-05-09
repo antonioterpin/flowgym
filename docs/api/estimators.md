@@ -9,7 +9,9 @@ estimator surface, but they may require extra dependencies at runtime.
 
 ## Flow estimator base
 
-Start here if you want the shared behavior across flow estimators.
+`FlowFieldEstimator` — the abstract base class every flow estimator
+subclasses. Defines the shared call signature, postprocessing hooks,
+and supported output types.
 
 ```{eval-rst}
 .. automodule:: flowgym.flow.base
@@ -18,7 +20,7 @@ Start here if you want the shared behavior across flow estimators.
 
 ## DIS JAX estimator
 
-The main JAX-backed DIS implementation.
+JAX-backed Dense Inverse Search (DIS).
 
 ```{eval-rst}
 .. automodule:: flowgym.flow.dis.dis_jax
@@ -27,8 +29,7 @@ The main JAX-backed DIS implementation.
 
 ## DIS OpenCV estimator
 
-This is the OpenCV-backed DIS variant exposed through the same estimator
-interface.
+OpenCV-backed Dense Inverse Search (DIS).
 
 ```{eval-rst}
 .. automodule:: flowgym.flow.dis.dis
@@ -37,7 +38,7 @@ interface.
 
 ## RAFT JAX estimator
 
-The JAX RAFT implementation used for learned flow estimation.
+JAX-backed RAFT (learning-based flow).
 
 ```{eval-rst}
 .. automodule:: flowgym.flow.raft.raft_jax
@@ -46,7 +47,7 @@ The JAX RAFT implementation used for learned flow estimation.
 
 ## RAFT PyTorch estimator
 
-This is the PyTorch-backed RAFT integration.
+PyTorch-backed RAFT (learning-based flow).
 
 ```{eval-rst}
 .. automodule:: flowgym.flow.raft.raft_piv_pytorch
@@ -55,7 +56,7 @@ This is the PyTorch-backed RAFT integration.
 
 ## OpenPIV JAX estimator
 
-The JAX-based OpenPIV estimator variant.
+JAX-backed OpenPIV cross-correlation.
 
 ```{eval-rst}
 .. automodule:: flowgym.flow.open_piv.openpiv_jax
@@ -64,7 +65,7 @@ The JAX-based OpenPIV estimator variant.
 
 ## OpenPIV estimator
 
-This is the OpenPIV-backed integration.
+OpenPIV-backed cross-correlation.
 
 ```{eval-rst}
 .. automodule:: flowgym.flow.open_piv.openpiv
@@ -73,8 +74,7 @@ This is the OpenPIV-backed integration.
 
 ## Farneback estimator
 
-OpenCV Farneback optical-flow estimator exposed through the FlowGym
-interface.
+OpenCV-backed Farneback optical flow.
 
 ```{eval-rst}
 .. automodule:: flowgym.flow.farneback
@@ -83,7 +83,7 @@ interface.
 
 ## DeepFlow estimator
 
-OpenCV DeepFlow integration exposed through the FlowGym interface.
+OpenCV-backed DeepFlow.
 
 ```{eval-rst}
 .. automodule:: flowgym.flow.deepflow
@@ -92,8 +92,7 @@ OpenCV DeepFlow integration exposed through the FlowGym interface.
 
 ## Horn-Schunck estimator
 
-Horn-Schunck optical-flow integration exposed through the FlowGym
-interface.
+`pyoptflow`-backed Horn–Schunck optical flow.
 
 ```{eval-rst}
 .. automodule:: flowgym.flow.hornschunck
@@ -102,8 +101,7 @@ interface.
 
 ## Consensus estimator
 
-Consensus-based flow estimation built on top of multiple underlying
-estimators.
+Consensus combination of multiple flow estimators.
 
 ```{eval-rst}
 .. automodule:: flowgym.flow.consensus.consensus
@@ -112,7 +110,7 @@ estimators.
 
 ## Dummy estimator
 
-Minimal estimator used in tests and workflow examples.
+Minimal no-op estimator used in tests and the supervised-training example.
 
 ```{eval-rst}
 .. automodule:: flowgym.flow.dummy
@@ -121,7 +119,8 @@ Minimal estimator used in tests and workflow examples.
 
 ## Density estimators
 
-These are the density-focused estimator implementations.
+Density-focused estimators (`SimpleDensityEstimator` and
+`NNDensityEstimator`).
 
 ```{eval-rst}
 .. automodule:: flowgym.density.simple
