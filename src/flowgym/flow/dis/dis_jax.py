@@ -75,6 +75,7 @@ class DISJAXFlowFieldEstimator(FlowFieldEstimator):
 
         Raises:
             ValueError: If parameter validation fails.
+            TypeError: If parameter type is incorrect.
         """
         # Validate and convert preset
         if isinstance(preset, int):
@@ -90,6 +91,10 @@ class DISJAXFlowFieldEstimator(FlowFieldEstimator):
                 ) from None
         elif isinstance(preset, PresetType):
             preset_enum = preset
+        else:
+            raise TypeError(
+                f"preset={preset}, but it must be an int or PresetType."
+            )
 
         self.preset = preset_enum
 
@@ -173,21 +178,27 @@ class DISJAXFlowFieldEstimator(FlowFieldEstimator):
             )
         self.start_level = start_level
 
-        if levels <= 0:
-            raise ValueError(
+        if not isinstance(levels, int) or levels <= 0:
+            raise TypeError(
                 f"levels={levels}, but it must be a positive integer."
             )
         self.levels = levels
 
-        if level_steps <= 0:
-            raise ValueError(
+        if not isinstance(level_steps, int) or level_steps <= 0:
+            raise TypeError(
                 f"level_steps={level_steps}, but it must be a positive integer."
             )
         self.level_steps = level_steps
+
+        if not isinstance(output_full_res, bool):
+            raise TypeError(
+                f"output_full_res={output_full_res}, but it must be a boolean."
+            )
         self.output_full_res = output_full_res
-        self.use_mean_normalization = use_mean_normalization
-        self.use_spatial_propagation = use_spatial_propagation
-        self.use_temporal_propagation = use_temporal_propagation
+
+        self.use_mean_normalization = bool(use_mean_normalization)
+        self.use_spatial_propagation = bool(use_spatial_propagation)
+        self.use_temporal_propagation = bool(use_temporal_propagation)
 
         postprocessing_steps = kwargs.get("postprocessing_steps")
         if isinstance(postprocessing_steps, list):
