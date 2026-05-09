@@ -1,6 +1,6 @@
-# FlowGym agent instructions
+# Flow Gym agent instructions
 
-This file is the canonical agent-facing instruction set for FlowGym.
+This file is the canonical agent-facing instruction set for Flow Gym.
 Both human contributors and AI assistants follow the same guide; the
 full version lives at `docs/contribute/contributing.md`.
 

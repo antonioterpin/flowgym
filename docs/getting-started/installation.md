@@ -1,6 +1,6 @@
 # Installation
 
-This page covers the common installation paths for FlowGym.
+This page covers the common installation paths for Flow Gym.
 
 ## Install the package
 
@@ -22,7 +22,7 @@ The current package metadata requires Python 3.10+.
 
 ## Working on the repository
 
-If you want to contribute to FlowGym itself, use the
+If you want to contribute to Flow Gym itself, use the
 [Contributing guide](../contribute/contributing.md) for development environment
 setup, docs builds, tests, and local workflow.
 

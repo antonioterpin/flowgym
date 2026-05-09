@@ -1,6 +1,6 @@
 # Estimator API overview
 
-FlowGym organizes different methods around a common `Estimator`
+Flow Gym organizes different methods around a common `Estimator`
 interface. Whether a method is classical or learning-based, package-level
 use follows the same basic contract for creating runtime state, stepping
 through observations, and carrying estimator parameters.
@@ -15,7 +15,7 @@ For exact signatures and docstring-level details, see:
 
 ## What an `Estimator` is
 
-In FlowGym, an `Estimator` is an object that maps observations to
+In Flow Gym, an `Estimator` is an object that maps observations to
 quantities of interest through a shared interface.
 
 For flow-field quantification, the observation is often a tracer-particle
@@ -80,7 +80,7 @@ false` and flip it to `true` for production runs.
 
 ### Why the split
 
-FlowGym separates runtime state from trainable state because they
+Flow Gym separates runtime state from trainable state because they
 change on different timescales and serve different roles:
 
 - runtime state changes as a sequence is processed
@@ -136,7 +136,7 @@ estimator. For learning-based methods, this usually includes estimator
 parameters, optimizer state, and related training information.
 
 Classical estimators usually do not have trainable parameters. In
-those cases, FlowGym still passes an empty trainable-state container
+those cases, Flow Gym still passes an empty trainable-state container
 through the same interface. That is what allows classical and
 learning-based methods to be swapped into the same workflow without
 changing the surrounding pipeline.
@@ -170,7 +170,7 @@ next_state, metrics = compute_estimate_fn(next_frame, state, trained_state)
 ```
 
 The helpers are not a different abstraction from the `Estimator`
-contract — they are the package-level way FlowGym prepares that
+contract — they are the package-level way Flow Gym prepares that
 contract for real use, including shape inference, compilation, and
 estimator construction.
 
@@ -183,7 +183,7 @@ For the generated reference docs behind this flow, see:
 
 ## Hooks around estimation
 
-The interface gives FlowGym standard places to attach processing steps
+The interface gives Flow Gym standard places to attach processing steps
 around estimation:
 
 - **preprocessing**: applied to `images` before estimation. Configured

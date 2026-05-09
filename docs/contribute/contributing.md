@@ -1,6 +1,6 @@
 # Contributor's guide
 
-Thanks for considering a contribution to FlowGym. This page covers the
+Thanks for considering a contribution to Flow Gym. This page covers the
 practical path from a clean checkout to a merged pull request: how to
 set up the environment, how the codebase is organized, what
 conventions apply to new code, how to test and document changes, and
@@ -22,7 +22,7 @@ Useful first steps before writing code:
 
 ## Setting up the development environment
 
-FlowGym uses [uv](https://docs.astral.sh/uv/) for dependency and
+Flow Gym uses [uv](https://docs.astral.sh/uv/) for dependency and
 environment management. Python 3.10 or newer is required.
 
 Install `uv` if you do not already have it:
@@ -229,7 +229,7 @@ the upstream cause in a short comment.
 
 ## Tests
 
-FlowGym uses `pytest`. Tests live under `tests/`, organized to mirror
+Flow Gym uses `pytest`. Tests live under `tests/`, organized to mirror
 the package layout (`tests/training/`, `tests/caching/`,
 `tests/base_estimator/`, …) where reasonable.
 
@@ -247,7 +247,7 @@ the package layout (`tests/training/`, `tests/caching/`,
 
 ## Implementation workflow
 
-The standard rhythm for any code change in FlowGym is test-first:
+The standard rhythm for any code change in Flow Gym is test-first:
 
 1. Write a failing test that defines the intended behavior. For a bug,
    reproduce the bug minimally; for a new feature, define the desired

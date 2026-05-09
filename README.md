@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 
-FlowGym is a Python toolkit for developing, benchmarking, training, and
+Flow Gym is a Python toolkit for developing, benchmarking, training, and
 deploying flow-field quantification methods. It provides a standardized
 estimator interface, JAX-first implementations, interoperable wrappers for
 external methods, and shared workflows for repeatable evaluation and
@@ -15,7 +15,7 @@ training.
 
 ![The Flow Gym environment](docs/flowgym.jpg)
 
-## What FlowGym provides
+## What Flow Gym provides
 
 - Unified estimator construction through `flowgym.make`
 - A shared `Estimator` interface for classical and learning-based methods
@@ -79,7 +79,7 @@ state = create_state_fn(prev, jax.random.PRNGKey(0))
 new_state, metrics = compute_estimate_fn(curr, state, trained_state)
 ```
 
-This is the smallest public API loop in FlowGym. For repository-backed
+This is the smallest public API loop in Flow Gym. For repository-backed
 examples, benchmarking workflows, and CLI usage, use the docs pages linked
 below.
 

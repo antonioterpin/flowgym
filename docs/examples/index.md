@@ -1,6 +1,6 @@
 # Example workflows
 
-Small, runnable examples of the main FlowGym workflows. They cover
+Small, runnable examples of the main Flow Gym workflows. They cover
 complete paths through the code, from a single in-memory estimate to
 configuration-driven evaluation, training, and caching runs.
 

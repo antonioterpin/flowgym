@@ -1,4 +1,4 @@
-"""Shared helpers for self-contained FlowGym example scripts."""
+"""Shared helpers for self-contained Flow Gym example scripts."""
 
 from __future__ import annotations
 
@@ -193,6 +193,6 @@ def run_main(
         print(result.stdout)
         print(result.stderr, file=sys.stderr)
         raise RuntimeError(
-            f"FlowGym CLI example failed with exit code {result.returncode}."
+            f"Flow Gym CLI example failed with exit code {result.returncode}."
         )
     return result

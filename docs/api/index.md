@@ -1,6 +1,6 @@
 # API reference
 
-This page summarizes the public FlowGym API. For learning-oriented material,
+This page summarizes the public Flow Gym API. For learning-oriented material,
 start with [Getting started](../getting-started/index.md) or the
 [User guide](../user-guide/index.md).
 

@@ -1,6 +1,6 @@
-# FlowGym documentation
+# Flow Gym documentation
 
-FlowGym is a research toolkit for flow-field quantification from
+Flow Gym is a research toolkit for flow-field quantification from
 tracer-particle images. It is designed to make method development,
 benchmarking, training, and deployment more reproducible by giving
 classical and learning-based estimators a shared software interface.
@@ -13,7 +13,7 @@ understand the estimator interface, or navigate the repository.
 ## Explore the documentation
 
 - [Get Started!](getting-started/index.md):
-  New to FlowGym? Start here for the motivation behind the project and the
+  New to Flow Gym? Start here for the motivation behind the project and the
   quickest path to a first estimator run.
 - [User guide](user-guide/index.md):
   Ready to go deeper? Visit the user guide for the Estimator API,

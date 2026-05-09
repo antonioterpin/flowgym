@@ -1,6 +1,6 @@
-# FlowGym project documentation
+# Flow Gym project documentation
 
-This folder contains all official project documentation, rules, workflows, and guides for the FlowGym repository. All agents and contributors should follow these documents.
+This folder contains all official project documentation, rules, workflows, and guides for the Flow Gym repository. All agents and contributors should follow these documents.
 
 ## 🎯 Quick start
 

@@ -1,6 +1,6 @@
 # User guide
 
-The user guide is where FlowGym's main ideas are explained in more detail.
+The user guide is where Flow Gym's main ideas are explained in more detail.
 Use it when you already know how to install the package and want a clearer
 mental model of the estimator API, configuration structure, and common
 workflows.

@@ -1,6 +1,6 @@
-# Overview: Why FlowGym?
+# Overview: Why Flow Gym?
 
-FlowGym exists to make flow-field quantification from tracer-particle images
+Flow Gym exists to make flow-field quantification from tracer-particle images
 easier to develop, compare, reproduce, and deploy.
 
 Particle Image Velocimetry (PIV) and related optical-flow methods are widely
@@ -13,12 +13,12 @@ interfaces, and make different choices about pre-processing,
 post-processing, and evaluation. As a result, fair comparison and repeatable
 benchmarking become harder than they need to be.
 
-FlowGym is meant to reduce that friction by giving these workflows a shared
+Flow Gym is meant to reduce that friction by giving these workflows a shared
 software shape.
 
-## What problem does FlowGym solve?
+## What problem does Flow Gym solve?
 
-FlowGym aims at simplifying:
+Flow Gym aims at simplifying:
 
 - comparing classical and learning-based estimators within the same
   pipeline
@@ -33,7 +33,7 @@ software ecosystems have brought to neighboring fields such as computer
 vision and reinforcement learning: less glue code, clearer comparisons, and
 better reproducibility.
 
-## What does FlowGym provide?
+## What does Flow Gym provide?
 
 - A shared estimator interface:
   classical and learning-based methods expose a consistent shape for state
@@ -42,7 +42,7 @@ better reproducibility.
   core estimators and training utilities are organized around JAX and Flax
   for accelerator-friendly execution.
 - Interoperable wrappers:
-  FlowGym can still integrate representative external methods from libraries
+  Flow Gym can still integrate representative external methods from libraries
   such as OpenCV, PyTorch, and OpenPIV.
 - Shared workflows:
   `src/main.py` and the related scripts handle training, evaluation,
@@ -59,7 +59,7 @@ includes related estimators such as tracer-particle density estimation.
 
 ## What does the API look like?
 
-The part of FlowGym most users touch first is the estimator API.
+The part of Flow Gym most users touch first is the estimator API.
 
 At a high level, you:
 
@@ -78,7 +78,7 @@ That interface is designed to support both:
 - independent workflows, where each estimate is computed without relying on
   sequence memory
 
-This lets FlowGym use the same mental model for a broad range of methods.
+This lets Flow Gym use the same mental model for a broad range of methods.
 
 ## What are the goals?
 

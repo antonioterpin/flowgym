@@ -1,12 +1,12 @@
 # Architecture guide
 
-This guide is for readers who want to understand how FlowGym is organized
+This guide is for readers who want to understand how Flow Gym is organized
  before making changes. It favors the current mental model of the repo over
  historical detail.
 
 ## The mental model
 
-FlowGym has three layers that matter most for navigation:
+Flow Gym has three layers that matter most for navigation:
 
 - Package layer:
   `src/flowgym/` contains estimators, environments, shared utilities,

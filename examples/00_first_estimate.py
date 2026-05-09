@@ -1,4 +1,4 @@
-"""Smallest meaningful FlowGym example: build an estimator and run it once."""
+"""Smallest meaningful Flow Gym example: build an estimator and run it once."""
 
 from __future__ import annotations
 

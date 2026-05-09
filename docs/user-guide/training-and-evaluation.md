@@ -1,6 +1,6 @@
 # Training and evaluation workflows
 
-This page is about the two workflows most users come to FlowGym for:
+This page is about the two workflows most users come to Flow Gym for:
 
 - **Benchmarking estimators on a dataset.**
 - **Training learning-based estimators.**

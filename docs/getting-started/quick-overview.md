@@ -58,7 +58,7 @@ The returned objects separate two kinds of state:
 - `create_state_fn` and `compute_estimate_fn`:
   helpers for the runtime estimation loop
 
-This split is what lets FlowGym use the same interface for classical and
+This split is what lets Flow Gym use the same interface for classical and
 learning-based methods. The `trained_state` is an empty dictionary for 
 non-trainable methods, but it can still be passed around and used in the same way as for
 trainable methods, which makes it easier to swap methods in and out of the same workflow.
@@ -82,7 +82,7 @@ new_state, metrics = compute_estimate_fn(curr, estimator_state, trained_state)
 
 In this pattern, the updated sequence state is returned explicitly rather
 than being hidden inside the estimator object. That is an important part of
-the FlowGym design: the same estimation step can support one-off or
+the Flow Gym design: the same estimation step can support one-off or
 consecutive workflows while remaining compatible with JAX-style execution.
 
 This example uses synthetic arrays to illustrate the current public API. For

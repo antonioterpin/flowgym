@@ -1,4 +1,4 @@
-"""Sphinx configuration for the FlowGym documentation site."""
+"""Sphinx configuration for the Flow Gym documentation site."""
 
 from __future__ import annotations
 
@@ -7,9 +7,9 @@ import sys
 
 sys.path.insert(0, os.path.abspath("../src"))
 
-project = "FlowGym"
-copyright = "2026, FlowGym contributors"
-author = "FlowGym contributors"
+project = "Flow Gym"
+copyright = "2026, Flow Gym contributors"
+author = "Flow Gym contributors"
 
 extensions = [
     "myst_parser",

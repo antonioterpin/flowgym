@@ -1,6 +1,6 @@
 # Using AI assistants
 
-FlowGym is set up so AI coding assistants can pick up the same
+Flow Gym is set up so AI coding assistants can pick up the same
 [Contributor's guide](contributing.md) humans use, with minimal
 per-tool configuration.
 

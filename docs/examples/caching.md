@@ -1,6 +1,6 @@
 # Caching examples
 
-These pages document two example scripts that exercise FlowGym's
+These pages document two example scripts that exercise Flow Gym's
 cache-backed evaluation workflow:
 
 - `examples/10_caching.py` for a `dis_jax` estimator

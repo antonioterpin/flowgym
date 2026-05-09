@@ -1,6 +1,6 @@
 # Configuration and data flow
 
-FlowGym uses YAML configuration files to wire estimators, datasets, and
+Flow Gym uses YAML configuration files to wire estimators, datasets, and
 repository-level workflows together. Two kinds of config carry the
 load-bearing decisions: an **estimator config** describes which estimator
 to build and how, and a **dataset config** describes the data source.
@@ -134,7 +134,7 @@ constructs the sampler or environment from the dataset config, and
 dispatches into `src/eval.py`, `src/train.py`, or
 `src/train_supervised.py` depending on `--mode`.
 
-When you use FlowGym as a package (no CLI), you pass the same
+When you use Flow Gym as a package (no CLI), you pass the same
 configuration dicts directly to `make_estimator`, as shown in the
 [Estimator API overview](estimator-api.md) and the
 [first-estimate](../examples/first-estimate.md) walkthrough.

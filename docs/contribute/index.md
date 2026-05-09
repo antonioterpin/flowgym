@@ -1,6 +1,6 @@
 # Contribute
 
-Contributions to FlowGym are welcome — bug reports, fixes, new
+Contributions to Flow Gym are welcome — bug reports, fixes, new
 estimators, documentation improvements, and ideas for the project's
 direction.
 

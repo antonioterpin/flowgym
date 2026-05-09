@@ -1,7 +1,7 @@
 # Estimators
 
 This page documents the estimator implementations currently available in
-FlowGym.
+Flow Gym.
 
 Some estimators are JAX-native, while others wrap methods from optional
 external libraries. The optional integrations are still part of the public
