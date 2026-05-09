@@ -338,6 +338,7 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
             )
         )
         if subestimator_keep_mask is not None:
+            assert subestimator_rejected_mask is not None
             rejected_frac = jnp.mean(
                 subestimator_rejected_mask.astype(jnp.float32), axis=(2, 3)
             )  # (B, N)

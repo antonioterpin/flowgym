@@ -144,7 +144,7 @@ def eval_flow(
                 jnp.mean(relative_errors, axis=(1, 2))
             )
 
-    oracle_epe_threshold = getattr(model, "oracle_epe_threshold", None)
+    oracle_epe_threshold = getattr(estimator, "oracle_epe_threshold", None)
     pred_mask = metrics.get("mask")
     if (
         pred_mask is not None
@@ -695,16 +695,21 @@ def eval_full_dataset(
                 f"Min Relative EPE over {batches_processed} batches: "
                 f"{min_relative_errors:.5f}"
             )
-            # Keep a summary on the model so estimator-specific finalizers
-            # can persist downstream eval metrics even in non-oracle mode.
-            model._eval_summary_metrics = {
-                "mean_epe": float(mean_errors),
-                "max_epe": float(max_errors),
-                "min_epe": float(min_errors),
-                "mean_relative_error": float(mean_relative_errors),
-                "max_relative_error": float(max_relative_errors),
-                "min_relative_error": float(min_relative_errors),
-            }
+            # Keep a summary on the estimator so its finalizer can persist
+            # downstream eval metrics even in non-oracle mode. Subclasses
+            # opt in by reading _eval_summary_metrics in finalize_metrics.
+            setattr(
+                estimator,
+                "_eval_summary_metrics",
+                {
+                    "mean_epe": float(mean_errors),
+                    "max_epe": float(max_errors),
+                    "min_epe": float(min_errors),
+                    "mean_relative_error": float(mean_relative_errors),
+                    "max_relative_error": float(max_relative_errors),
+                    "min_relative_error": float(min_relative_errors),
+                },
+            )
         else:
             logger.info(
                 f"Mean Density Error over {batches_processed} batches: "

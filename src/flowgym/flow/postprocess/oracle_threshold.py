@@ -148,7 +148,7 @@ class LearnedOracleThresholdEstimator(Estimator):
                 compute_estimate_fn,
                 estimator_model,
             ) = make_estimator(
-                model_config=cfg,
+                estimator_config=cfg,
                 load_from=cfg.get("load_from"),
             )
             supports_jit = supports_jit and estimator_model.supports_jit()
