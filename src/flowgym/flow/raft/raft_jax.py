@@ -66,63 +66,44 @@ class RaftJaxEstimator(FlowFieldEstimator):
             **kwargs: Additional keyword arguments for the base class.
 
         Raises:
-            TypeError: If parameter types are incorrect.
             ValueError: If parameter values are invalid.
         """
-        if not isinstance(patch_size, int):
-            raise TypeError(f"patch_size must be an int, got {patch_size}.")
         if patch_size <= 0:
             raise ValueError(f"patch_size must be positive, got {patch_size}.")
         self.patch_size = patch_size
 
-        if not isinstance(patch_stride, int):
-            raise TypeError(f"patch_stride must be an int, got {patch_stride}.")
         if patch_stride <= 0:
             raise ValueError(
                 f"patch_stride must be positive, got {patch_stride}."
             )
         self.patch_stride = patch_stride
 
-        if not isinstance(hidden_dim, int):
-            raise TypeError(f"hidden_dim must be an int, got {hidden_dim}.")
         if hidden_dim <= 0:
             raise ValueError(f"hidden_dim must be positive, got {hidden_dim}.")
         self.hidden_dim = hidden_dim
 
-        if not isinstance(context_dim, int):
-            raise TypeError(f"context_dim must be an int, got {context_dim}.")
         if context_dim <= 0:
             raise ValueError(
                 f"context_dim must be positive, got {context_dim}."
             )
         self.context_dim = context_dim
 
-        if not isinstance(corr_levels, int):
-            raise TypeError(f"corr_levels must be an int, got {corr_levels}.")
         if corr_levels <= 0:
             raise ValueError(
                 f"corr_levels must be positive, got {corr_levels}."
             )
         self.corr_levels = corr_levels
 
-        if not isinstance(corr_radius, int):
-            raise TypeError(f"corr_radius must be an int, got {corr_radius}.")
         if corr_radius <= 0:
             raise ValueError(
                 f"corr_radius must be positive, got {corr_radius}."
             )
         self.corr_radius = corr_radius
 
-        if not isinstance(iters, int):
-            raise TypeError(f"iters must be an int, got {iters}.")
         if iters <= 0:
             raise ValueError(f"iters must be positive, got {iters}.")
         self.iters = iters
 
-        if not isinstance(patches_groups, int):
-            raise TypeError(
-                f"patches_groups must be an int, got {patches_groups}."
-            )
         if patches_groups <= 0:
             raise ValueError(
                 f"patches_groups must be positive, got {patches_groups}."
@@ -135,27 +116,14 @@ class RaftJaxEstimator(FlowFieldEstimator):
             )
         self.norm_fn = norm_fn
 
-        if not isinstance(dropout, (float, int)):
-            raise TypeError(f"dropout must be a number, got {dropout}.")
         if not (0.0 <= dropout < 1.0):
             raise ValueError(f"dropout must be in [0.0, 1.0), got {dropout}.")
         self.dropout = float(dropout)
 
-        if not isinstance(gamma, (float, int)):
-            raise TypeError(f"gamma must be a number, got {gamma}.")
         if not (0.0 < gamma <= 1.0):
             raise ValueError(f"gamma must be in (0.0, 1.0], got {gamma}.")
         self.gamma = float(gamma)
-
-        if not isinstance(train, bool):
-            raise TypeError(f"train must be a bool, got {train}.")
         self.train = train
-
-        if not isinstance(use_temporal_propagation, bool):
-            raise TypeError(
-                "use_temporal_propagation must be a bool,"
-                f" got {use_temporal_propagation}."
-            )
         self.use_temporal_propagation = use_temporal_propagation
 
         self.model = RaftEstimatorModel(

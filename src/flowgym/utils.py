@@ -2,18 +2,13 @@
 
 import csv
 import importlib
+import jax.numpy as jnp
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Literal, cast, overload
-
-try:
-    import cv2
-except ImportError:
-    cv2 = None  # type: ignore
+from typing import Literal, overload
 
 import goggles as gg
 import jax
-import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -75,17 +70,10 @@ def setup_logging(
 
     # 3. Optionally attach WandB if available and desired
     if use_wandb:
-        try:
-            gg.attach(
-                gg.WandBHandler(project="flowgym"),
-                scopes=["global"],
-            )
-        except ImportError:
-            # Use print to avoid recursion (logger not fully initialized).
-            print(
-                "Weights & Biases is not installed. Please install it with: "
-                "uv sync --extra wandb"
-            )
+        gg.attach(
+            gg.WandBHandler(project="flowgym"),
+            scopes=["global"],
+        )
 
     logger = gg.get_logger("flowgym", with_metrics=True)
     logger.info("Goggles logging initialized.")
@@ -97,17 +85,17 @@ GracefulShutdown = gg.GracefulShutdown
 load_configuration = gg.load_configuration
 
 
-def clean_for_logging(obj: Any) -> Any:
-    """Recursively clean an object for logging.
+def clean_for_logging(obj):
+    """Recursively cleans an object for logging.
 
-    Converts complex objects into simple types for logging. Handles dicts,
-    lists, tuples, and JAX/NumPy 0d arrays.
+    This function converts complex objects into simple types that can be logged.
+    It handles dictionaries, lists, tuples, and JAX/NumPy 0d arrays.
 
     Args:
-        obj: The object to clean.
+        obj: The object to clean for logging.
 
     Returns:
-        Cleaned object in a human-readable format.
+        The cleaned objectin a human-readable format for logging.
     """
     if isinstance(obj, dict):
         return {k: clean_for_logging(v) for k, v in obj.items()}
@@ -122,14 +110,12 @@ def clean_for_logging(obj: Any) -> Any:
         return obj
 
 
-def write_dicts_to_csv(
-    filename: str | Path, all_rows: list[dict[str, Any]]
-) -> None:
-    """Write a CSV with all keys from dicts as columns.
+def write_dicts_to_csv(filename, all_rows):
+    """Write a CSV with all keys appearing in any dict in all_rows as columns.
 
     Args:
-        filename: Name of the file to write.
-        all_rows: List of dicts.
+        filename: str, the name of the file to write to
+        all_rows: list of dicts
     """
     # Compute the union of all keys
     fieldnames = set()
@@ -145,51 +131,40 @@ def write_dicts_to_csv(
 
 
 def viz(
-    flow: np.ndarray,
-    img: np.ndarray | None = None,
-    scalar_field: np.ndarray | None = None,
-    scalar_label: str | None = None,
-    downsample: int = 1,
-    bilinear: bool = False,
-    title: str = "Flow Field",
-) -> Any:
-    """Visualize the flow field overlaid on the image.
+    flow,
+    img=None,
+    scalar_field=None,
+    scalar_label=None,
+    downsample=1,
+    bilinear=False,
+    title="Flow Field",
+):
+    """Visualizes the flow field overlaid on the image.
 
     Args:
         flow: Flow field of shape (H, W, 2).
         img: Image of shape (H, W) or (H, W, 3).
         scalar_field: Scalar field of shape (H, W).
-        scalar_label: Colorbar label for scalar field.
-        downsample: Downsampling factor.
-        bilinear: Use bilinear interpolation for downsampling.
-        title: Plot title.
-
-    Returns:
-        Matplotlib figure.
-
-    Raises:
-        ImportError: If OpenCV is not installed.
+        scalar_label: Name of the scalar field for colorbar label.
+        downsample: Factor by which to downsample.
+        bilinear: Whether to use bilinear interpolation for downsampling.
+        title: Title of the plot.
     """
-    if cv2 is None:
-        raise ImportError("OpenCV required. Install: uv sync --extra extra")
+    try:
+        import cv2
+    except ImportError:
+        raise ImportError(
+            "OpenCV is required for viz function."
+            "Please install it with: uv sync --extra extra"
+        )
 
-    cv2_module = cast(Any, cv2)  # Narrow type after None check
-
-    def _downsample(arr: np.ndarray, factor: int) -> np.ndarray:
-        """Downsample an array by a given factor.
-
-        Args:
-            arr: Array to downsample.
-            factor: Downsampling factor.
-
-        Returns:
-            Downsampled array.
-        """
+    def _downsample(arr, factor):
+        """Downsample an array by a given factor."""
         if bilinear:
-            return cv2_module.resize(
+            return cv2.resize(
                 arr,
                 (arr.shape[1] // factor, arr.shape[0] // factor),
-                interpolation=cv2_module.INTER_LINEAR,
+                interpolation=cv2.INTER_LINEAR,
             )
         else:
             return arr[::factor, ::factor]
@@ -246,11 +221,6 @@ def viz(
         cbar = fig.colorbar(Q, cax=cax)
         if scalar_label:
             cbar.set_label(scalar_label)
-    # Check if flow is zero to avoid matplotlib auto-scaling warning
-    elif np.allclose(u, 0) and np.allclose(v, 0):
-        ax.quiver(
-            X, Y, u, v, scale_units="xy", color="r", pivot="mid", scale=1.0
-        )
     else:
         ax.quiver(X, Y, u, v, scale_units="xy", color="r", pivot="mid")
 
@@ -275,8 +245,8 @@ def flow_magnitude_heatmap(
 
     Args:
         flow: Array (H, W, 2), the optical flow field.
-        maxrad: Max value for normalization. If None, uses flow max.
-        minrad: Min value for normalization. If None, uses flow min.
+        maxrad: Optional float, maximum value for normalization. If None, uses flow max.
+        minrad: Optional float, minimum value for normalization. If None, uses flow min.
 
     Returns:
         RGB image (H, W, 3), dtype float32, values in [0, 1].
@@ -284,42 +254,38 @@ def flow_magnitude_heatmap(
     mag = np.linalg.norm(flow, axis=-1)  # (H, W)
 
     if maxrad is None:
-        maxrad = float(np.max(mag) + 1e-6)
-    else:
-        maxrad = float(maxrad)
+        maxrad = np.max(mag) + 1e-6  # avoid divide-by-zero
 
     if minrad is None:
-        minrad = float(np.min(mag) + 1e-6)
-    else:
-        minrad = float(minrad)
+        minrad = np.min(mag) + 1e-6  # avoid divide-by-zero
 
-    diff = maxrad - minrad
-    if diff == 0:
-        norm_mag = np.zeros_like(mag)
-    else:
-        norm_mag = np.clip((mag - minrad) / diff, 0.0, 1.0)
+    if not isinstance(maxrad, (float, int)):
+        raise ValueError("maxrad must be a float or None.")
+
+    if not isinstance(minrad, (float, int)):
+        raise ValueError("minrad must be a float or None.")
+
+    norm_mag = np.clip(
+        (mag - minrad) / (maxrad - minrad), 0.0, 1.0
+    )  # Normalize to [0, 1]
 
     # Use a colormap: 'jet' (blue to red)
-    cmap = plt.get_cmap(
-        "jet"
-    )  # alternative: 'plasma', 'inferno', 'coolwarm', etc.
+    cmap = plt.get_cmap("jet")  # alternative: 'plasma', 'inferno', 'coolwarm', etc.
     rgb = cmap(norm_mag)[..., :3]  # Discard alpha
 
     return rgb.astype(np.float32)
 
 
-def fig_to_np(
-    fig: Any, dtype: type = np.float32, drop_alpha: bool = True
-) -> np.ndarray:
+def fig_to_np(fig, dtype=np.float32, drop_alpha=True) -> np.ndarray:
     """Convert a Matplotlib figure to an image array.
 
     Args:
-        fig: Matplotlib figure.
-        dtype: Desired numpy dtype (e.g. np.float32 or np.uint8).
-        drop_alpha: If True, return RGB instead of RGBA.
+        fig: matplotlib.figure.Figure
+        dtype: desired numpy dtype (e.g. np.float32 or np.uint8)
+        drop_alpha: if True, return RGB instead of RGBA
 
     Returns:
-        Array of shape (H, W, C) with C = 3 or 4.
+        np.ndarray of shape (H, W, C) with C = 3 or 4.
     """
     # Make sure the figure is rendered
     fig.canvas.draw()
@@ -442,13 +408,14 @@ def log_flow_estimate(
 def optional_import(module_path: str) -> ModuleType | None:
     """Attempt to import an optional module.
 
-    Never raises ImportError. Returns None if module cannot be imported.
+    This function never raises ImportError. If the module cannot be imported,
+    it simply returns None.
 
     Args:
-        module_path: The full dotted-path of the module to import.
+        module_path (str): The full dotted-path of the module to import.
 
     Returns:
-        The imported module, or None if unavailable.
+        ModuleType | None: The imported module, or None if unavailable.
     """
     try:
         return importlib.import_module(module_path)
@@ -477,19 +444,17 @@ class MissingDependency:
         self.extras = extras
 
     def __call__(self) -> None:
-        """Raise ImportError on missing dependency instantiation.
+        """Raise ImportError when attempting to instantiate the missing component.
 
         Raises:
-            ImportError: Always raised to indicate missing dependency.
+            ImportError: Always raised to indicate the missing dependency.
         """
-        extras_str = "|".join(self.extras)
-        msg = (
-            f"Component '{self.name}' requires optional dependencies: "
-            f"{self.extras}. Install via: "
-            f"'uv sync --extra [{extras_str}]'. "
-            f"Example: 'uv sync --extra {self.extras[0]}'."
+        raise ImportError(
+            f"The component '{self.name}' requires one of the optional dependencies: "
+            f"{self.extras}. Please install it via 'uv sync --extra [{'|'.join(self.extras)}]'. "
+            f"Example: 'uv sync --extra {self.extras[0]}'. "
+            "If you have forked the repo, consider using 'uv sync --all-groups --all-extras'."
         )
-        raise ImportError(msg)
 
 
 def append_metrics_to_csv(
@@ -499,20 +464,18 @@ def append_metrics_to_csv(
 ) -> None:
     """Append metrics to a CSV in long format.
 
-    Metrics expected to be arrays of shape (B, T), where B is batch size
-    and T is the number of iterations. For non-iteration metrics, set T=1.
-    Metrics are flattened and written with columns:
+    Metrics are expected to be in the form of arrays of shape (B, T), where B is
+    the batch size and T is the number of iterations. For non-iteration metrics,
+    explicitly set the T=1 dimension.
+    Metrics are flattened and written in long format with columns:
         - img_idx: global image index across batches
         - iter_idx: iteration index (0..T-1)
         - metric values...
 
     Args:
-        metrics: dict of metrics with shape (B, T).
-        batch_idx: Optional batch index.
-        filename: Path to the CSV file to append to.
-
-    Raises:
-        ValueError: If metrics are not arrays or don't have shape (B, T).
+        metrics: dict of metrics with keys of shape (B, T).
+        batch_idx: Optional int, index of the current batch.
+        filename: str, path to the CSV file to append to.
     """
     # Access the first metric
     first_metric = next(iter(metrics.values()))
@@ -537,21 +500,24 @@ def append_metrics_to_csv(
     else:
         start_img = batch_idx * B
 
-    # Global image indices (B consecutive images), each repeated T times
+    # Global image indices: [start_img, ..., start_img + B - 1], each repeated T times
     img_idx = jnp.repeat(jnp.arange(start_img, start_img + B), T)
-    # Iteration index: 0..T-1 repeated for each image
-    iter_idx = jnp.tile(jnp.arange(T), B)
+    iter_idx = jnp.tile(jnp.arange(T), B)  # 0..T-1 repeated for each image
 
     cols = [
         img_idx,
         iter_idx,
     ]
-    for _key, metric_values in metrics.items():
+    for key in metrics:
+        metric_values = metrics[key]  # shape (B, T)
         flattened = metric_values.flatten()  # shape (B*T,)
         cols.append(flattened)
 
     # Build header
-    header = ["img_idx", "iter_idx", *list(metrics.keys())]
+    header = [
+        "img_idx",
+        "iter_idx",
+    ] + list(metrics.keys())
 
     data = np.array(jnp.column_stack(cols))
 
