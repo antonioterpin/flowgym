@@ -80,8 +80,7 @@ def eval_flow(
 
     t = time.time() - t
 
-    # Post process the metrics. Convert to a mutable dict locally so the
-    # caller below can add derived fields; expose as ``Metrics`` at return.
+    # Post process the metrics
     metrics = dict(estimator.process_metrics(metrics))
 
     # Extract the flow field from the estimation state
@@ -154,8 +153,7 @@ def eval_density(
     block_until_ready_dict(metrics)
     t = time.time() - t
 
-    # Post process the metrics. Convert to a mutable dict locally so the
-    # caller below can add derived fields; expose as ``Metrics`` at return.
+    # Post process the metrics
     metrics = dict(estimator.process_metrics(metrics))
 
     # Compute the supervised loss if not already provided (e.g., from cache)
@@ -389,8 +387,6 @@ def evaluate_batches(
     # Allow estimator to add derived metrics to the summary
     processed = estimator.process_metrics(dict(summary))
     summary.update(processed)
-    # Expose the locally built dict through Goggles' read-only ``Metrics``
-    # interface.
     return dict(summary)
 
 
@@ -477,9 +473,6 @@ def eval_full_dataset(
             total_time_enriching += time_enriching
 
             t_evaluate_start = time.time()
-            # Convert to a mutable dict locally; the loop below adds and
-            # rewrites fields. The function still returns ``Metrics`` to
-            # callers via the final aggregation step.
             metrics = dict(
                 eval(
                     estimator=estimator,

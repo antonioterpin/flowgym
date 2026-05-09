@@ -301,8 +301,6 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
             else B
         )
 
-        # Build a plain dict locally; expose it as ``Metrics`` at the return
-        # boundary (see ``docs/standards/typing-docstrings.md``).
         processed_metrics: dict = {}
         for key, value in metrics.items():
             if key != "valid_images":
