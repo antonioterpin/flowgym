@@ -37,5 +37,5 @@ uv run python examples/02_supervised_training.py
 ## Related pages
 
 - [Flow evaluation](flow-eval.md)
-- [Architecture guide](../guides/architecture.md)
-- [Contributing guide](../guides/contributing.md)
+- [Architecture guide](../contribute/architecture.md)
+- [Contributing guide](../contribute/contributing.md)

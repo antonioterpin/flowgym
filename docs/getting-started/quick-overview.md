@@ -106,5 +106,5 @@ estimator state, configuration, and runtime concepts.
 - [Example workflows](../examples/index.md) for evaluation, training, and
   caching walkthroughs
 - [API reference](../api/index.md) for modules, classes, and functions
-- [Contributing guide](../guides/contributing.md) for repository-level
+- [Contributing guide](../contribute/contributing.md) for repository-level
   workflow
