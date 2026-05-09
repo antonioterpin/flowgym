@@ -40,7 +40,9 @@ def run_example() -> None:
         }
 
         dataset_path = write_yaml(temp_dir / "dataset.yaml", dataset_config)
-        estimator_path = write_yaml(temp_dir / "estimator.yaml", estimator_config)
+        estimator_path = write_yaml(
+            temp_dir / "estimator.yaml", estimator_config
+        )
         result = run_main(
             mode="eval",
             estimator_path=estimator_path,

@@ -16,7 +16,9 @@ import jax.numpy as jnp
 from flowgym.make import make_estimator
 
 
-def make_test_images(shape: tuple[int, int] = (64, 64)) -> tuple[jnp.ndarray, jnp.ndarray]:
+def make_test_images(
+    shape: tuple[int, int] = (64, 64),
+) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Create two tiny grayscale images with a shifted bright square."""
     height, width = shape
     prev = jnp.zeros((1, height, width), dtype=jnp.float32)
@@ -47,7 +49,12 @@ def run_example() -> None:
     image_shape = prev.shape
     estimate_shape = (*image_shape, 2)
 
-    trained_state, create_state_fn, compute_estimate_fn, estimator = make_estimator(
+    (
+        trained_state,
+        create_state_fn,
+        compute_estimate_fn,
+        estimator,
+    ) = make_estimator(
         estimator_config=estimator_config,
         image_shape=image_shape,
         estimate_shape=estimate_shape,
@@ -68,7 +75,9 @@ def run_example() -> None:
         {
             "mean_u": float(jnp.mean(flow_estimate[..., 0])),
             "mean_v": float(jnp.mean(flow_estimate[..., 1])),
-            "max_magnitude": float(jnp.max(jnp.linalg.norm(flow_estimate, axis=-1))),
+            "max_magnitude": float(
+                jnp.max(jnp.linalg.norm(flow_estimate, axis=-1))
+            ),
         },
     )
     print("Estimate lives in state['estimates'][:, -1].")
