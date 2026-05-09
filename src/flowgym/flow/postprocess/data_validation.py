@@ -14,7 +14,7 @@ from flowgym.common.base import (
 )
 from flowgym.common.median import median
 from flowgym.flow.postprocess.oracle_model import OracleMaskCNN
-from flowgym.make import load_model
+from flowgym.make import load_estimator
 from flowgym.utils import DEBUG
 
 _DEFAULT_ORACLE_FEATURES = (16, 32)
@@ -68,7 +68,7 @@ def _load_learned_oracle_state_from_checkpoint(
         params=params,
         optimizer_config=_LEARNED_ORACLE_OPTIMIZER_CONFIG,
     )
-    loaded_state = load_model(
+    loaded_state = load_estimator(
         ckpt_dir=checkpoint_path,
         template_state=template_state,
         mode="params_only",

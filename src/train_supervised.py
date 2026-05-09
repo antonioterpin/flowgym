@@ -236,7 +236,7 @@ def train_supervised(
                     ground_truth=ground_truth,
                     cache_payload=cache_payload,
                 )
-                experience = model.prepare_experience_for_training(
+                experience = estimator.prepare_experience_for_training(
                     experience, trainable_state
                 )
                 # Do one training step
@@ -304,7 +304,7 @@ def train_supervised(
                             )
                             for replay_exp in replay_iter:
                                 replay_exp_prepared = (
-                                    model.prepare_experience_for_training(
+                                    estimator.prepare_experience_for_training(
                                         replay_exp, trainable_state
                                     )
                                 )
