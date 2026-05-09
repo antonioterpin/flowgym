@@ -16,7 +16,7 @@ benchmarking become harder than they need to be.
 FlowGym is meant to reduce that friction by giving these workflows a shared
 software shape.
 
-## What problem it is trying to solve
+## What problem does FlowGym solve?
 
 FlowGym aims at simplifying:
 
@@ -33,7 +33,7 @@ software ecosystems have brought to neighboring fields such as computer
 vision and reinforcement learning: less glue code, clearer comparisons, and
 better reproducibility.
 
-## What FlowGym provides
+## What does FlowGym provide?
 
 - A shared estimator interface:
   classical and learning-based methods expose a consistent shape for state
@@ -57,7 +57,7 @@ better reproducibility.
 The same interface is also used beyond flow estimation itself. The repo
 includes related estimators such as tracer-particle density estimation.
 
-## The core API shape
+## What does the API look like?
 
 The part of FlowGym most users touch first is the estimator API.
 
@@ -80,7 +80,7 @@ That interface is designed to support both:
 
 This lets FlowGym use the same mental model for a broad range of methods.
 
-## Goals and aspirations
+## What are the goals?
 
 - Keep the public API small enough to learn, but broad enough to support
   multiple estimator families.

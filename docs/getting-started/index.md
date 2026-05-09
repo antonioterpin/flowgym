@@ -9,10 +9,10 @@ If you want the short version, start with the
 context first, read the overview and installation pages in order.
 
 - [Overview: Why FlowGym?](why-flowgym.md)
-  - [What problem it is trying to solve](why-flowgym.md#what-problem-it-is-trying-to-solve)
-  - [What FlowGym provides](why-flowgym.md#what-flowgym-provides)
-  - [The core API shape](why-flowgym.md#the-core-api-shape)
-  - [Goals and aspirations](why-flowgym.md#goals-and-aspirations)
+  - [What problem does FlowGym solve?](why-flowgym.md#what-problem-does-flowgym-solve)
+  - [What does FlowGym provide?](why-flowgym.md#what-does-flowgym-provide)
+  - [What does the API look like?](why-flowgym.md#what-does-the-api-look-like)
+  - [What are the goals?](why-flowgym.md#what-are-the-goals)
 
 - [Installation](installation.md)
   - [Install the package](installation.md#install-the-package)
