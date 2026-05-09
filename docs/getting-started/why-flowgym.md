@@ -18,17 +18,15 @@ software shape.
 
 ## What problem it is trying to solve
 
-FlowGym is built around a simple idea: providing a shared interface and 
-common workflows for a broad range of flow estimation methods in order to 
-make it easier to evaluate, train, and deploy them in a consistent way.
+FlowGym aims at simplifying:
 
-The project tries to make it easier to:
-
-- compare classical and learning-based estimators within the same pipeline
-- reuse evaluation and training logic across methods
-- rerun experiments from configuration rather than ad hoc glue code
-- benchmark methods more fairly by sharing surrounding workflow code
-- carry the same method from offline evaluation to practical deployment
+- comparing classical and learning-based estimators within the same
+  pipeline
+- reusing evaluation and training logic across methods
+- rerunning experiments from configuration rather than ad-hoc glue code
+- benchmarking methods more fairly by sharing surrounding workflow code
+- carrying the same method from offline evaluation to practical
+  deployment
 
 This is the same kind of benefit that shared interfaces and benchmark-driven
 software ecosystems have brought to neighboring fields such as computer
