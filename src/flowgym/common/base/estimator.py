@@ -462,22 +462,27 @@ class Estimator(abc.ABC):
     def process_metrics(self, metrics: dict[str, jnp.ndarray]) -> Metrics:
         """Process metrics after estimation.
 
+        See ``docs/standards/typing-docstrings.md`` for the metrics boundary
+        convention.
+
         Args:
             metrics: The raw metrics from the estimation step.
 
         Returns:
-            Processed metrics.
+            Processed metrics exposed through the read-only ``Metrics``
+            interface.
         """
         # Convert JAX arrays to numpy arrays
-        return Metrics(**{k: np.asarray(v) for k, v in metrics.items()})
+        return {k: np.asarray(v) for k, v in metrics.items()}
 
     def finalize_metrics(self) -> Metrics:
         """Finalize metrics after evaluation.
 
         Returns:
-            Finalized metrics.
+            Finalized metrics exposed through the read-only ``Metrics``
+            interface.
         """
-        return Metrics()
+        return {}
 
     def prepare_experience_for_replay(
         self,

@@ -301,8 +301,9 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
             else B
         )
 
-        # Convert the raw metrics dictionary into a structured Metrics object
-        processed_metrics = Metrics()
+        # Build a plain dict locally; expose it as ``Metrics`` at the return
+        # boundary (see ``docs/standards/typing-docstrings.md``).
+        processed_metrics: dict = {}
         for key, value in metrics.items():
             if key != "valid_images":
                 filtered_value = (
@@ -384,7 +385,7 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
             TypeError: If log_path is not a string or None.
             ValueError: If log_path doesn't end with .csv.
         """
-        finalized_metrics = Metrics()
+        finalized_metrics: dict = {}
         if hasattr(self, "running_mean_coverage"):
             finalized_metrics["mean_oracle_mask_coverage"] = np.array(
                 self.running_mean_coverage

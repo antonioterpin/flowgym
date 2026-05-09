@@ -137,7 +137,7 @@ def train(
                 t = time.time() - t
 
                 # Post process, log and append the metrics
-                metrics = estimator.process_metrics(metrics)
+                metrics = dict(estimator.process_metrics(metrics))
                 logger.push(metrics, step=episode_idx)
 
                 # Extract the action (the last estimate)

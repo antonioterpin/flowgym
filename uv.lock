@@ -1003,8 +1003,8 @@ requires-dist = [
     { name = "openpiv", marker = "extra == 'other-methods'" },
     { name = "pip", specifier = ">=25.3" },
     { name = "pyoptflow", marker = "extra == 'other-methods'" },
-    { name = "robo-goggles", git = "https://github.com/antonioterpin/goggles.git?rev=dev" },
-    { name = "robo-goggles", extras = ["wandb"], marker = "extra == 'wandb'", git = "https://github.com/antonioterpin/goggles.git?rev=dev" },
+    { name = "robo-goggles", git = "https://github.com/antonioterpin/goggles.git?rev=15a2ef28f58d06179d47804ddb908fb58fd06b20" },
+    { name = "robo-goggles", extras = ["wandb"], marker = "extra == 'wandb'" },
     { name = "torch", marker = "extra == 'other-methods'", specifier = ">=1.13.1" },
     { name = "torchvision", marker = "extra == 'other-methods'", specifier = ">=0.14.1" },
 ]
@@ -2228,12 +2228,6 @@ wheels = [
 ]
 
 [[package]]
-name = "netifaces"
-version = "0.11.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/a6/91/86a6eac449ddfae239e93ffc1918cf33fd9bab35c04d1e963b311e347a73/netifaces-0.11.0.tar.gz", hash = "sha256:043a79146eb2907edf439899f262b3dfe41717d34124298ed281139a8b93ca32", size = 30106, upload-time = "2021-05-31T08:33:02.506Z" }
-
-[[package]]
 name = "networkx"
 version = "3.4.2"
 source = { registry = "https://pypi.org/simple" }
@@ -2778,18 +2772,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/f9/e2/3e91f31a7d2b083fe
 wheels = [
     { url = "https://files.pythonhosted.org/packages/54/20/4d324d65cc6d9205fabedc306948156824eb9f0ee1633355a8f7ec5c66bf/pluggy-1.6.0-py3-none-any.whl", hash = "sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746", size = 20538, upload-time = "2025-05-15T12:30:06.134Z" },
 ]
-
-[[package]]
-name = "portal"
-version = "3.7.3"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "cloudpickle" },
-    { name = "msgpack" },
-    { name = "numpy" },
-    { name = "psutil" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/f0/8d/03dcd20105d0009751e2df903ab06b2141f4cd448e87911bab36429f8094/portal-3.7.3.tar.gz", hash = "sha256:543b8e177d22b2efb3c3a966ab0164871ef6a31a5cf60faf2d45286b3efd969b", size = 27395, upload-time = "2025-04-20T21:35:00.858Z" }
 
 [[package]]
 name = "pre-commit"
@@ -3350,17 +3332,12 @@ wheels = [
 
 [[package]]
 name = "robo-goggles"
-version = "0.1.9"
-source = { git = "https://github.com/antonioterpin/goggles.git?rev=dev#0c1cb6d2f8c4a155f54ecdda7ff05a60c5d6e6ea" }
+version = "0.2.0"
+source = { git = "https://github.com/antonioterpin/goggles.git?rev=15a2ef28f58d06179d47804ddb908fb58fd06b20#15a2ef28f58d06179d47804ddb908fb58fd06b20" }
 dependencies = [
-    { name = "basedpyright" },
     { name = "imageio" },
     { name = "matplotlib" },
-    { name = "netifaces" },
     { name = "numpy" },
-    { name = "portal" },
-    { name = "pydoclint" },
-    { name = "pyyaml" },
     { name = "rich" },
     { name = "ruamel-yaml" },
     { name = "typing-extensions" },
@@ -3368,6 +3345,7 @@ dependencies = [
 
 [package.optional-dependencies]
 wandb = [
+    { name = "plotly" },
     { name = "wandb", extra = ["media"] },
 ]
 

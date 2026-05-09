@@ -216,7 +216,7 @@ def comparison(
         stats_dict = compute_stats(jnp.array(epe_list))
         write_dicts_to_csv(
             "comparison_results.csv",
-            [stats_dict],
+            [dict(stats_dict)],
         )
 
         logger.info("Comparison completed successfully.")
