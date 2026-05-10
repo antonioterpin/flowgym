@@ -15,6 +15,56 @@ from flowgym.flow.consensus.types import (
 from flowgym.utils import DEBUG
 
 
+def _compute_stopping_criteria(
+    flows_new: jax.Array,
+    consensus_flow_new: jax.Array,
+    consensus_flow: jax.Array,
+    consensus_dual_new: jax.Array,
+    rho: float,
+    eps_abs: float,
+    eps_rel: float,
+    total_decision_vars: int,
+    N: int,
+) -> tuple[jax.Array, ...]:
+    """Compute residuals for ADMM stopping criteria.
+
+    Args:
+        flows_new: Updated flow estimates from different agents.
+        consensus_flow_new: Updated consensus flow estimate.
+        consensus_flow: Previous consensus flow estimate.
+        consensus_dual_new: Updated dual variable for consensus.
+        rho: Penalty parameter for the consensus term.
+        eps_abs: Absolute tolerance for stopping criterion.
+        eps_rel: Relative tolerance for stopping criterion.
+        total_decision_vars: Total number of decision variables.
+        N: Number of agents.
+
+    Returns:
+        Tuple containing primal residual, dual residual, primal epsilon,
+        dual epsilon, flows norm, and consensus norm.
+    """
+    primal_residual = jnp.linalg.norm(flows_new - consensus_flow_new[None, ...])
+    dual_residual = (
+        rho * jnp.sqrt(N) * jnp.linalg.norm(consensus_flow_new - consensus_flow)
+    )
+    flows_norm = jnp.linalg.norm(flows_new)
+    consensus_norm = jnp.sqrt(N) * jnp.linalg.norm(consensus_flow_new)
+    eps_pri = jnp.sqrt(total_decision_vars) * eps_abs + eps_rel * jnp.maximum(
+        flows_norm, consensus_norm
+    )
+    eps_dual = jnp.sqrt(
+        total_decision_vars
+    ) * eps_abs + eps_rel * rho * jnp.linalg.norm(consensus_dual_new)
+    return (
+        primal_residual,
+        dual_residual,
+        eps_pri,
+        eps_dual,
+        flows_norm,
+        consensus_norm,
+    )
+
+
 def run_admm(
     flows: jax.Array,
     rho: float,
@@ -188,24 +238,24 @@ def run_admm(
 
         if (eps_rel is not None) and (eps_abs is not None):
             # Apply stopping criteria based on eps_abs and eps_rel
-
-            # Stopping conditions (per batch)
-            primal_residual = jnp.linalg.norm(
-                flows_new - consensus_flow_new[None, ...]
+            (
+                primal_residual,
+                dual_residual,
+                eps_pri,
+                eps_dual,
+                flows_norm,
+                consensus_norm,
+            ) = _compute_stopping_criteria(
+                flows_new,
+                consensus_flow_new,
+                consensus_flow,
+                consensus_dual_new,
+                rho,
+                eps_abs,
+                eps_rel,
+                total_decision_vars,
+                N,
             )
-            dual_residual = (
-                rho
-                * jnp.sqrt(N)
-                * jnp.linalg.norm(consensus_flow_new - consensus_flow)
-            )
-            flows_norm = jnp.linalg.norm(flows_new)
-            consensus_norm = jnp.sqrt(N) * jnp.linalg.norm(consensus_flow_new)
-            eps_pri = jnp.sqrt(
-                total_decision_vars
-            ) * eps_abs + eps_rel * jnp.maximum(flows_norm, consensus_norm)
-            eps_dual = jnp.sqrt(
-                total_decision_vars
-            ) * eps_abs + eps_rel * rho * jnp.linalg.norm(consensus_dual_new)
 
             # Update active mask (per batch item)
             active_new: jax.Array = (primal_residual > eps_pri) | (
