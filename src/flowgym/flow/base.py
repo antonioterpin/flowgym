@@ -12,17 +12,14 @@ from flowgym.common.base import (
     Estimator,
     EstimatorTrainableState,
 )
-from flowgym.flow.postprocess import apply_postprocessing, validate_params
+from flowgym.flow.postprocess import (
+    apply_postprocessing,
+    is_outlier_rejection_step,
+    validate_params,
+)
 from flowgym.utils import DEBUG
 
 logger = get_logger(__name__)
-OUTLIER_REJECTION_STEPS = {
-    "constant_threshold_filter",
-    "adaptive_global_filter",
-    "adaptive_local_filter",
-    "universal_median_test",
-    "learned_oracle_threshold",
-}
 
 
 class FlowFieldEstimator(Estimator):
@@ -139,7 +136,7 @@ class FlowFieldEstimator(Estimator):
                     )
                     metrics[metric_prefix] = outlier_frac * 100.0
 
-                    if step_name in OUTLIER_REJECTION_STEPS:
+                    if is_outlier_rejection_step(step_name):
                         metrics[
                             f"postprocess_{step_name}_{idx}_rejected_percentage"
                         ] = (outlier_frac * 100.0)

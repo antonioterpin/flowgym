@@ -7,7 +7,9 @@ from typing import Any, cast
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import optax
+from goggles import Metrics
 from goggles.history.types import History
 from jax import lax
 
@@ -25,6 +27,48 @@ from flowgym.types import (
     SupervisedTrainStep,
 )
 from flowgym.utils import load_configuration
+
+
+def _binary_classification_metrics(
+    preds: jnp.ndarray,
+    labels: jnp.ndarray,
+) -> dict[str, np.ndarray]:
+    """Per-sample binary classification metrics over trailing axes."""
+    preds = jnp.asarray(preds, dtype=jnp.bool_)
+    labels = jnp.asarray(labels, dtype=jnp.bool_)
+    if preds.shape != labels.shape:
+        raise ValueError(
+            f"preds shape {preds.shape} must match labels shape {labels.shape}."
+        )
+    if preds.ndim < 2:
+        raise ValueError(
+            f"Expected classification arrays with ndim >= 2, got {preds.ndim}."
+        )
+    eps = jnp.asarray(1e-8, dtype=jnp.float32)
+    reduce_axes = tuple(range(1, preds.ndim))
+
+    tp = jnp.sum(preds & labels, axis=reduce_axes).astype(jnp.float32)
+    tn = jnp.sum((~preds) & (~labels), axis=reduce_axes).astype(jnp.float32)
+    fp = jnp.sum(preds & (~labels), axis=reduce_axes).astype(jnp.float32)
+    fn = jnp.sum((~preds) & labels, axis=reduce_axes).astype(jnp.float32)
+
+    accuracy = (tp + tn) / (tp + tn + fp + fn + eps)
+    precision = tp / (tp + fp + eps)
+    recall = tp / (tp + fn + eps)
+    specificity = tn / (tn + fp + eps)
+    balanced_accuracy = 0.5 * (recall + specificity)
+    f1 = (2.0 * tp) / (2.0 * tp + fp + fn + eps)
+    iou = tp / (tp + fp + fn + eps)
+
+    return {
+        "mask_accuracy": np.asarray(accuracy),
+        "mask_precision": np.asarray(precision),
+        "mask_recall": np.asarray(recall),
+        "mask_specificity": np.asarray(specificity),
+        "mask_balanced_accuracy": np.asarray(balanced_accuracy),
+        "mask_f1": np.asarray(f1),
+        "mask_iou": np.asarray(iou),
+    }
 
 
 class LearnedOracleThresholdEstimator(Estimator):
@@ -490,6 +534,76 @@ class LearnedOracleThresholdEstimator(Estimator):
         if mask is None:
             raise ValueError("learned_oracle_threshold returned `mask=None`.")
         return flow_field, {}, {"mask": mask}
+
+    def process_metrics(
+        self,
+        metrics: dict[str, Any],
+        *,
+        flow_field: jnp.ndarray | None = None,
+        flow_field_gt: jnp.ndarray | None = None,
+    ) -> Metrics:
+        """Process metrics and emit per-sample mask classification scores."""
+        processed = dict(
+            super().process_metrics(
+                metrics,
+                flow_field=flow_field,
+                flow_field_gt=flow_field_gt,
+            )
+        )
+        if (
+            flow_field is None
+            or flow_field_gt is None
+            or self.oracle_epe_threshold <= 0
+        ):
+            return processed
+        pred_mask = metrics.get("mask")
+        if pred_mask is None:
+            return processed
+        pred_mask_arr = jnp.asarray(pred_mask, dtype=jnp.bool_)
+        per_pixel_epe = jnp.linalg.norm(flow_field - flow_field_gt, axis=-1)
+        if pred_mask_arr.shape == per_pixel_epe.shape:
+            oracle_mask = per_pixel_epe <= float(self.oracle_epe_threshold)
+            processed.update(
+                _binary_classification_metrics(pred_mask_arr, oracle_mask)
+            )
+            processed["oracle_inlier_fraction"] = np.asarray(
+                jnp.mean(oracle_mask.astype(jnp.float32), axis=(1, 2))
+            )
+            processed["pred_inlier_fraction"] = np.asarray(
+                jnp.mean(pred_mask_arr.astype(jnp.float32), axis=(1, 2))
+            )
+            return processed
+        mask_flow_fields = metrics.get("mask_flow_fields")
+        if mask_flow_fields is None:
+            return processed
+        mask_flow_fields = jnp.asarray(mask_flow_fields)
+        if (
+            mask_flow_fields.ndim != 5
+            or pred_mask_arr.ndim != 4
+            or pred_mask_arr.shape != mask_flow_fields.shape[:-1]
+        ):
+            return processed
+        flow_gt_expanded = flow_field_gt[:, None, ...]
+        per_pixel_epe_k = jnp.linalg.norm(
+            mask_flow_fields - flow_gt_expanded, axis=-1
+        )
+        oracle_mask = per_pixel_epe_k <= float(self.oracle_epe_threshold)
+        processed.update(
+            _binary_classification_metrics(pred_mask_arr, oracle_mask)
+        )
+        processed["oracle_inlier_fraction"] = np.asarray(
+            jnp.mean(oracle_mask.astype(jnp.float32), axis=(1, 2, 3))
+        )
+        processed["pred_inlier_fraction"] = np.asarray(
+            jnp.mean(pred_mask_arr.astype(jnp.float32), axis=(1, 2, 3))
+        )
+        return processed
+
+    def validation_score(self, val_metrics: dict[str, Any]) -> float:
+        """Score validation passes by mask F1 when available."""
+        if "mask_f1" in val_metrics:
+            return float(val_metrics["mask_f1"])
+        return super().validation_score(val_metrics)
 
     def supports_jit(self) -> bool:
         """Jittable iff all configured sub-estimators are jittable."""
