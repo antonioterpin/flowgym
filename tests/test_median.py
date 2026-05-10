@@ -82,7 +82,7 @@ def test_median_correctness(fn, dim, seed, shape):
 
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="Requires NVIDIA GeForce RTX 4090 GPU.",
+    reason="Requires the workstation (4x NVIDIA GeForce RTX 4090).",
 )
 @pytest.mark.parametrize(
     "fn, dim, limit_time, shape, cmp_std",

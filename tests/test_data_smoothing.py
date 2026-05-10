@@ -104,7 +104,7 @@ def test_methods_match_naive_version(seed, shape, method, method_naive, kwargs):
 
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="Requires NVIDIA GeForce RTX 4090 GPU.",
+    reason="Requires the workstation (4x NVIDIA GeForce RTX 4090).",
 )
 @pytest.mark.parametrize(
     "B, H, W, radius, limit_time",
@@ -153,7 +153,7 @@ def test_average_time(B, H, W, radius, limit_time):
 
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="Requires NVIDIA GeForce RTX 4090 GPU.",
+    reason="Requires the workstation (4x NVIDIA GeForce RTX 4090).",
 )
 @pytest.mark.parametrize(
     "B, H, W, radius, limit_time",
