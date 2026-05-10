@@ -3,19 +3,18 @@
 import jax
 import jax.numpy as jnp
 import numpy as np
-import torch
-
-
-import torch.nn.functional as F
-
 import scipy.signal
+import torch
+import torch.nn.functional as F
 
 from flowgym.nn.raft_torch_nn.flowNetsRAFT import RAFT
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-from flowgym.flow.base import FlowFieldEstimator
 from goggles.history.types import History
+
+from flowgym.flow.base import FlowFieldEstimator
+
 try:
     autocast = torch.cuda.amp.autocast
 except:
@@ -106,7 +105,9 @@ class RaftTorchEstimator(FlowFieldEstimator):
         )
         flow_patches = flow_patches.reshape((-1, 2, args.offset, args.offset))
         splitted_patches = torch.split(patches, args.split_size, dim=0)
-        splitted_flow_patches = torch.split(flow_patches, args.split_size, dim=0)
+        splitted_flow_patches = torch.split(
+            flow_patches, args.split_size, dim=0
+        )
 
         # Forward pass
         with autocast(enabled=args.amp):
@@ -164,14 +165,16 @@ class RaftTorchEstimator(FlowFieldEstimator):
             folding_mask = torch.ones_like(images)  # (B, C, H, W)
 
             # compute folding mask
-            mask_patches = folding_mask.unfold(3, args.offset, args.shift).unfold(
-                2, args.offset, args.shift
-            )
+            mask_patches = folding_mask.unfold(
+                3, args.offset, args.shift
+            ).unfold(2, args.offset, args.shift)
             mask_patches = mask_patches.contiguous().view(
                 B, C, -1, args.offset, args.offset
             )
             mask_patches = mask_patches * WINDOW_SPLINE_2D.cuda()
-            mask_patches = mask_patches.view(B, C, -1, args.offset * args.offset)
+            mask_patches = mask_patches.view(
+                B, C, -1, args.offset * args.offset
+            )
             mask_patches = mask_patches.permute(0, 1, 3, 2)
             mask_patches = mask_patches.contiguous().view(
                 B, C * args.offset * args.offset, -1
@@ -186,13 +189,19 @@ class RaftTorchEstimator(FlowFieldEstimator):
             predicted_flows += predicted_flows_iter / folding_mask
 
         # PyTorch tensor device
-        torch_device = predicted_flows.device.type   # "cuda" or "cpu"
+        torch_device = predicted_flows.device.type  # "cuda" or "cpu"
 
         # Choose matching JAX device if available
-        if torch_device == "cuda" and any(d.platform == "gpu" for d in jax.devices()):
-            target_device = next(d for d in jax.devices() if d.platform == "gpu")
+        if torch_device == "cuda" and any(
+            d.platform == "gpu" for d in jax.devices()
+        ):
+            target_device = next(
+                d for d in jax.devices() if d.platform == "gpu"
+            )
         else:
-            target_device = next(d for d in jax.devices() if d.platform == "cpu")
+            target_device = next(
+                d for d in jax.devices() if d.platform == "cpu"
+            )
 
         # Convert: torch to numpy to jax
         np_flow = predicted_flows.permute(0, 2, 3, 1).detach().cpu().numpy()
@@ -227,11 +236,15 @@ class RaftTorchEstimator(FlowFieldEstimator):
     def _spline_window(self, window_size, power=2):
         """Squared spline window function."""
         intersection = int(window_size / 4)
-        wind_outer = (abs(2 * (scipy.signal.windows.triang(window_size))) ** power) / 2
+        wind_outer = (
+            abs(2 * (scipy.signal.windows.triang(window_size))) ** power
+        ) / 2
         wind_outer[intersection:-intersection] = 0
 
         wind_inner = (
-            1 - (abs(2 * (scipy.signal.windows.triang(window_size) - 1)) ** power) / 2
+            1
+            - (abs(2 * (scipy.signal.windows.triang(window_size) - 1)) ** power)
+            / 2
         )
         wind_inner[:intersection] = 0
         wind_inner[-intersection:] = 0
@@ -239,5 +252,3 @@ class RaftTorchEstimator(FlowFieldEstimator):
         wind = wind_inner + wind_outer
         wind = wind / np.average(wind)
         return wind
-
-

@@ -2,12 +2,13 @@
 
 import jax.numpy as jnp
 import synthpix
-from flowgym.make import select_gt
-from flowgym.common.evaluation import loss_supervised_density
 from synthpix.sampler import Sampler
 
+from flowgym.common.evaluation import loss_supervised_density
+from flowgym.make import select_gt
+from flowgym.types import Observation
+
 EnvState = tuple[Sampler, jnp.ndarray | None]  # (sampler, gt)
-Observation = tuple[jnp.ndarray, jnp.ndarray]  # pair of images (prev, curr)
 
 
 class FluidEnv:
@@ -19,6 +20,10 @@ class FluidEnv:
         Args:
             episode_length: Length of the episode for episodic training.
             gt_type: Type of ground truth to use, either 'flow' or 'density'.
+
+        Raises:
+            ValueError: If gt_type is not 'flow' or 'density', or if
+                episode_length is negative.
         """
         if gt_type not in ["flow", "density"]:
             raise ValueError(
@@ -48,12 +53,16 @@ class FluidEnv:
         Returns:
             An instance of the FluidEnv class and a sampler.
         """
-        sampler = synthpix.make(dataset_config)
+        sampler = synthpix.make(
+            dataset_config, load_from=dataset_config.get("load_from")
+        )
         episode_length = dataset_config.get("episode_length", 0)
         gt_type = dataset_config.get("gt_type", "flow")
         return cls(episode_length, gt_type), (sampler, None)
 
-    def reset(self, state: EnvState) -> tuple[Observation, EnvState, jnp.ndarray]:
+    def reset(
+        self, state: EnvState
+    ) -> tuple[Observation, EnvState, jnp.ndarray]:
         """Reset the environment to an initial state.
 
         Args:
@@ -65,6 +74,10 @@ class FluidEnv:
             done: An array of booleans indicating if each
                 episode is done. Shape (batch_size,). If episodic is False,
                 this will always be False.
+
+        Raises:
+            ValueError: If episodic mode is enabled but sampler doesn't
+                provide 'done' flags.
         """
         # Unpack the state
         sampler, _ = state
@@ -102,11 +115,18 @@ class FluidEnv:
             state: The new state of the environment (sampler, gt).
             reward: The reward received after taking the action (-EPE).
             done: A boolean indicating if the episode is done.
+
+        Raises:
+            ValueError: If ground truth is not present in state, or if
+                episodic mode is enabled but sampler doesn't provide 'done'
+                flags.
         """
         # Unpack the state
         sampler, gt = state
         if gt is None:
-            raise ValueError("Ground truth flow field is required in the state.")
+            raise ValueError(
+                "Ground truth flow field is required in the state."
+            )
         # # Compute the reward based on the flow field estimated
         r = self.calculate_reward(gt, action)
 
@@ -128,7 +148,9 @@ class FluidEnv:
 
         return obs, state, r, done
 
-    def calculate_reward(self, gt: jnp.ndarray, action: jnp.ndarray) -> jnp.ndarray:
+    def calculate_reward(
+        self, gt: jnp.ndarray, action: jnp.ndarray
+    ) -> jnp.ndarray:
         """Calculate the reward based on the estimated flow field.
 
         Args:
@@ -155,7 +177,7 @@ class FluidEnv:
         """Shutdown the environment and release resources.
 
         Args:
-            state (EnvState): The current state of the environment (sampler, gt).
+            state: The current state of the environment (sampler, gt).
         """
         # Unpack the state
         sampler, _ = state

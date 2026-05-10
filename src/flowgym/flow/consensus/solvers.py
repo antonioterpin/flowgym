@@ -1,10 +1,12 @@
 """Solver module for flow estimation."""
 
 import functools
-import jax.numpy as jnp
-import jax
-import optax
 from collections.abc import Callable
+from typing import cast
+
+import jax
+import jax.numpy as jnp
+import optax
 
 
 def closed_form_flows_l2(
@@ -13,24 +15,20 @@ def closed_form_flows_l2(
     consensus_dual: jnp.ndarray,
     weights_and_anchors_fn: Callable,
     rho: float,
-    _,
+    _: object,
 ) -> jnp.ndarray:
     """Closed form x-update for flows with a l2 penalty.
 
     Args:
-        flows (jnp.ndarray): Current flow estimates from different agents.
-            unused in this solver.
-        anchor_flows (jnp.ndarray): Anchor flow estimates from different agents.
-            shape (N, H, W, 2) where N is the number of agents
-        consensus_flow (jnp.ndarray): Current consensus flow estimate.
-            shape (H, W, 2)
-        consensus_dual (jnp.ndarray): Dual variable for consensus.
-            shape (N, H, W, 2)
-        weights_and_anchors_fn (Callable): Function that returns weights and anchor flows.
-        rho (float): Penalty parameter for the consensus term.
+        flows: Current flow estimates from different agents (unused).
+        consensus_flow: Current consensus flow estimate (H, W, 2).
+        consensus_dual: Dual variable for consensus (N, H, W, 2).
+        weights_and_anchors_fn: Function that returns weights and
+            anchor flows.
+        rho: Penalty parameter for the consensus term.
 
     Returns:
-        jnp.ndarray: Updated flow estimates.
+        Updated flow estimates.
     """
     # Use the provided function to get weights and anchor flows
     weights, anchor_flows = weights_and_anchors_fn()
@@ -48,29 +46,25 @@ def closed_form_flows_l2(
 
 
 def closed_form_flows_l1(
-    flows,
-    consensus_flow,
-    consensus_dual,
-    weights_and_anchors_fn,
-    rho,
-    _,
-):
+    flows: jnp.ndarray,
+    consensus_flow: jnp.ndarray,
+    consensus_dual: jnp.ndarray,
+    weights_and_anchors_fn: Callable,
+    rho: float,
+    _: object,
+) -> jnp.ndarray:
     """Closed form x-update for flows with a l1 penalty.
 
     Args:
-        flows (jnp.ndarray): Current flow estimates from different agents.
-            unused in this solver.
-        anchor_flows (jnp.ndarray): Anchor flow estimates from different agents.
-            shape (N, H, W, 2) where N is the number of agents
-        consensus_flow (jnp.ndarray): Current consensus flow estimate.
-            shape (H, W, 2)
-        consensus_dual (jnp.ndarray): Dual variable for consensus.
-            shape (N, H, W, 2)
-        weights_and_anchors_fn (Callable): Function that returns weights and anchor flows.
-        rho (float): Penalty parameter for the consensus term.
+        flows: Current flow estimates from different agents (unused).
+        consensus_flow: Current consensus flow estimate (H, W, 2).
+        consensus_dual: Dual variable for consensus (N, H, W, 2).
+        weights_and_anchors_fn: Function that returns weights and
+            anchor flows.
+        rho: Penalty parameter for the consensus term.
 
     Returns:
-        jnp.ndarray: Updated flow estimates.
+        Updated flow estimates.
     """
     # Use the provided function to get weights and anchor flows
     weights, anchor_flows = weights_and_anchors_fn()
@@ -95,14 +89,13 @@ def optax_solve(
     """Solve an optimization problem using Optax.
 
     Args:
-        params (jnp.ndarray): Initial parameters for optimization.
-        objective_fn (Callable): Objective function to minimize.
-        optimiser (optax.GradientTransformation): Optax optimizer.
-        num_steps (int): Number of optimization steps.
+        params: Initial parameters for optimization.
+        objective_fn: Objective function to minimize.
+        optimiser: Optax optimizer.
+        num_steps: Number of optimization steps.
 
     Returns:
-        optax.Params: Optimized parameters after the specified number of steps.
-        jnp.ndarray: Loss values at each optimization step.
+        Tuple of optimized parameters and loss values at each step.
     """
     value_and_grad_fn = jax.value_and_grad(objective_fn)
     opt_state = optimiser.init(params)
@@ -133,26 +126,28 @@ def optax_consensus(
     """Optax solver for consensus variable.
 
     Args:
-        flows (jnp.ndarray): Current flow estimates from different agents.
-            shape (N, H, W, 2) where B is the batch size, N is the number of estimates.
-        consensus_flow (jnp.ndarray): Current consensus flow estimate
-            shape (H, W, 2)
-        consensus_dual (jnp.ndarray): Current dual variable for consensus
-            shape (N, H, W, 2)
-        objective_fn (Callable): Objective function for consensus variable.
-        rho (float): Parameter associated with the augmented Lagrangian.
-        optimiser (optax.GradientTransformation): Optax optimizer.
-        num_steps (int): Number of optimization steps.
+        flows: Current flow estimates from different agents.
+            shape (N, H, W, 2) where B is the batch size, N is the
+            number of estimates.
+        consensus_flow: Current consensus flow estimate shape (H, W, 2).
+        consensus_dual: Current dual variable for consensus
+            shape (N, H, W, 2).
+        objective_fn: Objective function for consensus variable.
+        rho: Parameter associated with the augmented Lagrangian.
+        num_steps: Number of optimization steps.
+        optimiser: Optax optimizer.
 
     Returns:
-        jnp.ndarray: Updated consensus flow estimate.
+        Updated consensus flow estimate.
     """
     # Freeze flows and consensus_dual in the objective function
     consensus_flow_fn = functools.partial(
         objective_fn, flows=flows, consensus_dual=consensus_dual, rho=rho
     )
 
-    consensus, _ = optax_solve(consensus_flow, consensus_flow_fn, optimiser, num_steps)
+    consensus, _ = optax_solve(
+        consensus_flow, consensus_flow_fn, optimiser, num_steps
+    )
     return consensus
 
 
@@ -164,23 +159,23 @@ def optax_flows(
     rho: float,
     num_steps: int,
     optimiser: optax.GradientTransformation,
-) -> optax.Params:
+) -> jnp.ndarray:
     """Optax solver for flow estimates.
 
     Args:
-        flows (jnp.ndarray): Current flow estimates from different agents.
-            shape (N, H, W, 2) where B is the batch size, N is the number of estimates.
-        consensus_flow (jnp.ndarray): Current consensus flow estimate
-            shape (H, W, 2)
-        consensus_dual (jnp.ndarray): Current dual variable for consensus
-            shape (N, H, W, 2)
-        objective_fn (Callable): Objective function for flow estimates.
-        rho (float): Parameter associated with the augmented Lagrangian.
-        optimiser (optax.GradientTransformation): Optax optimizer.
-        num_steps (int): Number of optimization steps.
+        flows: Current flow estimates from different agents.
+            shape (N, H, W, 2) where B is the batch size, N is the
+            number of estimates.
+        consensus_flow: Current consensus flow estimate shape (H, W, 2).
+        consensus_dual: Current dual variable for consensus
+            shape (N, H, W, 2).
+        objective_fn: Objective function for flow estimates.
+        rho: Parameter associated with the augmented Lagrangian.
+        num_steps: Number of optimization steps.
+        optimiser: Optax optimizer.
 
     Returns:
-        optax.Params: Updated flow estimates.
+        Updated flow estimates.
     """
     # Freeze consensus_flow and consensus_dual in the objective function
     flows_fn = functools.partial(
@@ -189,7 +184,8 @@ def optax_flows(
         consensus_dual=consensus_dual,
         rho=rho,
     )
-    flows, _ = optax_solve(flows, flows_fn, optimiser, num_steps)  # type: ignore
+    flows_result, _ = optax_solve(flows, flows_fn, optimiser, num_steps)
+    flows = cast(jnp.ndarray, flows_result)
     return flows
 
 

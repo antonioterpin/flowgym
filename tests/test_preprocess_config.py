@@ -1,20 +1,24 @@
-import pytest
+"""Tests for preprocess_config module."""
+
 import timeit
+
 import jax
-from jax import random as jrandom, numpy as jnp
+import pytest
+from jax import numpy as jnp
+from jax import random as jrandom
+
 from flowgym.common.base import Estimator
-from flowgym.make import compile_model
 from flowgym.common.preprocess import (
-    stretch_contrast,
+    background_suppression,
+    clahe,
+    crop_special,
+    high_pass_filter,
     intensity_capping,
     intensity_clipping,
-    clahe,
-    high_pass_filter,
-    background_suppression,
-    crop_special,
     resize_image,
+    stretch_contrast,
 )
-
+from flowgym.make import compile_estimator
 from flowgym.utils import load_configuration
 
 config = load_configuration("src/flowgym/config/testing.yaml")
@@ -99,13 +103,17 @@ def apply_from_idxs(idxs, image):
 
 
 @pytest.mark.parametrize("B", [1, 16])
-@pytest.mark.parametrize("N", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])
+@pytest.mark.parametrize(
+    "N", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+)
 @pytest.mark.parametrize("seed", [42, 123, 456, 789, 1, 2, 3, 43, 44, 45])
 def test_preprocess_config(B, N, seed):
     # Sample idxs
     key = jrandom.PRNGKey(seed)
     key, subkey = jrandom.split(key)
-    idxs = jrandom.choice(key, jnp.arange(len(all_pre)), shape=(N,), replace=True)
+    idxs = jrandom.choice(
+        key, jnp.arange(len(all_pre)), shape=(N,), replace=True
+    )
 
     # Create a random image
     image = jrandom.uniform(
@@ -123,10 +131,10 @@ def test_preprocess_config(B, N, seed):
     }
 
     # Instantiate the dummy estimator
-    model = DummyEstimator.from_config(pre_processing_config)
-    trainable_state = model.create_trainable_state(image, key)
-    create_state_fn, compute_estimate_fn = compile_model(
-        model, processed_image_reference, False
+    estimator = DummyEstimator.from_config(pre_processing_config)
+    trainable_state = estimator.create_trainable_state(image, key)
+    create_state_fn, compute_estimate_fn = compile_estimator(
+        estimator, processed_image_reference, False
     )
     # Create the state
     state = create_state_fn(image, key)
@@ -136,20 +144,28 @@ def test_preprocess_config(B, N, seed):
     # Check if the processed image matches the reference
     assert jnp.allclose(
         processed_image, processed_image_reference, atol=1e-5
-    ), "Processed image does not match reference after applying preprocessing functions"
+    ), (
+        "Processed image does not match reference after applying "
+        "preprocessing functions"
+    )
 
 
-@pytest.mark.parametrize("N", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])
+@pytest.mark.parametrize(
+    "N", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+)
 @pytest.mark.parametrize("seed", [42, 123, 456, 789, 1, 2, 3, 43, 44, 45])
 def test_preprocess_config_invalid_params(N, seed):
     # Sample idxs
     key = jrandom.PRNGKey(seed)
-    idxs = jrandom.choice(key, jnp.arange(len(bad_params)), shape=(N,), replace=True)
+    idxs = jrandom.choice(
+        key, jnp.arange(len(bad_params)), shape=(N,), replace=True
+    )
 
     # Create a pre_processing configuration
     pre_processing_config = {
         "preprocessing_steps": [
-            {"name": bad_params[idx][0].__name__} | bad_params[idx][1] for idx in idxs
+            {"name": bad_params[idx][0].__name__} | bad_params[idx][1]
+            for idx in idxs
         ]
     }
     with pytest.raises((ValueError, TypeError)):
@@ -174,13 +190,16 @@ def test_preprocess_config_invalid_params(N, seed):
     ],
 )
 @pytest.mark.parametrize("seed", [42])
+@pytest.mark.speed
 def test_preprocess_jit(B, H, time_limit, seed):
     # Sample idxs
     key = jrandom.PRNGKey(seed)
     key, subkey = jrandom.split(key)
 
     # Create a random image
-    image = jrandom.uniform(subkey, (B, H, H), minval=0, maxval=255, dtype=jnp.float32)
+    image = jrandom.uniform(
+        subkey, (B, H, H), minval=0, maxval=255, dtype=jnp.float32
+    )
 
     # Create a pre_processing configuration
     pre_processing_config = {
@@ -190,9 +209,11 @@ def test_preprocess_jit(B, H, time_limit, seed):
         ]
     }
     # Instantiate the dummy estimator
-    model = DummyEstimator.from_config(pre_processing_config)
-    trainable_state = model.create_trainable_state(image, key)
-    create_state_fn, compute_estimate_fn = compile_model(model, image, True)
+    estimator = DummyEstimator.from_config(pre_processing_config)
+    trainable_state = estimator.create_trainable_state(image, key)
+    create_state_fn, compute_estimate_fn = compile_estimator(
+        estimator, image, True
+    )
     # Warm up
     state = create_state_fn(image, key)
     state, _ = compute_estimate_fn(image, state, trainable_state)
@@ -210,7 +231,7 @@ def test_preprocess_jit(B, H, time_limit, seed):
     )
     runtime = min(runtime) / NUMBER_OF_EXECUTIONS
 
-    assert (
-        runtime < time_limit
-    ), f"JIT preprocessing took too long: {runtime:.6f} seconds per execution,"
+    assert runtime < time_limit, (
+        f"JIT preprocessing took too long: {runtime:.6f} seconds per execution,"
+    )
     f" time limit: {time_limit:.6f} seconds"

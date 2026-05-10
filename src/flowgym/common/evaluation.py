@@ -3,8 +3,8 @@
 import jax.numpy as jnp
 from goggles.types import Metrics
 
-from flowgym.flow.utils import compute_divergence_and_vorticity
 from flowgym.flow.process import apply_flow_to_image_forward
+from flowgym.flow.utils import compute_divergence_and_vorticity
 
 
 def loss_supervised_density(
@@ -22,7 +22,9 @@ def loss_supervised_density(
     return jnp.mean(jnp.square(density - density_gt) / density_gt)
 
 
-def angle_error(flow_field: jnp.ndarray, flow_field_gt: jnp.ndarray) -> jnp.ndarray:
+def angle_error(
+    flow_field: jnp.ndarray, flow_field_gt: jnp.ndarray
+) -> jnp.ndarray:
     """Compute the angle error between two flow fields.
 
     Args:
@@ -52,7 +54,9 @@ def angle_error(flow_field: jnp.ndarray, flow_field_gt: jnp.ndarray) -> jnp.ndar
     return angle_error / jnp.pi
 
 
-def relative_error(flow_field: jnp.ndarray, flow_field_gt: jnp.ndarray) -> jnp.ndarray:
+def relative_error(
+    flow_field: jnp.ndarray, flow_field_gt: jnp.ndarray
+) -> jnp.ndarray:
     """Compute the relative error between two flow fields.
 
     Args:
@@ -75,7 +79,9 @@ def relative_error(flow_field: jnp.ndarray, flow_field_gt: jnp.ndarray) -> jnp.n
     return relative_error
 
 
-def absolute_error(flow_field: jnp.ndarray, flow_field_gt: jnp.ndarray) -> jnp.ndarray:
+def absolute_error(
+    flow_field: jnp.ndarray, flow_field_gt: jnp.ndarray
+) -> jnp.ndarray:
     """Compute the absolute error between two flow fields.
 
     Args:
@@ -91,7 +97,9 @@ def absolute_error(flow_field: jnp.ndarray, flow_field_gt: jnp.ndarray) -> jnp.n
     return absolute_error
 
 
-def loss_supervised(flow_field: jnp.ndarray, flow_field_gt: jnp.ndarray) -> jnp.ndarray:
+def loss_supervised(
+    flow_field: jnp.ndarray, flow_field_gt: jnp.ndarray
+) -> jnp.ndarray:
     """Compute the loss for supervised training.
 
     Args:
@@ -132,10 +140,12 @@ def constraint_violation(
     Args:
         flow_field: Estimated flow field.
         max_speed: Maximum allowed speed.
-        thresholds: Dictionary containing the thresholds for speed and divergence.
+        thresholds: Dictionary containing thresholds for speed and
+            divergence.
 
     Returns:
-        Dictionary containing the statistics for speed and divergence violations.
+        Dictionary containing statistics for speed and divergence
+        violations.
     """
     # Compute divergence, vorticity, and flow speed
     divergence, _ = compute_divergence_and_vorticity(flow_field)
@@ -191,7 +201,9 @@ def compute_stats(errors: jnp.ndarray, threshold: float = 0.5) -> Metrics:
     return {
         "mean": mean_error.item(),
         "std": std_error.item(),
-        "fraction_below_threshold": ((n_below_threshold / errors.shape[0]).item()),
+        "fraction_below_threshold": (
+            (n_below_threshold / errors.shape[0]).item()
+        ),
         "lower_quartile": lq.item(),
         "upper_quartile": up.item(),
         "median": median.item(),

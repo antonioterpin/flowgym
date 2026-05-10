@@ -1,13 +1,15 @@
 """Module for PIV images processing in JAX."""
 
+from typing import cast
+
 import jax
 import jax.numpy as jnp
 from jax import lax
 
 from flowgym.common.filters import sobel
-from flowgym.flow.utils import inv_hessian
-from flowgym.flow.process import img_resize
 from flowgym.flow.process import apply_flow_to_image_backward as warp_image
+from flowgym.flow.process import img_resize
+from flowgym.flow.utils import inv_hessian
 
 
 def estimate_dis_flow(
@@ -42,7 +44,8 @@ def estimate_dis_flow(
         estimated batch of flow field (B, H, W, 2)
     """
     return jax.vmap(
-        flow_between, in_axes=(0, 0, 0, None, None, None, None, None, None, None, None)
+        flow_between,
+        in_axes=(0, 0, 0, None, None, None, None, None, None, None, None),
     )(
         prev_batch,
         curr_batch,
@@ -88,6 +91,9 @@ def variational_refinement(
         omega: SOR relaxation factor.
         zeta: small constant for smoothness weight.
         eps: small constant for robust norms.
+
+    Returns:
+        Refined flow of shape (H,W,2).
     """
     # Gaussian kernel for structure tensor
     # TODO: try to precompute this
@@ -142,9 +148,13 @@ def variational_refinement(
         def sor_body(_, dW):
             dWu, dWv = dW
             # red pass
-            dWu, dWv = sor_pass(dWu, dWv, Au11, Au12, Au22, bu, bv, omega, red_mask)
+            dWu, dWv = sor_pass(
+                dWu, dWv, Au11, Au12, Au22, bu, bv, omega, red_mask
+            )
             # black pass
-            dWu, dWv = sor_pass(dWu, dWv, Au11, Au12, Au22, bu, bv, omega, ~red_mask)
+            dWu, dWv = sor_pass(
+                dWu, dWv, Au11, Au12, Au22, bu, bv, omega, ~red_mask
+            )
             return (dWu, dWv)
 
         dWu, dWv = jax.lax.fori_loop(0, sor_iters, sor_body, (dWu, dWv))
@@ -182,6 +192,9 @@ def prepare_structure_tensor(
     Args:
         I0: (H,W) single-channel image.
         kernel: (kh,kw) single-channel kernel for smoothing.
+
+    Returns:
+        Tuple of (Ixx, Ixy, Iyy) structure tensor components.
     """
     I0x, I0y = sobel_grad(I0)
     # Convolve squared products
@@ -192,7 +205,7 @@ def prepare_structure_tensor(
 
 
 def conv2d(img: jnp.ndarray, kernel: jnp.ndarray) -> jnp.ndarray:
-    """Perform a 2D convolution on a single-channel image using a separable kernel.
+    """Perform 2D convolution on single-channel image with separable kernel.
 
     Args:
         img: (H,W) single-channel image.
@@ -241,6 +254,9 @@ def sor_pass(
         bv: linear system second right-hand side.
         omega: relaxation factor.
         red_mask: boolean mask for the red checkerboard.
+
+    Returns:
+        Tuple of updated (dWu, dWv) displacement increments.
     """
     # compute the unconstrained updates
     upd_u = (bu - Au12 * dWv) / Au11
@@ -271,9 +287,10 @@ def flow_between(
 ) -> jnp.ndarray:
     """Compute dense flow between two images using the DIS algorithm.
 
-    The function is implemented using jax.lax.switch nested in a jax.lax.scan loop.
-    The reason for this is to index the pyramid levels with a python int and now with
-    a jax tracer. This is important for the JIT compilation to work correctly.
+    The function is implemented using jax.lax.switch nested in a
+    jax.lax.scan loop. The reason for this is to index the pyramid levels
+    with a python int and not with a jax tracer. This is important for the
+    JIT compilation to work correctly.
 
     Args:
         prev: Previous image of shape (H, W)
@@ -305,7 +322,9 @@ def flow_between(
     for level in range(len(prev_pyr)):
         pp_level, centers_level, grads_level, hessians_inv_level = (
             extract_patches_grad_hess(
-                prev_pyr[level], patch_size=patch_size, patch_stride=patch_stride
+                prev_pyr[level],
+                patch_size=patch_size,
+                patch_stride=patch_stride,
             )
         )
         pp.append(pp_level)
@@ -322,7 +341,6 @@ def flow_between(
             num_patches = pp[level].shape[0]
 
             if level == levels - 1:
-
                 flow_curr = flow[:num_patches, :]
 
                 if level > 0:
@@ -346,7 +364,6 @@ def flow_between(
                 next_num_patches = centers[level].shape[0]
 
             elif level == 0:
-
                 flow_curr = flow[:num_patches]
 
                 # Compute the flow at the current level
@@ -381,13 +398,16 @@ def flow_between(
                     )
 
                     # Compute the flow at the next level's patches center
-                    updated = gather_2d(next_flow, centers[1] // (2**level_steps))
+                    updated = gather_2d(
+                        next_flow, centers[1] // (2**level_steps)
+                    )
                 else:
                     # Compute the flow at the next level's patches center
                     updated = query_flow_at_points(
                         next_flow,
                         centers[0] * (2**level_steps),
-                        (patch_size // (2**level_steps)) * 2 * (2**level_steps) + 1,
+                        (patch_size // (2**level_steps)) * 2 * (2**level_steps)
+                        + 1,
                         errors,
                         centers[1],
                     )
@@ -395,7 +415,6 @@ def flow_between(
                 next_num_patches = centers[level + 1].shape[0]
 
             else:
-
                 # Crop the flow coming from the previous level's estimate
                 flow_curr = flow[:num_patches]
 
@@ -442,7 +461,8 @@ def flow_between(
                     updated = query_flow_at_points(
                         next_flow,
                         centers[level] * (2**level_steps),
-                        (patch_size // (2**level_steps)) * 2 * (2**level_steps) + 1,
+                        (patch_size // (2**level_steps)) * 2 * (2**level_steps)
+                        + 1,
                         errors,
                         centers[level + 1],
                     )
@@ -472,7 +492,9 @@ def flow_between(
     # Create a function to process each level
     def body_fn(input, lvl):
         flow, final_errors = input
-        (flow, final_errors), _ = jax.lax.switch(lvl, level_fns, (flow, final_errors))
+        (flow, final_errors), _ = jax.lax.switch(
+            lvl, level_fns, (flow, final_errors)
+        )
         return (flow, final_errors), None
 
     # Iterate over the levels from coarsest to finest
@@ -501,9 +523,16 @@ def flow_between(
 
     # Resize the flow to match the original image size
     if start_level > 0 and output_full_res:
-        resized_flow_x = img_resize(flow[..., 0], (prev.shape[0], prev.shape[1]))
-        resized_flow_y = img_resize(flow[..., 1], (prev.shape[0], prev.shape[1]))
-        flow = jnp.stack((resized_flow_x, resized_flow_y), axis=-1) * 2**start_level
+        resized_flow_x = img_resize(
+            flow[..., 0], (prev.shape[0], prev.shape[1])
+        )
+        resized_flow_y = img_resize(
+            flow[..., 1], (prev.shape[0], prev.shape[1])
+        )
+        flow = (
+            jnp.stack((resized_flow_x, resized_flow_y), axis=-1)
+            * 2**start_level
+        )
 
     return flow
 
@@ -554,7 +583,9 @@ def densify(
         # Create coordinates and updates
         ys = jnp.arange(y0, y1) + cy
         xs = jnp.arange(x0, x1) + cx
-        coords = jnp.stack(jnp.meshgrid(ys, xs, indexing="ij"), axis=-1).reshape(-1, 2)
+        coords = jnp.stack(
+            jnp.meshgrid(ys, xs, indexing="ij"), axis=-1
+        ).reshape(-1, 2)
         updates = flow * weights[:, None]
 
         # Valid mask: check if each coord is within image bounds
@@ -579,8 +610,12 @@ def densify(
     updates_flat = updates_all.reshape(-1, 2)
     weights_flat = weights_all.reshape(-1)
 
-    flow_acc = flow_acc.at[coords_flat[:, 0], coords_flat[:, 1]].add(updates_flat)
-    weight_acc = weight_acc.at[coords_flat[:, 0], coords_flat[:, 1]].add(weights_flat)
+    flow_acc = flow_acc.at[coords_flat[:, 0], coords_flat[:, 1]].add(
+        updates_flat
+    )
+    weight_acc = weight_acc.at[coords_flat[:, 0], coords_flat[:, 1]].add(
+        weights_flat
+    )
 
     dense_flow = flow_acc / weight_acc[..., None]
 
@@ -592,7 +627,8 @@ def build_pyramid(
 ) -> list[jnp.ndarray]:
     """Build an image pyramid from coarsest to finest resolution.
 
-    The pyramid is built by downsampling the image by a factor of 2 at each level.
+    The pyramid is built by downsampling the image by a factor of 2 at each
+    level.
 
     Args:
         img: jnp.ndarray of shape (H, W) or (H, W, C)
@@ -605,7 +641,7 @@ def build_pyramid(
     """
     H, W = img.shape[:2]
 
-    def downsample(level):
+    def downsample(level: int) -> jnp.ndarray:
         """Downsample the image by a factor of 2^level.
 
         Args:
@@ -648,8 +684,8 @@ def compute_flow_level(
 
     Returns:
         flow: jnp.ndarray of shape (num_patches, 2) with the estimated flow
-        error: jnp.ndarray of shape (num_patches, patch_size, patch_size) with the
-            error of the final flow
+        error: jnp.ndarray of shape (num_patches, patch_size, patch_size)
+            with the error of the final flow
     """
 
     def solve_patch(
@@ -658,7 +694,7 @@ def compute_flow_level(
         grad: jnp.ndarray,
         hess_inv: jnp.ndarray,
         u0: jnp.ndarray,
-    ) -> tuple[jnp.ndarray, jnp.ndarray]:
+    ) -> tuple:
         """Solve the flow for a single patch.
 
         Args:
@@ -676,7 +712,9 @@ def compute_flow_level(
         def body_fun(_, u):
             # Sample the patch at the current displacement
             # Sample patch expects the displacement to be in (dy, dx) order
-            sampled = sample_patch(curr, center + u[::-1], patch_size=patch_size)
+            sampled = sample_patch(
+                curr, center + u[::-1], patch_size=patch_size
+            )
 
             # Compute the error
             error = (sampled - p_prev).ravel()  # shape (p*p,)
@@ -696,7 +734,9 @@ def compute_flow_level(
         flow = jnp.where(jnp.linalg.norm(flow - u0) > patch_size, u0, flow)
 
         # Compute the final error
-        sampled = sample_patch(curr, center + flow[::-1], patch_size=patch_size)
+        sampled = sample_patch(
+            curr, center + cast(jnp.ndarray, flow)[::-1], patch_size=patch_size
+        )
         error = p_prev - sampled  # shape (p, p)
 
         return flow, error  # type: ignore
@@ -708,10 +748,13 @@ def compute_flow_level(
     return disps, errors
 
 
-def sample_patch(img: jnp.ndarray, disp: jnp.ndarray, patch_size: int) -> jnp.ndarray:
+def sample_patch(
+    img: jnp.ndarray, disp: jnp.ndarray, patch_size: int
+) -> jnp.ndarray:
     """Extract a p x p patch from `img` at subpixel displacement `disp`.
 
-    'disp' is a 2D vector (dy, dx) that indicates the center of the patch in the image.
+    'disp' is a 2D vector (dy, dx) that indicates the center of the patch
+    in the image.
 
     Args:
         img: of shape (H, W), the source image.
@@ -790,13 +833,13 @@ def gather_2d(array: jnp.ndarray, indices: jnp.ndarray) -> jnp.ndarray:
 def extract_patches_grad_hess(
     img: jnp.ndarray, patch_size: int, patch_stride: int, eps: float = 1e-4
 ):
-    """Extract patches, their centers, image gradients and inverted hessian for an image.
+    """Extract patches, centers, image gradients and hessian for an image.
 
-    This function extracts patches from the image and returns them in a jnp.ndarray
-    in the shape (num_patches, patch_size, patch_size). It also extracts their centers,
-    computes each patch's photometric gradient and the inverted hessian matrix.
-    This function is used in the DIS algorithm to pre-compute these values for each
-    template image.
+    This function extracts patches from the image and returns them in a
+    jnp.ndarray in the shape (num_patches, patch_size, patch_size). It also
+    extracts their centers, computes each patch's photometric gradient and
+    the inverted hessian matrix. This function is used in the DIS algorithm
+    to pre-compute these values for each template image.
 
     Args:
         img: image of size (H, W)
@@ -810,7 +853,8 @@ def extract_patches_grad_hess(
         centers:
             centers of the patches in the original image
         grad_patches:
-            gradients of the patches of shape (num_patches, patch_size * patch_size, 2)
+            gradients of the patches of shape
+            (num_patches, patch_size * patch_size, 2)
         invH:
             inverted hessian matrices of shape (num_patches, 2, 2)
 
@@ -875,7 +919,9 @@ def extract_patches_grad_hess(
     ys = jnp.arange(0, H_p - patch_size + 1, patch_stride)
     xs = jnp.arange(0, W_p - patch_size + 1, patch_stride)
     grid_y, grid_x = jnp.meshgrid(ys, xs, indexing="ij")
-    centres_p = jnp.stack([grid_y + half, grid_x + half], axis=-1).reshape(-1, 2)
+    centres_p = jnp.stack([grid_y + half, grid_x + half], axis=-1).reshape(
+        -1, 2
+    )
     centres = centres_p - jnp.array([pad_top, pad_left])
 
     return (patches, centres, grad_patches, invH)
@@ -912,7 +958,7 @@ def extract_patches(
     )
 
     # (1, p*p*C, Oh, Ow) -> (1, Oh, Ow, p*p*C) -> (1, Oh, Ow, p, p, C)
-    _, N, Oh, Ow = patches.shape
+    _, _N, Oh, Ow = patches.shape
     patches = patches.reshape(1, C, patch_size, patch_size, Oh, Ow)
     patches = patches.transpose(0, 4, 5, 2, 3, 1)
     patches = patches.reshape(-1, patch_size, patch_size, C)
@@ -955,10 +1001,14 @@ def query_flow_at_points(
             def weighted_flow():
                 ix = qx - x0
                 iy = qy - y0
-                weight = 1.0 / jnp.maximum(1.0, jnp.abs(patch_errors[i, iy, ix]))
+                weight = 1.0 / jnp.maximum(
+                    1.0, jnp.abs(patch_errors[i, iy, ix])
+                )
                 return sparse_flow[i] * weight, weight
 
-            return jax.lax.cond(inside, weighted_flow, lambda: (jnp.zeros(2), 0.0))
+            return jax.lax.cond(
+                inside, weighted_flow, lambda: (jnp.zeros(2), 0.0)
+            )
 
         flow_contribs, weights = jax.vmap(influence_from_patch)(
             jnp.arange(centers.shape[0])
@@ -1014,26 +1064,27 @@ def photometric_error_with_patches(
 ) -> jnp.ndarray:
     """Compute the photometric error for each patch (as a matrix).
 
-    This function computes the photometric error between the previous and current images
-    by extracting patches from the previous image, applying the flow sampled from the
-    center of the patch, and computing the error between the sampled patch and the
-    corresponding patch in the current image and then taking the mean of the errors
-    across all pixels in the patch.
+    This function computes the photometric error between the previous and
+    current images by extracting patches from the previous image, applying
+    the flow sampled from the center of the patch, and computing the error
+    between the sampled patch and the corresponding patch in the current
+    image and then taking the mean of the errors across all pixels in the
+    patch.
 
     Note:
     WIP, for now it works only for patch_stride = 1.
     TODO: support patch_stride > 1.
 
     Args:
-        prev (jnp.ndarray): Previous image of shape (H, W).
-        curr (jnp.ndarray): Current image of shape (H, W).
-        flow (jnp.ndarray): Flow field of shape (H, W, 2).
-        patch_size (int): Size of the patches to extract.
-        patch_stride (int): Stride between patches.
-        squared (bool): If True, compute squared error.
+        prev: Previous image of shape (H, W).
+        curr: Current image of shape (H, W).
+        flow: Flow field of shape (H, W, 2).
+        patch_size: Size of the patches to extract.
+        patch_stride: Stride between patches.
+        squared: If True, compute squared error.
 
     Returns:
-        jnp.ndarray: Error matrix of shape (H-2*half, W-2*half)
+        Error matrix of shape (H-2*half, W-2*half).
     """
     # Pad the image before extracting patches
     H, W = prev.shape
@@ -1047,9 +1098,9 @@ def photometric_error_with_patches(
     # Compute grid of centers
     grid_h = H - 2 * half
     grid_w = W - 2 * half
-    centers = patch_grid(grid_h, grid_w, patch_stride, patch_stride) + jnp.array(
-        [half, half]
-    )
+    centers = patch_grid(
+        grid_h, grid_w, patch_stride, patch_stride
+    ) + jnp.array([half, half])
 
     y = centers[..., 0]
     x = centers[..., 1]
@@ -1066,9 +1117,13 @@ def photometric_error_with_patches(
     )(curr, displaced_centers, patch_size)
 
     # Compute the mean photometric error in each patch
-    errors = patches - sampled_patches  # shape (num_patches, patch_size, patch_size)
+    errors = (
+        patches - sampled_patches
+    )  # shape (num_patches, patch_size, patch_size)
     if not squared:
-        patch_errors = jnp.linalg.norm(errors, axis=(1, 2))  # shape (num_patches,)
+        patch_errors = jnp.linalg.norm(
+            errors, axis=(1, 2)
+        )  # shape (num_patches,)
     else:
         patch_errors = jnp.sum(errors**2, axis=(1, 2))  # shape (num_patches,)
 
@@ -1082,8 +1137,18 @@ def photometric_error_with_patches(
     return error_matrix
 
 
-def patch_grid(H, W, stride_y, stride_x):
-    """Generate a grid of patch centers for an image."""
+def patch_grid(H: int, W: int, stride_y: int, stride_x: int) -> jnp.ndarray:
+    """Generate a grid of patch centers for an image.
+
+    Args:
+        H: Height of the image.
+        W: Width of the image.
+        stride_y: Vertical stride between patches.
+        stride_x: Horizontal stride between patches.
+
+    Returns:
+        Grid of patch centers of shape (num_y, num_x, 2).
+    """
     centers_y = patch_centers(H, stride_y)
     centers_x = patch_centers(W, stride_x)
     grid_y, grid_x = jnp.meshgrid(centers_y, centers_x, indexing="ij")

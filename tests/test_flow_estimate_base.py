@@ -29,21 +29,20 @@ def test_estimation_create_state(estimator, image_shape, history_length):
 
     # Create the estimator state
     state = estimator.create_state(
-        img, image_history_size=history_length, estimates=jnp.zeros(img.shape + (2,))
+        img,
+        image_history_size=history_length,
+        estimates=jnp.zeros((*img.shape, 2)),
     )
 
     # Check that the state has the expected shape
-    assert (
-        state["images"].shape
-        == (
-            img.shape[0],
-            history_length,
-        )
-        + img.shape[1:]
+    assert state["images"].shape == (
+        img.shape[0],
+        history_length,
+        *img.shape[1:],
     )
     assert state["estimates"].shape == (
         img.shape[0],
         history_length,
-    ) + img.shape[
-        1:
-    ] + (2,)
+        *img.shape[1:],
+        2,
+    )

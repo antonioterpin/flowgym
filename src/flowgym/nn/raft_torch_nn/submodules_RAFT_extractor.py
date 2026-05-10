@@ -1,4 +1,4 @@
-"""Copyright (c) 2020-2021, Christian Lagemann
+"""Copyright (c) 2020-2021, Christian Lagemann.
 
 Portions of this code copyright 2020, princeton-vl
 In the framework of:
@@ -7,7 +7,7 @@ URL: https://github.com/princeton-vl/RAFT
 """
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 
 class ResidualBlock(nn.Module):
@@ -23,10 +23,16 @@ class ResidualBlock(nn.Module):
         num_groups = planes // 8
 
         if norm_fn == "group":
-            self.norm1 = nn.GroupNorm(num_groups=num_groups, num_channels=planes)
-            self.norm2 = nn.GroupNorm(num_groups=num_groups, num_channels=planes)
+            self.norm1 = nn.GroupNorm(
+                num_groups=num_groups, num_channels=planes
+            )
+            self.norm2 = nn.GroupNorm(
+                num_groups=num_groups, num_channels=planes
+            )
             if not stride == 1:
-                self.norm3 = nn.GroupNorm(num_groups=num_groups, num_channels=planes)
+                self.norm3 = nn.GroupNorm(
+                    num_groups=num_groups, num_channels=planes
+                )
 
         elif norm_fn == "batch":
             self.norm1 = nn.BatchNorm2d(planes)
@@ -75,11 +81,19 @@ class BottleneckBlock(nn.Module):
         num_groups = planes // 8
 
         if norm_fn == "group":
-            self.norm1 = nn.GroupNorm(num_groups=num_groups, num_channels=planes // 4)
-            self.norm2 = nn.GroupNorm(num_groups=num_groups, num_channels=planes // 4)
-            self.norm3 = nn.GroupNorm(num_groups=num_groups, num_channels=planes)
+            self.norm1 = nn.GroupNorm(
+                num_groups=num_groups, num_channels=planes // 4
+            )
+            self.norm2 = nn.GroupNorm(
+                num_groups=num_groups, num_channels=planes // 4
+            )
+            self.norm3 = nn.GroupNorm(
+                num_groups=num_groups, num_channels=planes
+            )
             if not stride == 1:
-                self.norm4 = nn.GroupNorm(num_groups=num_groups, num_channels=planes)
+                self.norm4 = nn.GroupNorm(
+                    num_groups=num_groups, num_channels=planes
+                )
 
         elif norm_fn == "batch":
             self.norm1 = nn.BatchNorm2d(planes // 4)
@@ -107,7 +121,8 @@ class BottleneckBlock(nn.Module):
 
         else:
             self.downsample = nn.Sequential(
-                nn.Conv2d(in_planes, planes, kernel_size=1, stride=stride), self.norm4
+                nn.Conv2d(in_planes, planes, kernel_size=1, stride=stride),
+                self.norm4,
             )
 
     def forward(self, x):
@@ -156,8 +171,12 @@ class BasicEncoder(nn.Module):
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
-            elif isinstance(m, (nn.BatchNorm2d, nn.InstanceNorm2d, nn.GroupNorm)):
+                nn.init.kaiming_normal_(
+                    m.weight, mode="fan_out", nonlinearity="relu"
+                )
+            elif isinstance(
+                m, (nn.BatchNorm2d, nn.InstanceNorm2d, nn.GroupNorm)
+            ):
                 if m.weight is not None:
                     nn.init.constant_(m.weight, 1)
                 if m.bias is not None:
@@ -172,7 +191,6 @@ class BasicEncoder(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
-
         # if input is list, combine batch dimension
         is_list = isinstance(x, tuple) or isinstance(x, list)
         if is_list:
@@ -231,15 +249,21 @@ class SmallEncoder(nn.Module):
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
-            elif isinstance(m, (nn.BatchNorm2d, nn.InstanceNorm2d, nn.GroupNorm)):
+                nn.init.kaiming_normal_(
+                    m.weight, mode="fan_out", nonlinearity="relu"
+                )
+            elif isinstance(
+                m, (nn.BatchNorm2d, nn.InstanceNorm2d, nn.GroupNorm)
+            ):
                 if m.weight is not None:
                     nn.init.constant_(m.weight, 1)
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
 
     def _make_layer(self, dim, stride=1):
-        layer1 = BottleneckBlock(self.in_planes, dim, self.norm_fn, stride=stride)
+        layer1 = BottleneckBlock(
+            self.in_planes, dim, self.norm_fn, stride=stride
+        )
         layer2 = BottleneckBlock(dim, dim, self.norm_fn, stride=1)
         layers = (layer1, layer2)
 
@@ -247,8 +271,6 @@ class SmallEncoder(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
-
-        # if input is list, combine batch dimension
         is_list = isinstance(x, tuple) or isinstance(x, list)
         if is_list:
             batch_dim = x[0].shape[0]

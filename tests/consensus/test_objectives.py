@@ -1,8 +1,13 @@
-import pytest
+"""Tests for objectives module."""
+
 import jax.numpy as jnp
+import pytest
 from jax import random
 
-from flowgym.flow.consensus.consensus_algorithms import z_objective, flows_objective
+from flowgym.flow.consensus.consensus_algorithms import (
+    flows_objective,
+    z_objective,
+)
 from flowgym.flow.consensus.objectives import make_weights
 
 
@@ -19,7 +24,8 @@ def test_z_objective_no_regularization(N, H, W, C, rho):
     flows = jnp.ones((N, H, W, C))
     consensus_flow = jnp.zeros((H, W, C))
     consensus_dual = jnp.zeros((N, H, W, C))
-    # The consensus term: each residual is 1, squared = 1, sum over all = N*H*W*C
+    # The consensus term: each residual is 1, squared = 1, sum over
+    # all = N*H*W*C
     expected = 0.5 * rho * (N * H * W * C)
     result = z_objective(consensus_flow, flows, consensus_dual, rho)
     assert jnp.isscalar(result) or result.shape == ()
@@ -29,7 +35,9 @@ def test_z_objective_no_regularization(N, H, W, C, rho):
 @pytest.mark.parametrize("N, H, W, C", [(1, 2, 2, 1)])
 @pytest.mark.parametrize("regularizer_loss", [0.1, 1.0, 2.0])
 @pytest.mark.parametrize("rho", [1.0])
-def test_z_objective_with_regularizer(N, H, W, C, rho, monkeypatch, regularizer_loss):
+def test_z_objective_with_regularizer(
+    N, H, W, C, rho, monkeypatch, regularizer_loss
+):
     """Test consensus term plus regularization."""
     flows = jnp.ones((N, H, W, C)) + 1
     consensus_flow = jnp.ones((H, W, C))
@@ -286,11 +294,12 @@ def test_photometric_weights_favor_best_flow(config, B, N, H, W):
     # Agent 0 should be highly favored
     max_weight = weights[0, 0].mean()
 
-    # TODO: this threshold doesn't make sense if the normalization isn't per pixel
+    # TODO: this threshold doesn't make sense if the normalization
+    # isn't per pixel
     assert max_weight > 0.85, f"Perfect agent's mean weight: {max_weight}"
-    assert jnp.all(
-        weights[0, 1:] < max_weight
-    ), "Other agents should have lower weights"
+    assert jnp.all(weights[0, 1:] < max_weight), (
+        "Other agents should have lower weights"
+    )
 
 
 @pytest.mark.parametrize("B, N, H, W", [(2, 4, 64, 64), (1, 3, 256, 256)])
@@ -334,9 +343,11 @@ def test_photometric_weights_zero_error_stability(config, B, N, H, W):
     assert jnp.allclose(interior.sum(axis=1), 1.0, atol=1e-5)
 
 
-@pytest.mark.parametrize("B, N, H, W", [(10, 2, 64, 64)])  # B must be > 3 for this test
+@pytest.mark.parametrize(
+    "B, N, H, W", [(10, 2, 64, 64)]
+)  # B must be > 3 for this test
 def test_make_weights_batch_consistency(config, B, N, H, W):
-    """Test that make_weights works consistently for full batch and sub-batch."""
+    """Test make_weights consistency for full batch and sub-batch."""
     flows = random.uniform(random.PRNGKey(0), (B, N, H, W, 2)) * 5
     prevs = random.uniform(random.PRNGKey(1), (B, H, W)) * 255
     currs = random.uniform(random.PRNGKey(2), (B, H, W)) * 255
@@ -353,11 +364,11 @@ def test_make_weights_batch_consistency(config, B, N, H, W):
     assert out_sub2.shape[0] == 1
 
     # The first 3 in full batch must be identical to out_sub
-    assert jnp.allclose(
-        out_full[:3], out_sub1, atol=1e-6
-    ), "First 3 elements in full batch do not match sub-batch"
+    assert jnp.allclose(out_full[:3], out_sub1, atol=1e-6), (
+        "First 3 elements in full batch do not match sub-batch"
+    )
 
     # The first element in full batch must be identical to out_sub2
-    assert jnp.allclose(
-        out_full[0], out_sub2, atol=1e-6
-    ), "First element in full batch does not match sub-batch"
+    assert jnp.allclose(out_full[0], out_sub2, atol=1e-6), (
+        "First element in full batch does not match sub-batch"
+    )

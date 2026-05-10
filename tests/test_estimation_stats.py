@@ -1,13 +1,15 @@
+"""Tests for estimation_stats module."""
+
 import jax.numpy as jnp
 
 import flowgym.common.evaluation as eval_mod
 from flowgym.common.evaluation import (
-    angle_error,
-    relative_error,
     absolute_error,
+    angle_error,
+    compute_stats,
     loss_supervised,
     loss_unsupervised,
-    compute_stats,
+    relative_error,
 )
 
 
@@ -91,7 +93,9 @@ def test_compute_stats_known_values():
 
     assert jnp.allclose(stats["mean"], expected_mean, rtol=1e-6)
     assert jnp.allclose(stats["std"], expected_std, rtol=1e-6)
-    assert jnp.allclose(stats["fraction_below_threshold"], expected_fraction, rtol=1e-6)
+    assert jnp.allclose(
+        stats["fraction_below_threshold"], expected_fraction, rtol=1e-6
+    )
     assert jnp.allclose(stats["lower_quartile"], expected_lq, rtol=1e-6)
     assert jnp.allclose(stats["upper_quartile"], expected_up, rtol=1e-6)
     assert jnp.allclose(stats["median"], expected_median, rtol=1e-6)

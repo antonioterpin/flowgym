@@ -4,8 +4,8 @@ import jax
 import jax.numpy as jnp
 from jax import lax
 
-from flowgym.utils import DEBUG
 from flowgym.flow.process import img_resize
+from flowgym.utils import DEBUG
 
 
 def extended_search_area_piv(
@@ -24,27 +24,27 @@ def extended_search_area_piv(
         img1: First image.
         img2: Second image.
         window_size: Size of the interrogation window.
-        overlap: Overlap between interrogation windows.
         search_area_size: Size of the search area.
+        overlap: Overlap between interrogation windows.
 
     Returns:
         Displacement field of shape (batch_size, n_rows, n_cols, 2).
     """
     # Validate inputs
     if DEBUG:
-        assert (
-            img1.ndim == 3
-        ), f"Image must be (batch_size, height, width), instead {img1.shape}"
-        assert (
-            img2.ndim == 3
-        ), f"Image must be (batch_size, height, width), instead {img2.shape}"
+        assert img1.ndim == 3, (
+            f"Image must be (batch_size, height, width), instead {img1.shape}"
+        )
+        assert img2.ndim == 3, (
+            f"Image must be (batch_size, height, width), instead {img2.shape}"
+        )
         assert isinstance(window_size, int), "Window size must be an integer"
         assert isinstance(overlap, int), "Overlap must be an integer"
         assert isinstance(search_area_size, int)
         # TODO: allow <=
-        assert (
-            search_area_size >= window_size
-        ), "Search area size must be greater than window size"
+        assert search_area_size >= window_size, (
+            "Search area size must be greater than window size"
+        )
 
     # TODO: extend to handle non-square windows
     window_size_tuple = (window_size, window_size)
@@ -59,11 +59,15 @@ def extended_search_area_piv(
         (img1.shape[1], img1.shape[2]), search_area_size_tuple, overlap_tuple
     )
     if DEBUG:
-        assert (
-            aa.shape == (img1.shape[0], n_rows * n_cols) + search_area_size_tuple
+        assert aa.shape == (
+            img1.shape[0],
+            n_rows * n_cols,
+            *search_area_size_tuple,
         ), f"Sliding window wrong dimensions: {aa.shape}"
-        assert (
-            bb.shape == (img2.shape[0], n_rows * n_cols) + search_area_size_tuple
+        assert bb.shape == (
+            img2.shape[0],
+            n_rows * n_cols,
+            *search_area_size_tuple,
         ), f"Sliding window wrong dimensions: {bb.shape}"
 
     # Extended search area masking
@@ -72,7 +76,8 @@ def extended_search_area_piv(
     pady = (search_area_size_tuple[0] - window_size_tuple[0]) // 2
     padx = (search_area_size_tuple[1] - window_size_tuple[1]) // 2
     mask = mask.at[
-        pady : search_area_size_tuple[0] - pady, padx : search_area_size_tuple[1] - padx
+        pady : search_area_size_tuple[0] - pady,
+        padx : search_area_size_tuple[1] - padx,
     ].set(1)
     mask = mask[None, None, :, :]
     aa = aa * mask
@@ -110,17 +115,22 @@ def get_field_shape(
         Shape of the resulting flow field (num_rows, num_cols).
     """
     if DEBUG:
-        assert (
-            len(image_size) == 2
-        ), f"Image size must be a tuple of (height, width), instead {image_size}"
-        assert (
-            len(search_area_size) == 2
-        ), "Search area size must be a tuple of (height, width)"
+        assert len(image_size) == 2, (
+            f"Image size must be a tuple of (height, width), "
+            f"instead {image_size}"
+        )
+        assert len(search_area_size) == 2, (
+            "Search area size must be a tuple of (height, width)"
+        )
         assert len(overlap) == 2, "Overlap must be a tuple of (height, width)"
 
     return (
-        (image_size[0] - search_area_size[0]) // (search_area_size[0] - overlap[0]) + 1,
-        (image_size[1] - search_area_size[1]) // (search_area_size[1] - overlap[1]) + 1,
+        (image_size[0] - search_area_size[0])
+        // (search_area_size[0] - overlap[0])
+        + 1,
+        (image_size[1] - search_area_size[1])
+        // (search_area_size[1] - overlap[1])
+        + 1,
     )
 
 
@@ -160,11 +170,13 @@ def normalize_intensity(windows: jnp.ndarray) -> jnp.ndarray:
     """
     mean = jnp.mean(windows, axis=(-2, -1), keepdims=True)
     std = jnp.std(windows, axis=(-2, -1), keepdims=True)
-    normalized = jnp.where(std == 0, jnp.zeros_like(windows), (windows - mean) / std)
+    normalized = jnp.where(
+        std == 0, jnp.zeros_like(windows), (windows - mean) / std
+    )
     return jnp.clip(normalized, 0, normalized.max())
 
 
-def find_all_first_peaks(corr):
+def find_all_first_peaks(corr: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Find first peaks in batched correlation maps.
 
     Args:
@@ -182,7 +194,10 @@ def find_all_first_peaks(corr):
 
 
 def subpixel_displacement(
-    corr: jnp.ndarray, peaks_i: jnp.ndarray, peaks_j: jnp.ndarray, mask_width: int = 1
+    corr: jnp.ndarray,
+    peaks_i: jnp.ndarray,
+    peaks_j: jnp.ndarray,
+    mask_width: int = 1,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Compute subpixel displacements from correlation maps.
 
@@ -200,10 +215,13 @@ def subpixel_displacement(
             "Correlation must be (batch_size * n_windows, height, width), "
             + f"instead {corr.shape}"
         )
-        assert (
-            peaks_i.ndim == 1 and peaks_j.ndim == 1
-        ), f"Peaks must be 1D arrays, instead {peaks_i.shape} and {peaks_j.shape}"
-        assert len(peaks_i) == len(peaks_j), "Peaks i and j must have the same length"
+        assert peaks_i.ndim == 1 and peaks_j.ndim == 1, (
+            f"Peaks must be 1D arrays, instead {peaks_i.shape} and "
+            f"{peaks_j.shape}"
+        )
+        assert len(peaks_i) == len(peaks_j), (
+            "Peaks i and j must have the same length"
+        )
         assert len(peaks_i) == corr.shape[0], (
             "Peaks must match the number of windows, "
             f"instead {len(peaks_i)} and {corr.shape[0]}",
@@ -212,7 +230,7 @@ def subpixel_displacement(
     K, H, W = corr.shape
     idx = jnp.arange(K)
 
-    # 1) Identify out-of-bounds (“invalid”) peaks
+    # 1) Identify out-of-bounds ("invalid") peaks
     invalid = (
         (peaks_i < mask_width)
         | (peaks_i > (H - mask_width - 1))
@@ -220,14 +238,15 @@ def subpixel_displacement(
         | (peaks_j > (W - mask_width - 1))
     )
 
-    # 2) “Safe” indices (so we never index outside) — we’ll mask these later
+    # 2) "Safe" indices (so we never index outside) -- we'll mask these later
     safe_i = jnp.where(invalid, H // 2, peaks_i)
     safe_j = jnp.where(invalid, W // 2, peaks_j)
 
     if DEBUG:
-        assert safe_i.shape == (K,) and safe_j.shape == (
-            K,
-        ), f"Safe indices must be 1D, instead {safe_i.shape} and {safe_j.shape}"
+        assert safe_i.shape == (K,) and safe_j.shape == (K,), (
+            f"Safe indices must be 1D, instead {safe_i.shape} and "
+            f"{safe_j.shape}"
+        )
 
     # 3) Gather the 5-point stencil around each peak
     c = corr[idx, safe_i, safe_j]
@@ -237,18 +256,22 @@ def subpixel_displacement(
     cu = corr[idx, safe_i, safe_j + 1]
 
     if DEBUG:
-        assert c.shape == (K,), f"Peak correlation must be 1D, instead {c.shape}"
-        assert cl.shape == (K,) and cr.shape == (
-            K,
-        ), f"Left and right correlations must be 1D, instead {cl.shape} and {cr.shape}"
-        assert cd.shape == (K,) and cu.shape == (
-            K,
-        ), f"Down and up correlations must be 1D, instead {cd.shape} and {cu.shape}"
+        assert c.shape == (K,), (
+            f"Peak correlation must be 1D, instead {c.shape}"
+        )
+        assert cl.shape == (K,) and cr.shape == (K,), (
+            f"Left and right correlations must be 1D, instead "
+            f"{cl.shape} and {cr.shape}"
+        )
+        assert cd.shape == (K,) and cu.shape == (K,), (
+            f"Down and up correlations must be 1D, instead "
+            f"{cd.shape} and {cu.shape}"
+        )
 
-    # 4) Detect any non-positive values → fallback to 3‑point parabolic
+    # 4) Detect any non-positive values -> fallback to 3-point parabolic
     inv = (c <= 0) | (cl <= 0) | (cr <= 0) | (cd <= 0) | (cu <= 0)
 
-    # 5) Log‑parabolic interpolation
+    # 5) Log-parabolic interpolation
     lcl, lcr, lc = jnp.log(cl), jnp.log(cr), jnp.log(c)
     lcd, lcu = jnp.log(cd), jnp.log(cu)
     nom1 = lcl - lcr
@@ -259,7 +282,7 @@ def subpixel_displacement(
     shift_i_log = jnp.where(den1 != 0, nom1 / den1, 0.0)
     shift_j_log = jnp.where(den2 != 0, nom2 / den2, 0.0)
 
-    # 6) 3‑point parabolic fallback
+    # 6) 3-point parabolic fallback
     shift_i_fallback = (cl - cr) / (2 * cl - 4 * c + 2 * cr)
     shift_j_fallback = (cd - cu) / (2 * cd - 4 * c + 2 * cu)
 
@@ -291,8 +314,12 @@ def sliding_window_array(
         Extracted windows (batch_size, num_windows, win_height, win_width).
     """
     if DEBUG:
-        assert image.ndim == 3, "Image batch must be 3D (batch_size, height, width)"
-        assert len(window_size) == 2, "Window size must be a tuple of (height, width)"
+        assert image.ndim == 3, (
+            "Image batch must be 3D (batch_size, height, width)"
+        )
+        assert len(window_size) == 2, (
+            "Window size must be a tuple of (height, width)"
+        )
         assert len(overlap) == 2, "Overlap must be a tuple of (height, width)"
 
     xs, ys = get_rect_coordinates(
@@ -311,7 +338,9 @@ def sliding_window_array(
 
 
 def get_rect_coordinates(
-    image_size: tuple[int, int], window_size: tuple[int, int], overlap: tuple[int, int]
+    image_size: tuple[int, int],
+    window_size: tuple[int, int],
+    overlap: tuple[int, int],
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Compute coordinates of interrogation window centers.
 
@@ -334,7 +363,9 @@ def get_rect_coordinates(
     return X.flatten(), Y.flatten()
 
 
-def upsample_flow(flows: jnp.ndarray, image_shape: tuple[int, int]) -> jnp.ndarray:
+def upsample_flow(
+    flows: jnp.ndarray, image_shape: tuple[int, int]
+) -> jnp.ndarray:
     """Upsample flow field to match the target image shape.
 
     Args:
@@ -350,15 +381,16 @@ def upsample_flow(flows: jnp.ndarray, image_shape: tuple[int, int]) -> jnp.ndarr
             + f"instead {flows.shape}"
         )
         assert flows.shape[-1] == 2, "Flow field must have 2 channels"
-        assert (
-            len(image_shape) == 2
-        ), f"Image shape must be a tuple of (height, width), instead {image_shape}"
-        assert isinstance(
-            image_shape[0], int
-        ), f"Image height must be an integer, instead {image_shape[0]}"
-        assert isinstance(
-            image_shape[1], int
-        ), f"Image width must be an integer, instead {image_shape[1]}"
+        assert len(image_shape) == 2, (
+            f"Image shape must be a tuple of (height, width), "
+            f"instead {image_shape}"
+        )
+        assert isinstance(image_shape[0], int), (
+            f"Image height must be an integer, instead {image_shape[0]}"
+        )
+        assert isinstance(image_shape[1], int), (
+            f"Image width must be an integer, instead {image_shape[1]}"
+        )
         assert image_shape[0] >= flows.shape[1], (
             "Image height must be greater or equal to flow field height, "
             + f"instead {image_shape[0]} and {flows.shape[1]}"

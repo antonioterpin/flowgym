@@ -1,17 +1,20 @@
-import pytest
-import numpy as np
+"""Tests for openpiv_jax module."""
+
 import jax.numpy as jnp
+import numpy as np
+import pytest
+from openpiv import pyprocess
+
 from flowgym.flow.open_piv.process import (
-    get_field_shape,
-    get_rect_coordinates,
-    sliding_window_array,
-    normalize_intensity,
     fft_correlate_images,
     find_all_first_peaks,
+    get_field_shape,
+    get_rect_coordinates,
+    normalize_intensity,
+    sliding_window_array,
     subpixel_displacement,
     upsample_flow,
 )
-from openpiv import pyprocess
 
 
 @pytest.fixture
@@ -86,7 +89,9 @@ def test_upsample_flow():
     ],
 )
 def test_get_field_shape_parametrized(image_size, search_area_size, overlap):
-    expected = tuple(pyprocess.get_field_shape(image_size, search_area_size, overlap))
+    expected = tuple(
+        pyprocess.get_field_shape(image_size, search_area_size, overlap)
+    )
     got = get_field_shape(image_size, search_area_size, overlap)
     assert got == expected, (
         f"mismatch for image_size={image_size}, "
@@ -96,7 +101,7 @@ def test_get_field_shape_parametrized(image_size, search_area_size, overlap):
 
 
 def test_get_field_shape_with_random_images(random_images):
-    img1, img2 = random_images
+    img1, _ = random_images
     # take the shape of one frame (batch dim ignored)
     H, W = img1.shape[1], img1.shape[2]
 
@@ -112,7 +117,7 @@ def test_get_field_shape_with_random_images(random_images):
 @pytest.mark.parametrize(
     "image_size, window_size, overlap, expected_centers",
     [
-        # simple square case: 3×3 grid at [16, 32, 48] in both dims
+        # simple square case: 3x3 grid at [16, 32, 48] in both dims
         (
             (64, 64),
             (32, 32),
@@ -122,16 +127,16 @@ def test_get_field_shape_with_random_images(random_images):
                 "ys": np.array([16, 32, 48]),
             },
         ),
-        # rectangular image, non‐square windows
+        # rectangular image, non-square windows
         (
             (100, 80),
             (20, 10),
             (5, 2),
             {
-                # sh = 20−5=15 ⇒ ny=(100−20)//15+1 = 6
+                # sh = 20-5=15 ⇒ ny=(100-20)//15+1 = 6
                 # offsets: 10*0.5=10, then +15, …
                 "ys": np.arange(6) * 15 + 10,
-                # sw = 10−2=8 ⇒ nx=(80−10)//8+1 = 9
+                # sw = 10-2=8 ⇒ nx=(80 - 10)//8+1 = 9
                 # offsets: 10*0.5=5, then +8, …
                 "xs": np.arange(9) * 8 + 5,
             },
@@ -154,21 +159,23 @@ def test_get_rect_coordinates_parametrized(
     xs, ys = get_rect_coordinates(image_size, window_size, overlap)
 
     # reshape back to grid for easier comparison
-    ny, nx = (image_size[0] - window_size[0]) // (window_size[0] - overlap[0]) + 1, (
-        image_size[1] - window_size[1]
-    ) // (window_size[1] - overlap[1]) + 1
-    X = xs.reshape(ny, nx)
-    Y = ys.reshape(ny, nx)
+    ny, nx = (
+        (image_size[0] - window_size[0]) // (window_size[0] - overlap[0]) + 1,
+        (image_size[1] - window_size[1]) // (window_size[1] - overlap[1]) + 1,
+    )
+    x = xs.reshape(ny, nx)
+    y = ys.reshape(ny, nx)
 
     # check first row/column match expected offsets
-    np.testing.assert_allclose(X[0], expected_centers["xs"], rtol=1e-6)
-    np.testing.assert_allclose(Y[:, 0], expected_centers["ys"], rtol=1e-6)
+    np.testing.assert_allclose(x[0], expected_centers["xs"], rtol=1e-6)
+    np.testing.assert_allclose(y[:, 0], expected_centers["ys"], rtol=1e-6)
 
-    # check meshgrid property: every row of Y is constant, every column of X is constant
+    # check meshgrid property: every row of Y is constant, every column
+    # of X is constant
     for i in range(ny):
-        assert np.allclose(Y[i, :], expected_centers["ys"][i], rtol=1e-6)
+        assert np.allclose(y[i, :], expected_centers["ys"][i], rtol=1e-6)
     for j in range(nx):
-        assert np.allclose(X[:, j], expected_centers["xs"][j], rtol=1e-6)
+        assert np.allclose(x[:, j], expected_centers["xs"][j], rtol=1e-6)
 
 
 def test_number_of_centers_matches_field_shape(
@@ -193,10 +200,12 @@ def test_get_rect_coordinates_with_random_images(random_images):
     overlap = (16, 16)
 
     xs, ys = get_rect_coordinates(image_size, window_size, overlap)
-    X_ref, Y_ref = pyprocess.get_rect_coordinates(image_size, window_size, overlap)
+    x_ref, y_ref = pyprocess.get_rect_coordinates(
+        image_size, window_size, overlap
+    )
 
-    np.testing.assert_allclose(xs, X_ref.flatten(), rtol=1e-6)
-    np.testing.assert_allclose(ys, Y_ref.flatten(), rtol=1e-6)
+    np.testing.assert_allclose(xs, x_ref.flatten(), rtol=1e-6)
+    np.testing.assert_allclose(ys, y_ref.flatten(), rtol=1e-6)
 
 
 def test_normalize_intensity(random_images):
@@ -220,7 +229,7 @@ def test_sliding_window(random_images):
 
     assert sol.shape == (img1.shape[0] * 2, n_rows * n_cols, *search_area_size)
 
-    for i, sj in zip(np.concatenate((img1, img2), axis=0), sol):
+    for i, sj in zip(np.concatenate((img1, img2), axis=0), sol, strict=True):
         assert i.shape == img1.shape[1:]
         assert sj.shape == (n_rows * n_cols, *search_area_size)
 
@@ -242,12 +251,14 @@ def test_fft_correlate_images(random_images):
     bb = sliding_window_array(img2, search_area_size, overlap)
 
     corr = fft_correlate_images(aa, bb)
-    for c, a, b in zip(corr, aa, bb):
-        for cw, aw, bw in zip(c, a, b):
+    for c, a, b in zip(corr, aa, bb, strict=True):
+        for cw, aw, bw in zip(c, a, b, strict=True):
             assert cw.shape == search_area_size
             assert aw.shape == search_area_size
             assert bw.shape == search_area_size
-            corr_gt = pyprocess.fft_correlate_images(np.asarray(aw), np.asarray(bw))
+            corr_gt = pyprocess.fft_correlate_images(
+                np.asarray(aw), np.asarray(bw)
+            )
             np.testing.assert_allclose(cw, corr_gt, rtol=1e-6)
 
 
@@ -263,7 +274,7 @@ def test_find_all_first_peaks(random_images):
     peaks_i, peaks_j = find_all_first_peaks(corr)
 
     n_rows, n_cols = get_field_shape(img1.shape[1:], search_area_size, overlap)
-    for c, pi, pj in zip(corr, peaks_i, peaks_j):
+    for c, pi, pj in zip(corr, peaks_i, peaks_j, strict=True):
         assert c.shape == (n_rows * n_cols, *search_area_size)
         assert pi.shape == (n_rows * n_cols,)
         assert pj.shape == (n_rows * n_cols,)

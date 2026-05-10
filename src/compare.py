@@ -1,31 +1,27 @@
 """Comparison script for the different samplers."""
 
-from collections.abc import Callable
-import time
 import sys
-from synthpix import SynthpixBatch
+import time
+from collections.abc import Callable
 
-
-import numpy as np
 import jax.numpy as jnp
-import jax
-import flowgym
+import numpy as np
 from goggles import get_logger
 from goggles.types import Metrics
-from flowgym.utils import (
-    write_dicts_to_csv,
-)
-from synthpix.sampler import SyntheticImageSampler, RealImageSampler
+from synthpix import SynthpixBatch
+from synthpix.sampler import RealImageSampler, SyntheticImageSampler
 
-# Models
-from flowgym.common.base import EstimatorTrainableState
-from flowgym.common.base import Estimator
-from flowgym.types import PRNGKey
+import flowgym
+
+# Estimators
+from flowgym.common.base import Estimator, EstimatorTrainableState
 
 # Utils
 from flowgym.common.evaluation import compute_stats
+from flowgym.types import PRNGKey
 from flowgym.utils import (
     GracefulShutdown,
+    write_dicts_to_csv,
 )
 
 sys.modules["estimator"] = flowgym
@@ -34,19 +30,19 @@ logger = get_logger(__name__, with_metrics=True)
 
 
 def compare_performances_on_batches(
-    model: Estimator,
+    estimator: Estimator,
     trained_state: EstimatorTrainableState,
     create_state_fn: Callable,
     compute_flow_fn: Callable,
     batch1: SynthpixBatch,
     batch2: SynthpixBatch,
-    key: PRNGKey = jax.random.PRNGKey(0),
+    key: PRNGKey | None = None,
 ) -> Metrics:
     """Compare the estimator on two batches using the provided estimator.
 
     Args:
-        model: The model to evaluate.
-        trained_state: The trained state of the model.
+        estimator: The estimator to evaluate.
+        trained_state: The trained state of the estimator.
         create_state_fn: Function to create the state.
         compute_flow_fn: Function to compute the flow.
         batch1: The first batch of images.
@@ -55,6 +51,9 @@ def compare_performances_on_batches(
 
     Returns:
         Metrics: The metrics containing the comparison results.
+
+    Raises:
+        ValueError: If ground truth flow fields are not equal.
     """
     img1_1 = batch1.images1
     img2_1 = batch1.images2
@@ -66,10 +65,11 @@ def compare_performances_on_batches(
 
     # Check if the gt are the same
     if not jnp.isclose(flow_field_gt_1, flow_field_gt_2, atol=1e-4).all():
+        max_diff = jnp.max(jnp.abs(flow_field_gt_1 - flow_field_gt_2))
         raise ValueError(
-            "The ground truth flow fields from the two batches are not equal. "
-            "This is not supported in this comparison script."
-            f"Max difference: {jnp.max(jnp.abs(flow_field_gt_1 - flow_field_gt_2))}"
+            "The ground truth flow fields from the two batches are not "
+            "equal. This is not supported in this comparison script. "
+            f"Max difference: {max_diff}"
         )
 
     # Create the estimation state
@@ -91,8 +91,8 @@ def compare_performances_on_batches(
     t2 = time.time() - t2
 
     # Post process the metrics
-    metrics1 = model.process_metrics(metrics1)
-    metrics2 = model.process_metrics(metrics2)
+    metrics1 = estimator.process_metrics(metrics1)
+    metrics2 = estimator.process_metrics(metrics2)
 
     flow_field_1 = estimation_state1["estimates"][:, -1]
     flow_field_2 = estimation_state2["estimates"][:, -1]
@@ -121,34 +121,39 @@ def compare_performances_on_batches(
 
 
 def comparison(
-    model_config: dict,
+    estimator_config: dict,
     sampler1: SyntheticImageSampler,
     sampler2: RealImageSampler,
-    model: Estimator,
+    estimator: Estimator,
     create_state_fn: Callable,
     compute_estimate_fn: Callable,
-    trainable_state: EstimatorTrainableState | None,
-    key: PRNGKey = jax.random.PRNGKey(0),
+    trainable_state: EstimatorTrainableState,
+    key: PRNGKey | None = None,
 ) -> None:
     """Compare the flow field between real and synthetic images.
 
     Args:
-        model_config: Configuration of the model.
+        estimator_config: Configuration of the estimator.
         sampler1: The image sampler for comparison.
         sampler2: The second image sampler for comparison.
-        model: The model to evaluate.
+        estimator: The estimator to evaluate.
         create_state_fn: Function to create the state.
         compute_estimate_fn: Function to compute the estimate.
-        trainable_state: The trained state of the model.
+        trainable_state: The trained state of the estimator.
         key: Random key for JAX operations.
+
+    Raises:
+        ValueError: If estimate_type is not 'flow'.
     """
-    if model_config["estimate_type"] != "flow":
+    if estimator_config["estimate_type"] != "flow":
         raise ValueError(
-            f"Invalid estimate type: {model_config['estimate_type']}. "
+            f"Invalid estimate type: {estimator_config['estimate_type']}. "
             "Only 'flow' is supported for full comparison."
         )
 
-    with (GracefulShutdown("Stop detected, finishing batch...") as g,):
+    with (
+        GracefulShutdown("Stop detected, finishing batch...") as g,
+    ):
         epe_list = []
         for i, batch1 in enumerate(sampler1):
             try:
@@ -156,12 +161,13 @@ def comparison(
                 batch2 = next(sampler2)
             except StopIteration:
                 logger.warning(
-                    f"Sampler2 has no more batches while sampler1 has {i + 1} batches."
+                    f"Sampler2 has no more batches while sampler1 has "
+                    f"{i + 1} batches."
                 )
                 break
 
             metrics = compare_performances_on_batches(
-                model=model,
+                estimator=estimator,
                 trained_state=trainable_state,
                 create_state_fn=create_state_fn,
                 compute_flow_fn=compute_estimate_fn,
@@ -174,9 +180,14 @@ def comparison(
             if isinstance(metrics["epe_between_batches"], np.ndarray):
                 errors = metrics["epe_between_batches"][batch1.mask]
             for k, v in metrics.items():
-                if isinstance(v, np.ndarray) and v.shape[0] == batch1.images1.shape[0]:
-                    v = v[batch1.mask]
-                if k != "epe_between_batches":
+                if (
+                    isinstance(v, np.ndarray)
+                    and v.shape[0] == batch1.images1.shape[0]
+                ):
+                    masked_v = v[batch1.mask]
+                    if k != "epe_between_batches":
+                        logger.info(f"Batch {i + 1} - {k}: {masked_v}")
+                elif k != "epe_between_batches":
                     logger.info(f"Batch {i + 1} - {k}: {v}")
             logger.push(metrics=metrics, step=i)
 
@@ -205,7 +216,7 @@ def comparison(
         stats_dict = compute_stats(jnp.array(epe_list))
         write_dicts_to_csv(
             "comparison_results.csv",
-            [stats_dict],
+            [dict(stats_dict)],
         )
 
         logger.info("Comparison completed successfully.")

@@ -249,16 +249,18 @@ def test_experiment_launcher_preserves_relative_model_paths(
 
     run_script.main()
 
-    generated_models = [Path(cmd[cmd.index("--model") + 1]) for cmd in calls]
-    assert len(generated_models) == 2
-    assert generated_models[0] != generated_models[1]
+    generated_estimators = [
+        Path(cmd[cmd.index("--estimator") + 1]) for cmd in calls
+    ]
+    assert len(generated_estimators) == 2
+    assert generated_estimators[0] != generated_estimators[1]
     assert (
-        generated_models[0]
+        generated_estimators[0]
         .as_posix()
         .endswith("_generated/models/group_a/model.yaml")
     )
     assert (
-        generated_models[1]
+        generated_estimators[1]
         .as_posix()
         .endswith("_generated/models/group_b/model.yaml")
     )
@@ -316,7 +318,7 @@ def test_setup_study_run_collects_git_state_once_around_wandb_init(
     }
     args = argparse.Namespace(
         mode="eval",
-        model="model.yaml",
+        estimator="model.yaml",
         dataset="dataset.yaml",
         debug=False,
     )
@@ -346,7 +348,7 @@ def test_setup_study_run_collects_git_state_once_around_wandb_init(
     }
     assert handler_kwargs["config"]["out_dir"] is None
     assert ("artifact", "dataset_config") in events
-    assert ("artifact", "model_config") in events
+    assert ("artifact", "estimator_config") in events
 
 
 def test_prepare_configs_defers_git_state_for_study_runs(
@@ -384,7 +386,7 @@ def test_prepare_configs_defers_git_state_for_study_runs(
 
     args = argparse.Namespace(
         mode="eval",
-        model=str(model_yaml),
+        estimator=str(model_yaml),
         dataset=str(dataset_yaml),
         debug=False,
     )
@@ -425,7 +427,7 @@ def test_prepare_configs_merges_study_and_dataset_tags_for_wandb(
 
     args = argparse.Namespace(
         mode="eval",
-        model=str(model_yaml),
+        estimator=str(model_yaml),
         dataset=str(dataset_yaml),
         debug=False,
     )

@@ -1,6 +1,8 @@
-import pytest
+"""Tests for base_estimator module."""
+
 import jax
 import jax.numpy as jnp
+import pytest
 
 from flowgym.common.base import Estimator
 
@@ -18,7 +20,7 @@ def dummy_estimator():
 
 
 def test_create_state_shapes_basic(dummy_estimator):
-    """Ensure 'images' and 'estimates' histories are created with correct shapes."""
+    """Ensure 'images', 'estimates' histories created with right shapes."""
     B, H, W = 3, 16, 16
     images = jnp.ones((B, H, W))
     estimates = jnp.zeros((B, 2))
@@ -43,8 +45,18 @@ def test_create_state_with_extras(dummy_estimator):
     images = jnp.zeros((B, H, W))
     estimates = jnp.ones((B, 4))
     extras = {
-        "reward": {"length": 3, "shape": (), "dtype": jnp.float32, "init": "zeros"},
-        "mask": {"length": 3, "shape": (1,), "dtype": jnp.int32, "init": "zeros"},
+        "reward": {
+            "length": 3,
+            "shape": (),
+            "dtype": jnp.float32,
+            "init": "zeros",
+        },
+        "mask": {
+            "length": 3,
+            "shape": (1,),
+            "dtype": jnp.int32,
+            "init": "zeros",
+        },
     }
     history = dummy_estimator.create_state(
         images,
@@ -92,13 +104,17 @@ def test_invalid_shapes_raise(dummy_estimator):
     bad_images = jnp.ones((4, 4))
     good_estimates = jnp.zeros((4, 2))
     with pytest.raises(ValueError, match="must have shape"):
-        dummy_estimator.create_state(bad_images, good_estimates, image_history_size=2)
+        dummy_estimator.create_state(
+            bad_images, good_estimates, image_history_size=2
+        )
 
     # Mismatched batch size
     good_images = jnp.ones((3, 4, 4))
     bad_estimates = jnp.zeros((2, 3))
     with pytest.raises(ValueError, match="Batch size mismatch"):
-        dummy_estimator.create_state(good_images, bad_estimates, image_history_size=2)
+        dummy_estimator.create_state(
+            good_images, bad_estimates, image_history_size=2
+        )
 
 
 def test_invalid_rng_type_raises(dummy_estimator):

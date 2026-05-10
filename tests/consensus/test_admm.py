@@ -1,6 +1,9 @@
-import pytest
-import jax.numpy as jnp
+"""Tests for admm module."""
+
 import jax
+import jax.numpy as jnp
+import pytest
+
 import flowgym.flow.consensus.admm as consensus_mod
 
 
@@ -105,8 +108,11 @@ def test_run_admm_runs_correct_number_of_iterations(max_iters, N, H, W, C):
 
 @pytest.mark.usefixtures("dummy_solvers")
 @pytest.mark.parametrize("N, H, W, C", [(3, 2, 2, 1)])
-def test_run_admm_returns_consensus_mean_when_solvers_do_nothing(N, H, W, C):
-    """solvers return unchanged input, consensus_flow is the mean of original flows."""
+def test_run_admm_consensus_mean_with_noop_solvers(N, H, W, C):
+    """Solvers return unchanged input.
+
+    consensus_flow is the mean of original flows.
+    """
     flows = jnp.arange(N * H * W * C).reshape(N, H, W, C).astype(jnp.float32)
 
     # Solvers just return inputs, no changes

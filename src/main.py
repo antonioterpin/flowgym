@@ -1,42 +1,41 @@
 """Training and evaluation script for the different estimators."""
 
 import argparse
-import os
 import time
-import sys
 
-os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
-os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.5"
-os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
-
-# Make flow_estimator available as a module for pickle loading
-import flowgym
-
-sys.modules["flow_estimator"] = flowgym
-
-import jax  # noqa: E402
-import jax.numpy as jnp  # noqa: E402
-import synthpix  # noqa: E402
 import goggles as gg
+import jax
+import jax.numpy as jnp
+import synthpix
+from synthpix.sampler import (
+    RealImageSampler,
+    SyntheticImageSampler,
+)
+
+from compare import comparison
+from eval import eval, eval_full_dataset
+from flowgym.common.base import NNEstimatorTrainableState
 
 # Training environment
-from flowgym.environment.fluid_env import FluidEnv  # noqa: E402
-from train import train  # noqa: E402
-from train_supervised import train_supervised  # noqa: E402
-from synthpix.sampler import SyntheticImageSampler, RealImageSampler  # noqa: E402
+from flowgym.environment.fluid_env import FluidEnv
+from flowgym.make import make_estimator, select_gt
+from flowgym.run_setup import prepare_configs, setup_study_run
+from flowgym.training.caching import CacheManager
 
 # Utils
-from flowgym.run_setup import prepare_configs, setup_study_run  # noqa: E402
-from flowgym.utils import setup_logging  # noqa: E402
-from flowgym.make import make_estimator, select_gt  # noqa: E402
-from eval import eval_full_dataset, eval  # noqa: E402
-from compare import comparison  # noqa: E402
+from flowgym.utils import setup_logging
+from train import train
+from train_supervised import train_supervised
 
 logger = setup_logging(debug=False, use_wandb=False)
 
 
 def parse_args():
-    """Parse command line arguments."""
+    """Parse command line arguments.
+
+    Returns:
+        Parsed command line arguments.
+    """
     parser = argparse.ArgumentParser(
         description="Run the SyntheticImageSampler pipeline."
     )
@@ -45,16 +44,22 @@ def parse_args():
         "--mode",
         type=str,
         default="main",
-        choices=["main", "train", "eval", "compare_samplers", "train_supervised"],
+        choices=[
+            "main",
+            "train",
+            "eval",
+            "compare-samplers",
+            "train-supervised",
+        ],
         help="Mode of operation: 'main' for playing around, "
         "'eval' for evaluation only.",
     )
 
     parser.add_argument(
-        "--model",
+        "--estimator",
         type=str,
         required=True,
-        help="Configuration of the model to use.",
+        help="Configuration of the estimator to use.",
     )
 
     parser.add_argument(
@@ -76,7 +81,7 @@ if __name__ == "__main__":
     (
         dataset_config,
         dataset_config_to_compare,
-        model_config,
+        estimator_config,
         out_dir,
         validation_settings,
         caching_config,
@@ -91,18 +96,20 @@ if __name__ == "__main__":
             wandb_setup,
             dataset_config,
             dataset_config_to_compare,
-            model_config,
+            estimator_config,
             validation_settings,
         )
     if out_dir is not None:
-        logger.info(f"Saving models in directory: {out_dir}")
+        logger.info(f"Saving estimators in directory: {out_dir}")
 
     key = jax.random.PRNGKey(dataset_config["seed"])
     key, subkey = jax.random.split(key)
 
-    if args.mode not in ["train", "train_supervised"]:
+    if args.mode not in ["train", "train-supervised"]:
         # Load the dataset sampler
-        sampler = synthpix.make(dataset_config)
+        sampler = synthpix.make(
+            dataset_config, load_from=dataset_config.get("load_from")
+        )
 
         logger.info("Dataset loaded successfully.")
 
@@ -116,7 +123,7 @@ if __name__ == "__main__":
             raise  # Re-raise the exception after shutdown
 
         gt = select_gt(
-            model_config["estimate_type"],
+            estimator_config["estimate_type"],
             batch,
         )
     else:
@@ -128,9 +135,12 @@ if __name__ == "__main__":
             # Reset the environment
             # obs is the image pair (prev, curr)
             obs, env_state, done = env.reset(env_state)
+            sampler = env_state[0]
 
             if env_state[1] is None:
-                raise ValueError("Groundtruth flow fields in env_state cannot be None.")
+                raise ValueError(
+                    "Groundtruth flow fields in env_state cannot be None."
+                )
             gt = env_state[1]
 
             logger.info("Environment created successfully.")
@@ -148,53 +158,107 @@ if __name__ == "__main__":
             sampler.shutdown()
             gg.finish()
 
-    estimate_shape = model_config.get("estimate_shape", None)
+    estimate_shape = estimator_config.get("estimate_shape", None)
     if estimate_shape is not None:
         estimate_shape = (batch.images1.shape[0], *tuple(estimate_shape))
     else:
         estimate_shape = gt.shape
 
     # Create the estimator
-    (trainable_state, create_state_fn, compute_estimate_fn, model) = make_estimator(
-        model_config,
-        image_shape=(batch.images1.shape[0], *dataset_config["image_shape"]),
-        estimate_shape=estimate_shape,
-        load_from=model_config.get("load_from", None),
-        rng=subkey,
+    (trainable_state, create_state_fn, compute_estimate_fn, estimator) = (
+        make_estimator(
+            estimator_config,
+            image_shape=(
+                batch.images1.shape[0],
+                *dataset_config["image_shape"],
+            ),
+            estimate_shape=estimate_shape,
+            load_from=estimator_config.get("load_from", None),
+            rng=subkey,
+        )
     )
+    val_sampler = None
+    val_interval = None
+    val_num_batches = 1
+    if (
+        args.mode in ["train", "train-supervised"]
+        and validation_settings is not None
+    ):
+        val_dataset_config = validation_settings["dataset_config"]
+        val_interval = validation_settings.get("interval")
+        val_num_batches = validation_settings.get("num_batches", 1)
+        val_sampler = synthpix.make(
+            val_dataset_config, load_from=val_dataset_config.get("load_from")
+        )
+        logger.info("Validation sampler created successfully.")
 
     if args.mode == "eval":
         if create_state_fn is None or compute_estimate_fn is None:
             raise ValueError(
-                "create_state_fn and compute_estimate_fn must be provided for evaluation."
+                "create_state_fn and compute_estimate_fn must be provided "
+                "for evaluation."
             )
+
+        # Caching Setup
+        cache_manager = None
+        if caching_config:
+            logger.info(
+                "Initializing CacheManager from dataset config: "
+                f"{caching_config}"
+            )
+            # Append estimator-specific suffix to cache_id (e.g. weight hash)
+            if "cache_id" in caching_config:
+                suffix = estimator.get_cache_id_suffix(trainable_state)
+                if suffix:
+                    caching_config["cache_id"] += suffix
+                    cache_id = caching_config["cache_id"]
+                    logger.info(
+                        f"Updated cache_id with estimator suffix: {cache_id}"
+                    )
+
+            cache_manager = CacheManager(**caching_config)
+
         try:
             eval_full_dataset(
-                model=model,
+                estimator=estimator,
                 sampler=sampler,
                 create_state_fn=create_state_fn,
                 compute_estimate_fn=compute_estimate_fn,
                 trainable_state=trainable_state,
-                estimate_type=model_config["estimate_type"],
+                estimate_type=estimator_config["estimate_type"],
                 key=key,
+                print_files=dataset_config.get("print_files", False),
+                num_batches=dataset_config.get("num_batches", None),
+                cache_manager=cache_manager,
             )
         finally:
             sampler.shutdown()
+            if cache_manager is not None:
+                cache_manager.close()
             time.sleep(5)  # wait for the sampler to shutdown properly
             gg.finish()
     elif args.mode == "train":
         if out_dir is None:
             raise ValueError("out_dir must be provided for training mode.")
         if trainable_state is None:
-            raise ValueError("trainable_state must be provided for training mode.")
+            raise ValueError(
+                "trainable_state must be provided for training mode."
+            )
         if create_state_fn is None or compute_estimate_fn is None:
             raise ValueError(
-                "create_state_fn and compute_estimate_fn must be provided for training."
+                "create_state_fn and compute_estimate_fn must be provided "
+                "for training."
             )
+        if not isinstance(trainable_state, NNEstimatorTrainableState):
+            raise ValueError(
+                "trainable_state must be an instance of "
+                "NNEstimatorTrainableState."
+            )
+
         try:
             train(
-                model=model,
-                model_config=model_config,
+                estimator=estimator,
+                estimator_config=estimator_config,
                 trainable_state=trainable_state,
                 out_dir=out_dir,
                 create_state_fn=create_state_fn,
@@ -206,34 +270,110 @@ if __name__ == "__main__":
                 log_every=dataset_config.get("log_every", 100),
                 obs=obs,
                 key=key,
+                replay_buffer_capacity=estimator_config["config"]
+                .get("replay_buffer_config", {})
+                .get(
+                    "capacity",
+                    dataset_config.get("replay_buffer_capacity", 10000),
+                ),
+                replay_ratio=estimator_config["config"]
+                .get("replay_buffer_config", {})
+                .get("replay_ratio", dataset_config.get("replay_ratio", 0.0)),
+                prefetch_replay_size=estimator_config["config"]
+                .get("replay_buffer_config", {})
+                .get(
+                    "prefetch_replay_size",
+                    dataset_config.get("prefetch_replay_size", 0),
+                ),
             )
         finally:
             sampler = env_state[0]
             sampler.shutdown()
             time.sleep(5)  # wait for the sampler to shutdown properly
             gg.finish()
-    elif args.mode == "train_supervised":
+    elif args.mode == "train-supervised":
         if trainable_state is None:
-            raise ValueError("trainable_state must be provided for training mode.")
+            raise ValueError(
+                "trainable_state must be provided for training mode."
+            )
         if out_dir is None:
             raise ValueError("out_dir must be provided for training mode.")
+        if create_state_fn is None or compute_estimate_fn is None:
+            raise ValueError(
+                "create_state_fn and compute_estimate_fn must be provided "
+                "for training."
+            )
+        if sampler is None:
+            raise ValueError(
+                "sampler must be provided for supervised training mode."
+            )
+        if not isinstance(trainable_state, NNEstimatorTrainableState):
+            raise ValueError(
+                "trainable_state must be an instance of "
+                "NNEstimatorTrainableState."
+            )
+
+        logger.info("Training supervised estimator...")
+
+        # Caching Setup
+        cache_manager = None
+        if caching_config:
+            logger.info(
+                "Initializing CacheManager from dataset config: "
+                f"{caching_config}"
+            )
+            # Append estimator-specific suffix to cache_id (e.g. weight hash)
+            if "cache_id" in caching_config:
+                suffix = estimator.get_cache_id_suffix(trainable_state)
+                if suffix:
+                    caching_config["cache_id"] += suffix
+                    cache_id = caching_config["cache_id"]
+                    logger.info(
+                        f"Updated cache_id with estimator suffix: {cache_id}"
+                    )
+            cache_manager = CacheManager(**caching_config)
+
         try:
             train_supervised(
-                model=model,
-                model_config=model_config,
+                estimator=estimator,
+                estimator_config=estimator_config,
                 trainable_state=trainable_state,
                 out_dir=out_dir,
                 create_state_fn=create_state_fn,
-                env=env,
-                env_state=env_state,
-                num_episodes=dataset_config.get("num_episodes", 1000),
+                compute_estimate_fn=compute_estimate_fn,
+                sampler=sampler,
+                val_sampler=val_sampler,
+                val_interval=val_interval,
+                val_num_batches=val_num_batches,
+                num_batches=dataset_config.get("num_batches", 1000),
+                estimate_type=estimator_config["estimate_type"],
                 save_every=dataset_config.get("save_every", 100),
-                obs=obs,
+                log_every=dataset_config.get("log_every", 1),
+                save_only_best=dataset_config.get("save_only_best", False),
                 key=key,
+                replay_buffer_capacity=estimator_config["config"]
+                .get("replay_buffer_config", {})
+                .get(
+                    "capacity",
+                    dataset_config.get("replay_buffer_capacity", 0),
+                ),
+                replay_ratio=estimator_config["config"]
+                .get("replay_buffer_config", {})
+                .get("replay_ratio", dataset_config.get("replay_ratio", 0.0)),
+                prefetch_replay_size=estimator_config["config"]
+                .get("replay_buffer_config", {})
+                .get(
+                    "prefetch_replay_size",
+                    dataset_config.get("prefetch_replay_size", 0),
+                ),
+                cache_manager=cache_manager,
             )
         finally:
-            sampler = env_state[0]
             sampler.shutdown()
+            if val_sampler is not None:
+                val_sampler.shutdown()
+            if cache_manager is not None:
+                cache_manager.close()
             time.sleep(5)  # wait for the sampler to shutdown properly
             gg.finish()
     elif args.mode == "main":
@@ -244,7 +384,7 @@ if __name__ == "__main__":
                 if i != 0:
                     batch = next(sampler)
                 eval(
-                    model=model,
+                    estimator=estimator,
                     trainable_state=trainable_state,
                     create_state_fn=create_state_fn,
                     compute_estimate_fn=compute_estimate_fn,
@@ -255,23 +395,32 @@ if __name__ == "__main__":
             sampler.shutdown()
             time.sleep(5)  # wait for the sampler to shutdown properly
             gg.finish()
-    elif args.mode == "compare_samplers":
+
+    elif args.mode == "compare-samplers":
         if create_state_fn is None:
-            raise ValueError("create_state_fn must be provided for comparison mode.")
+            raise ValueError(
+                "create_state_fn must be provided for comparison mode."
+            )
         # create a second sampler to load real images from files
         assert dataset_config_to_compare is not None
-        sampler2 = synthpix.make(dataset_config_to_compare)
+        sampler2 = synthpix.make(
+            dataset_config_to_compare,
+            load_from=dataset_config_to_compare.get("load_from"),
+        )
         if not isinstance(sampler, SyntheticImageSampler):
-            raise TypeError("sampler must be an instance of SyntheticImageSampler.")
+            raise TypeError(
+                "sampler must be an instance of SyntheticImageSampler."
+            )
         if not isinstance(sampler2, RealImageSampler):
             raise TypeError("sampler2 must be an instance of RealImageSampler.")
         try:
             batch2 = next(sampler2)
+            assert trainable_state is not None
             comparison(
-                model_config=model_config,
+                estimator_config=estimator_config,
                 sampler1=sampler,
                 sampler2=sampler2,
-                model=model,
+                estimator=estimator,
                 create_state_fn=create_state_fn,
                 compute_estimate_fn=compute_estimate_fn,
                 trainable_state=trainable_state,

@@ -41,7 +41,7 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def main() -> None:  # noqa: PLR0912, PLR0915
+def main() -> None:
     """Expand the experiment matrix and shell out to the entrypoint per cell."""
     args = parse_args()
     exp_dir = (Path(args.exp_root) / args.exp).resolve()
@@ -179,7 +179,7 @@ def main() -> None:  # noqa: PLR0912, PLR0915
                     str(entry_path),
                     "--mode",
                     mode,
-                    "--model",
+                    "--estimator",
                     str(model_path),
                     "--dataset",
                     str(dataset_path),

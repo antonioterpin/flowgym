@@ -1,7 +1,7 @@
 """Base module for estimators."""
 
 from .estimator import Estimator
-from .trainable_states import EstimatorTrainableState, NNEstimatorTrainableState
+from .trainable_state import EstimatorTrainableState, NNEstimatorTrainableState
 
 __all__ = [
     "Estimator",

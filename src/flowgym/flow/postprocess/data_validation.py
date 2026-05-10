@@ -1,10 +1,11 @@
-"""Module for data validation and outlier detection in optical flow estimation."""
+"""Data validation and outlier detection utilities for optical flow."""
 
-from jax import lax
 import jax.numpy as jnp
+from goggles.history.types import History
+from jax import lax
+
 from flowgym.common.median import median
 from flowgym.utils import DEBUG
-from goggles.history.types import History
 
 
 def constant_threshold_filter_validate_params(
@@ -120,7 +121,9 @@ def adaptive_local_filter_validate_params(
     if n_sigma <= 0:
         raise ValueError(f"Invalid n_sigma: {n_sigma}. Must be positive.")
     if not isinstance(radius, int) or radius < 0:
-        raise ValueError(f"Invalid radius: {radius}. Must be a non-negative integer.")
+        raise ValueError(
+            f"Invalid radius: {radius}. Must be a non-negative integer."
+        )
 
 
 def adaptive_local_filter(
@@ -148,7 +151,9 @@ def adaptive_local_filter(
         Current state of the estimator.
     """
     if DEBUG:
-        assert isinstance(flow_field, jnp.ndarray), "Flow field must be a jnp.ndarray."
+        assert isinstance(flow_field, jnp.ndarray), (
+            "Flow field must be a jnp.ndarray."
+        )
         assert flow_field.ndim == 4, (
             "Flow field must be 4D (batch_size, height, width, channels)."
             + f" Got {flow_field.shape}."
@@ -181,12 +186,15 @@ def adaptive_local_filter(
     upper_bound = means + n_sigma * stds
     lower_bound = means - n_sigma * stds
 
-    valid = valid if valid is not None else jnp.ones(magnitudes.shape, dtype=bool)
+    valid = (
+        valid if valid is not None else jnp.ones(magnitudes.shape, dtype=bool)
+    )
 
     # if outside the bounds, mark as outlier
     return (
         flow_field,
-        jnp.squeeze((centers < lower_bound) | (centers > upper_bound), axis=-1) & valid,
+        jnp.squeeze((centers < lower_bound) | (centers > upper_bound), axis=-1)
+        & valid,
         state,
     )
 
@@ -209,11 +217,15 @@ def universal_median_test_validate_params(
             or radius is negative.
     """
     if not isinstance(r_threshold, (int, float)) or r_threshold <= 0:
-        raise ValueError(f"Invalid r_threshold: {r_threshold}. Must be positive.")
+        raise ValueError(
+            f"Invalid r_threshold: {r_threshold}. Must be positive."
+        )
     if not isinstance(epsilon, (int, float)) or epsilon <= 0:
         raise ValueError(f"Invalid epsilon: {epsilon}. Must be positive.")
     if not isinstance(radius, int) or radius < 0:
-        raise ValueError(f"Invalid radius: {radius}. Must be a non-negative integer.")
+        raise ValueError(
+            f"Invalid radius: {radius}. Must be a non-negative integer."
+        )
 
 
 def universal_median_test(
@@ -245,7 +257,9 @@ def universal_median_test(
         Current state of the estimator.
     """
     if DEBUG:
-        assert isinstance(flow_field, jnp.ndarray), "Flow field must be a jnp.ndarray."
+        assert isinstance(flow_field, jnp.ndarray), (
+            "Flow field must be a jnp.ndarray."
+        )
         assert flow_field.ndim == 4, (
             "Flow field must be 4D (batch_size, height, width, channels)."
             + f" Got {flow_field.shape}."

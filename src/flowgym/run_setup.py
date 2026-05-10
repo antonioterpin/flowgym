@@ -21,7 +21,7 @@ from flowgym.utils import dump_yaml, load_configuration
 logger = gg.get_logger("flowgym", with_metrics=True)
 
 
-def prepare_configs(  # noqa: PLR0912, PLR0915
+def prepare_configs(
     args: argparse.Namespace,
 ) -> tuple[
     dict,
@@ -32,7 +32,7 @@ def prepare_configs(  # noqa: PLR0912, PLR0915
     dict | None,
     dict,
 ]:
-    """Prepare dataset and model configurations based on command line arguments.
+    """Prepare dataset and estimator configurations from CLI arguments.
 
     Args:
         args: Parsed command line arguments.
@@ -42,7 +42,7 @@ def prepare_configs(  # noqa: PLR0912, PLR0915
             - Dataset configuration dictionary.
             - Second dataset configuration dictionary for comparison,
                 if in compare mode.
-            - Model configuration dictionary.
+            - Estimator configuration dictionary.
             - Output directory path if in training mode, else None.
             - Validation settings dictionary, if validation is enabled.
             - Caching configuration dictionary, if caching is enabled.
@@ -58,16 +58,16 @@ def prepare_configs(  # noqa: PLR0912, PLR0915
     caching_config = None
     dataset_tags = None
 
-    # Load the model
-    model_config = load_configuration(args.model)
+    # Load the estimator
+    estimator_config = load_configuration(args.estimator)
 
     # output directory
     out_dir = None
 
-    if args.mode == "compare_samplers":
+    if args.mode == "compare-samplers":
         dataset_config["randomize"] = False
         dataset_config["include_images"] = False
-    if args.mode not in ["train", "train_supervised"]:
+    if args.mode not in ["train", "train-supervised"]:
         dataset_config["loop"] = False
 
     validation_spec = dataset_config.pop("validation", None)
@@ -156,42 +156,44 @@ def prepare_configs(  # noqa: PLR0912, PLR0915
                 parsed_spec[k] = (dtype_str, shape)
             caching_config["spec"] = parsed_spec
 
-    if args.mode == "compare_samplers":
+    if args.mode == "compare-samplers":
         # create a second sampler to load real images from files
         dataset_config2 = load_configuration(args.dataset)
         dataset_config2["include_images"] = True
         dataset_config2["loop"] = False
         dataset_config2["randomize"] = False
 
-    log_model_config = {**model_config}
-    log_model_config["config"] = {**model_config["config"]}
-    for k, v in log_model_config["config"].items():
+    log_estimator_config = {**estimator_config}
+    log_estimator_config["config"] = {**estimator_config["config"]}
+    for k, v in log_estimator_config["config"].items():
         if isinstance(v, str) and v.endswith(".yaml"):
-            log_model_config["config"][k] = load_configuration(v)
+            log_estimator_config["config"][k] = load_configuration(v)
 
     group: str | None = None
     study_logged: dict[str, object] | None = None
     study_tags: dict | None = None
 
-    study = model_config.get("study")
+    study = estimator_config.get("study")
     if study is not None:
         if not isinstance(study, dict):
-            raise ValueError("model_config['study'] must be a dict.")
-        if "run_name" in model_config:
+            raise ValueError("estimator_config['study'] must be a dict.")
+        if "run_name" in estimator_config:
             raise ValueError(
-                "Do not set run_name in model config for study runs."
+                "Do not set run_name in estimator config for study runs."
             )
 
         study_name = study.get("name")
         if not isinstance(study_name, str) or not study_name:
-            raise ValueError("model_config['study']['name'] must be a string.")
+            raise ValueError(
+                "estimator_config['study']['name'] must be a string."
+            )
 
         study_tags = validate_scalar_tags(
-            study.get("tags"), "model_config['study']['tags']"
+            study.get("tags"), "estimator_config['study']['tags']"
         )
         seed = dataset_config["seed"]
         group = study_name
-        model_config["run_name"] = build_study_run_name(study_tags, seed)
+        estimator_config["run_name"] = build_study_run_name(study_tags, seed)
 
         # Git state is collected once later in setup_study_run, while
         # wandb_git_diff_capture is active, so the state_label in the
@@ -202,36 +204,36 @@ def prepare_configs(  # noqa: PLR0912, PLR0915
             "seed": seed,
         }
 
-    if args.mode in {"train", "train_supervised"} and study_logged is None:
-        out_dir = model_config.get("out_dir", "output")
+    if args.mode in {"train", "train-supervised"} and study_logged is None:
+        out_dir = estimator_config.get("out_dir", "output")
         out_dir = os.path.join(
-            out_dir, model_config["estimator"], str(dataset_config["seed"])
+            out_dir, estimator_config["estimator"], str(dataset_config["seed"])
         )
         _create_run_outputs(
-            args, out_dir, model_config, dataset_config, validation_settings
+            args, out_dir, estimator_config, dataset_config, validation_settings
         )
     # For study training runs, out_dir/configs are created later inside
     # setup_study_run, which derives state_label from the captured git state.
 
-    project = model_config.get("project", "FlowGym")
+    project = estimator_config.get("project", "FlowGym")
     if not isinstance(project, str) or not project:
         raise ValueError(
-            "model_config['project'] must be a non-empty string if provided."
+            "estimator_config['project'] must be a non-empty string."
         )
 
-    if study_logged is None and model_config.get("run_name") is None:
+    if study_logged is None and estimator_config.get("run_name") is None:
         dataset_stem = Path(args.dataset).stem
-        model_config["run_name"] = (
-            f"{args.mode}_{model_config['estimator']}_{dataset_stem}"
+        estimator_config["run_name"] = (
+            f"{args.mode}_{estimator_config['estimator']}_{dataset_stem}"
         )
 
     run_tags = wandb_run_tags(study_tags, dataset_tags)
     wandb_setup = {
         "project": project,
-        "run_name": model_config["run_name"],
+        "run_name": estimator_config["run_name"],
         "group": group,
         "config": {
-            "model_config": log_model_config,
+            "estimator_config": log_estimator_config,
             "dataset_config": dataset_config,
             "dataset_config2": dataset_config2,
             "validation": validation_settings,
@@ -250,7 +252,7 @@ def prepare_configs(  # noqa: PLR0912, PLR0915
     return (
         dataset_config,
         dataset_config2,
-        model_config,
+        estimator_config,
         out_dir,
         validation_settings,
         caching_config,
@@ -263,7 +265,7 @@ def setup_study_run(
     wandb_setup: dict,
     dataset_config: dict,
     dataset_config_to_compare: dict | None,
-    model_config: dict,
+    estimator_config: dict,
     validation_settings: dict | None,
 ) -> str | None:
     """Materialize study run outputs and W&B inside one git capture context.
@@ -280,7 +282,7 @@ def setup_study_run(
             into ``config['study']`` and to record the resolved ``out_dir``.
         dataset_config: Resolved primary dataset config.
         dataset_config_to_compare: Optional secondary dataset config.
-        model_config: Resolved model config.
+        estimator_config: Resolved estimator config.
         validation_settings: Optional validation settings.
 
     Returns:
@@ -288,7 +290,7 @@ def setup_study_run(
     """
     with wandb_git_diff_capture() as state_label:
         out_dir: str | None = None
-        if args.mode in {"train", "train_supervised"}:
+        if args.mode in {"train", "train-supervised"}:
             study = wandb_setup["config"]["study"]
             out_dir = os.path.join(
                 "experiments",
@@ -300,7 +302,7 @@ def setup_study_run(
             _create_run_outputs(
                 args,
                 out_dir,
-                model_config,
+                estimator_config,
                 dataset_config,
                 validation_settings,
             )
@@ -313,7 +315,7 @@ def setup_study_run(
         log_initial_config_artifacts(
             dataset_config,
             dataset_config_to_compare,
-            model_config,
+            estimator_config,
             validation_settings,
         )
     return out_dir
@@ -322,7 +324,7 @@ def setup_study_run(
 def log_initial_config_artifacts(
     dataset_config: dict,
     dataset_config_to_compare: dict | None,
-    model_config: dict,
+    estimator_config: dict,
     validation_settings: dict | None,
 ) -> None:
     """Log initial configuration artifacts after W&B is attached.
@@ -330,7 +332,7 @@ def log_initial_config_artifacts(
     Args:
         dataset_config: Resolved primary dataset config to log.
         dataset_config_to_compare: Optional secondary dataset config.
-        model_config: Resolved model config to log.
+        estimator_config: Resolved estimator config to log.
         validation_settings: Optional validation settings.
     """
     if hasattr(logger, "artifact"):
@@ -341,8 +343,8 @@ def log_initial_config_artifacts(
             step=0,
         )
         logger.artifact(
-            data=model_config,
-            name="model_config",
+            data=estimator_config,
+            name="estimator_config",
             format="yaml",
             step=0,
         )
@@ -370,7 +372,7 @@ def log_initial_config_artifacts(
 def _create_run_outputs(
     args: argparse.Namespace,
     out_dir: str,
-    model_config: dict,
+    estimator_config: dict,
     dataset_config: dict,
     validation_settings: dict | None,
 ) -> None:
@@ -379,16 +381,18 @@ def _create_run_outputs(
     Args:
         args: Parsed command line arguments.
         out_dir: Run output directory; created if missing.
-        model_config: Resolved model config to persist.
+        estimator_config: Resolved estimator config to persist.
         dataset_config: Resolved dataset config to persist.
         validation_settings: Optional validation settings to persist.
     """
     os.makedirs(out_dir, exist_ok=True)
     cfg_dir = os.path.join(out_dir, "configs")
     os.makedirs(cfg_dir, exist_ok=True)
-    shutil.copy2(args.model, os.path.join(cfg_dir, "model.yaml"))
+    shutil.copy2(args.estimator, os.path.join(cfg_dir, "estimator.yaml"))
     shutil.copy2(args.dataset, os.path.join(cfg_dir, "dataset.yaml"))
-    dump_yaml(os.path.join(cfg_dir, "model_resolved.yaml"), model_config)
+    dump_yaml(
+        os.path.join(cfg_dir, "estimator_resolved.yaml"), estimator_config
+    )
     dump_yaml(os.path.join(cfg_dir, "dataset_resolved.yaml"), dataset_config)
     if validation_settings is not None:
         dump_yaml(

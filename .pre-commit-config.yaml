@@ -1,0 +1,48 @@
+default_install_hook_types: [pre-commit, pre-push, commit-msg]
+
+repos:
+  # Ruff: lint + autofix
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.1
+    hooks:
+      - id: ruff
+        stages: [pre-commit, pre-push]
+        args: ["--fix"]
+
+      - id: ruff-format
+        stages: [pre-commit, pre-push]
+
+  # Pydoclint: docstring linting (refer to pyproject.toml for configuration)
+  - repo: local
+    hooks:
+      - id: pydoclint
+        name: pydoclint
+        entry: uv run pydoclint
+        language: system
+        types: [python]
+        stages: [pre-commit, pre-push]
+
+  # Type checking (BasedPyright)
+  - repo: local
+    hooks:
+      - id: basedpyright
+        name: basedpyright
+        entry: uv run basedpyright
+        language: system
+        types: [python]
+        stages: [pre-commit, pre-push]
+
+  # Commit message linting (Conventional Commits)
+  - repo: https://github.com/jorisroovers/gitlint
+    rev: v0.19.1
+    hooks:
+      - id: gitlint
+        stages: [commit-msg]
+
+  # Generic hygiene
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
