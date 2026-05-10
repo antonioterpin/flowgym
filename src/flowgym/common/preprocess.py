@@ -112,6 +112,11 @@ def clahe_validate_params(
     if clip_limit <= 0:
         raise ValueError(f"clip_limit must be positive, got {clip_limit}")
     if tile_grid_size is not None:
+        if len(tile_grid_size) != 2:
+            raise ValueError(
+                "tile_grid_size must be a tuple of length 2, got "
+                f"{len(tile_grid_size)}"
+            )
         if not all(isinstance(x, int) and x > 0 for x in tile_grid_size):
             raise ValueError(
                 "tile_grid_size must contain positive integers, got "
@@ -140,8 +145,6 @@ def clahe(
     Returns:
         Processed images with enhanced contrast.
     """
-    # Import here to avoid heavy dependency on skimage
-    # for users who don't use CLAHE
     from skimage import exposure  # noqa: PLC0415
 
     # stretch contrast first

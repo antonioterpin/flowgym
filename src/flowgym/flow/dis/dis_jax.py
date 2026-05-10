@@ -74,6 +74,7 @@ class DISJAXFlowFieldEstimator(FlowFieldEstimator):
 
         Raises:
             ValueError: If parameter validation fails.
+            TypeError: If preset is neither int nor PresetType.
         """
         # Validate and convert preset
         if isinstance(preset, int):
@@ -89,6 +90,10 @@ class DISJAXFlowFieldEstimator(FlowFieldEstimator):
                 ) from None
         elif isinstance(preset, PresetType):
             preset_enum = preset
+        else:
+            raise TypeError(
+                f"preset={preset}, but it must be an int or PresetType."
+            )
 
         self.preset = preset_enum
 
@@ -184,9 +189,9 @@ class DISJAXFlowFieldEstimator(FlowFieldEstimator):
             )
         self.level_steps = level_steps
         self.output_full_res = output_full_res
-        self.use_mean_normalization = use_mean_normalization
-        self.use_spatial_propagation = use_spatial_propagation
-        self.use_temporal_propagation = use_temporal_propagation
+        self.use_mean_normalization = bool(use_mean_normalization)
+        self.use_spatial_propagation = bool(use_spatial_propagation)
+        self.use_temporal_propagation = bool(use_temporal_propagation)
 
         super().__init__(**kwargs)
 
