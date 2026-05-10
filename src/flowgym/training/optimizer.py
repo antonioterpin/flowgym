@@ -69,7 +69,9 @@ def build_optimizer_from_config(
             kwargs: {weight_decay: 1.0e-4}
 
     Args:
-        config: Configuration dictionary for the optimizer.
+        config: Configuration dictionary for the optimizer. If ``None``,
+            defaults to ``{"name": "set_to_zero"}`` (a no-op optimizer)
+            and emits a warning.
 
     Returns:
         An Optax GradientTransformation instance.
