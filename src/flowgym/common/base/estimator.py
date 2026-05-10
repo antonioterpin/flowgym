@@ -569,8 +569,9 @@ class Estimator(abc.ABC):
         estimator's internal configuration.
 
         Args:
-            trainable_state: The current trainable state, or None if the estimator
-                is not trainable or parameters are not yet initialized.
+            trainable_state: The current trainable state, or None if the
+                estimator is not trainable or parameters are not yet
+                initialized.
 
         Returns:
             A string suffix (e.g., "_v1_hash123") or empty string.

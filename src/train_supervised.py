@@ -254,8 +254,10 @@ def train_supervised(
                 # Store experience in the replay buffer
                 if replay_buffer is not None:
                     # Allow estimator to enrich experience before storing
-                    enriched_experience = estimator.prepare_experience_for_replay(
-                        experience, trainable_state
+                    enriched_experience = (
+                        estimator.prepare_experience_for_replay(
+                            experience, trainable_state
+                        )
                     )
                     # We store unbatched experiences
                     B = images1.shape[0]
@@ -400,8 +402,8 @@ def train_supervised(
 
                     elif last_val_metrics is None:
                         logger.info(
-                            f"Skipping best-estimator save at batch {batch_idx}: "
-                            f"no validation computed yet."
+                            f"Skipping best-estimator save at batch "
+                            f"{batch_idx}: no validation computed yet."
                         )
                     else:
                         # Only save if validation was actually computed
@@ -422,8 +424,8 @@ def train_supervised(
                             )
 
                             logger.info(
-                                f"New best estimator saved at batch {batch_idx} "
-                                f"(mean_error={current_mean_error:.6f})"
+                                f"New best estimator saved at batch {batch_idx}"
+                                f" (mean_error={current_mean_error:.6f})"
                             )
 
                 # Reset sampler timer for next batch
