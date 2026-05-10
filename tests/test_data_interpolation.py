@@ -153,7 +153,7 @@ def test_algorithms_naive(method, method_naive, kwargs, B, H, W, p, seed):
 
 @pytest.mark.skipif(
     not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="User is not connected to the server.",
+    reason="Requires NVIDIA GeForce RTX 4090 GPU.",
 )
 @pytest.mark.parametrize(
     "method,kwargs,B,H,W,time_limit",
