@@ -459,15 +459,28 @@ class Estimator(abc.ABC):
         """
         raise NotImplementedError
 
-    def process_metrics(self, metrics: dict[str, jnp.ndarray]) -> Metrics:
+    def process_metrics(
+        self,
+        metrics: dict[str, jnp.ndarray],
+        *,
+        flow_field: jnp.ndarray | None = None,
+        flow_field_gt: jnp.ndarray | None = None,
+    ) -> Metrics:
         """Process metrics after estimation.
 
         Args:
             metrics: The raw metrics from the estimation step.
+            flow_field: Final flow field estimate, shape (B, H, W, 2).
+                Provided by the evaluation loop; ``None`` in training
+                and comparison contexts.
+            flow_field_gt: Ground-truth flow field, shape (B, H, W, 2).
+                Provided by the evaluation loop; ``None`` in training
+                and comparison contexts.
 
         Returns:
             Processed metrics.
         """
+        del flow_field, flow_field_gt
         # Convert JAX arrays to numpy arrays
         return {k: np.asarray(v) for k, v in metrics.items()}
 
@@ -477,31 +490,6 @@ class Estimator(abc.ABC):
         Returns:
             Finalized metrics.
         """
-        return {}
-
-    def evaluate_metrics(
-        self,
-        metrics: dict[str, Any],
-        *,
-        flow_field: jnp.ndarray,
-        flow_field_gt: jnp.ndarray,
-    ) -> dict[str, Any]:
-        """Compute estimator-specific metrics during evaluation.
-
-        Called from the evaluation loop after per-pixel EPE has been
-        recorded. Subclasses can override to emit additional metrics that
-        depend on estimator-specific outputs already present in
-        ``metrics`` (e.g. predicted masks, k-candidate flow fields).
-
-        Args:
-            metrics: Metrics produced so far for this batch.
-            flow_field: Final flow field estimate, shape (B, H, W, 2).
-            flow_field_gt: Ground-truth flow field, shape (B, H, W, 2).
-
-        Returns:
-            A mapping of metric name to value to merge into ``metrics``.
-        """
-        del metrics, flow_field, flow_field_gt
         return {}
 
     def record_eval_summary(self, summary: dict[str, float]) -> None:

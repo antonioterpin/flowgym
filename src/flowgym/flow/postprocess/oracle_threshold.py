@@ -9,6 +9,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
+from goggles import Metrics
 from goggles.history.types import History
 from jax import lax
 
@@ -534,52 +535,69 @@ class LearnedOracleThresholdEstimator(Estimator):
             raise ValueError("learned_oracle_threshold returned `mask=None`.")
         return flow_field, {}, {"mask": mask}
 
-    def evaluate_metrics(
+    def process_metrics(
         self,
         metrics: dict[str, Any],
         *,
-        flow_field: jnp.ndarray,
-        flow_field_gt: jnp.ndarray,
-    ) -> dict[str, Any]:
-        """Emit per-sample mask classification metrics against the oracle."""
+        flow_field: jnp.ndarray | None = None,
+        flow_field_gt: jnp.ndarray | None = None,
+    ) -> Metrics:
+        """Process metrics and emit per-sample mask classification scores."""
+        processed = dict(
+            super().process_metrics(
+                metrics,
+                flow_field=flow_field,
+                flow_field_gt=flow_field_gt,
+            )
+        )
+        if (
+            flow_field is None
+            or flow_field_gt is None
+            or self.oracle_epe_threshold <= 0
+        ):
+            return processed
         pred_mask = metrics.get("mask")
-        if pred_mask is None or self.oracle_epe_threshold <= 0:
-            return {}
+        if pred_mask is None:
+            return processed
         pred_mask_arr = jnp.asarray(pred_mask, dtype=jnp.bool_)
         per_pixel_epe = jnp.linalg.norm(flow_field - flow_field_gt, axis=-1)
         if pred_mask_arr.shape == per_pixel_epe.shape:
             oracle_mask = per_pixel_epe <= float(self.oracle_epe_threshold)
-            extra = _binary_classification_metrics(pred_mask_arr, oracle_mask)
-            extra["oracle_inlier_fraction"] = np.asarray(
+            processed.update(
+                _binary_classification_metrics(pred_mask_arr, oracle_mask)
+            )
+            processed["oracle_inlier_fraction"] = np.asarray(
                 jnp.mean(oracle_mask.astype(jnp.float32), axis=(1, 2))
             )
-            extra["pred_inlier_fraction"] = np.asarray(
+            processed["pred_inlier_fraction"] = np.asarray(
                 jnp.mean(pred_mask_arr.astype(jnp.float32), axis=(1, 2))
             )
-            return extra
+            return processed
         mask_flow_fields = metrics.get("mask_flow_fields")
         if mask_flow_fields is None:
-            return {}
+            return processed
         mask_flow_fields = jnp.asarray(mask_flow_fields)
         if (
             mask_flow_fields.ndim != 5
             or pred_mask_arr.ndim != 4
             or pred_mask_arr.shape != mask_flow_fields.shape[:-1]
         ):
-            return {}
+            return processed
         flow_gt_expanded = flow_field_gt[:, None, ...]
         per_pixel_epe_k = jnp.linalg.norm(
             mask_flow_fields - flow_gt_expanded, axis=-1
         )
         oracle_mask = per_pixel_epe_k <= float(self.oracle_epe_threshold)
-        extra = _binary_classification_metrics(pred_mask_arr, oracle_mask)
-        extra["oracle_inlier_fraction"] = np.asarray(
+        processed.update(
+            _binary_classification_metrics(pred_mask_arr, oracle_mask)
+        )
+        processed["oracle_inlier_fraction"] = np.asarray(
             jnp.mean(oracle_mask.astype(jnp.float32), axis=(1, 2, 3))
         )
-        extra["pred_inlier_fraction"] = np.asarray(
+        processed["pred_inlier_fraction"] = np.asarray(
             jnp.mean(pred_mask_arr.astype(jnp.float32), axis=(1, 2, 3))
         )
-        return extra
+        return processed
 
     def validation_score(self, val_metrics: dict[str, Any]) -> float:
         """Score validation passes by mask F1 when available."""

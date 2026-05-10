@@ -80,18 +80,13 @@ def eval_flow(
 
     t = time.time() - t
 
-    # Post process the metrics
-    metrics = dict(estimator.process_metrics(metrics))
-
     # Extract the flow field from the estimation state
     flow_field = estimation_state["estimates"][:, -1]
     per_pixel_epe = jnp.linalg.norm(flow_field - flow_field_gt, axis=-1)
 
-    # Log flow estimate and ground truth
     # If metrics already has errors (from cache), use them.
     if "errors" not in metrics:
         metrics["errors"] = np.array(jnp.mean(per_pixel_epe, axis=(1, 2)))
-        # Also compute relative errors if not present
         if "relative_errors" not in metrics:
             relative_errors = (
                 per_pixel_epe**2
@@ -102,8 +97,8 @@ def eval_flow(
                 jnp.mean(relative_errors, axis=(1, 2))
             )
 
-    metrics.update(
-        estimator.evaluate_metrics(
+    metrics = dict(
+        estimator.process_metrics(
             metrics,
             flow_field=flow_field,
             flow_field_gt=flow_field_gt,
