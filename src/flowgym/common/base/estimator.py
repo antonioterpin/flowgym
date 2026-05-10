@@ -479,6 +479,47 @@ class Estimator(abc.ABC):
         """
         return {}
 
+    def evaluate_metrics(
+        self,
+        metrics: dict[str, Any],
+        *,
+        flow_field: jnp.ndarray,
+        flow_field_gt: jnp.ndarray,
+    ) -> dict[str, Any]:
+        """Compute estimator-specific metrics during evaluation.
+
+        Called from the evaluation loop after per-pixel EPE has been
+        recorded. Subclasses can override to emit additional metrics that
+        depend on estimator-specific outputs already present in
+        ``metrics`` (e.g. predicted masks, k-candidate flow fields).
+
+        Args:
+            metrics: Metrics produced so far for this batch.
+            flow_field: Final flow field estimate, shape (B, H, W, 2).
+            flow_field_gt: Ground-truth flow field, shape (B, H, W, 2).
+
+        Returns:
+            A mapping of metric name to value to merge into ``metrics``.
+        """
+        del metrics, flow_field, flow_field_gt
+        return {}
+
+    def record_eval_summary(self, summary: dict[str, float]) -> None:
+        """Persist aggregated evaluation summary on the estimator.
+
+        Stored as ``self._eval_summary_metrics`` for ``finalize_metrics``
+        consumers that emit per-run summary rows.
+        """
+        self._eval_summary_metrics = dict(summary)
+
+    def validation_score(self, val_metrics: Metrics) -> float:
+        """Score a validation pass for best-checkpoint selection.
+
+        Higher is better. Default ranks by ``-mean_error``.
+        """
+        mean_error = float(val_metrics.get("mean_error", float("nan")))
+        return -mean_error
+
     def prepare_experience_for_replay(
         self,
         experience: SupervisedExperience,

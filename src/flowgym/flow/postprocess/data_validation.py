@@ -819,3 +819,14 @@ def learned_oracle_threshold_validate_params(
             f"{type(oracle_trainable_state)}."
         )
     _normalize_oracle_features(features)
+
+
+for _fn in (
+    constant_threshold_filter,
+    adaptive_global_filter,
+    adaptive_local_filter,
+    universal_median_test,
+    learned_oracle_threshold,
+):
+    _fn.is_outlier_rejection = True
+del _fn
