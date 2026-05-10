@@ -188,7 +188,7 @@ class DISJAXFlowFieldEstimator(FlowFieldEstimator):
                 f"level_steps={level_steps}, but it must be a positive integer."
             )
         self.level_steps = level_steps
-        self.output_full_res = output_full_res
+        self.output_full_res = bool(output_full_res)
         self.use_mean_normalization = bool(use_mean_normalization)
         self.use_spatial_propagation = bool(use_spatial_propagation)
         self.use_temporal_propagation = bool(use_temporal_propagation)
