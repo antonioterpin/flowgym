@@ -443,7 +443,13 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
 
         return new_flow, {}, metrics
 
-    def process_metrics(self, metrics: dict) -> Metrics:
+    def process_metrics(
+        self,
+        metrics: dict,
+        *,
+        flow_field: jnp.ndarray | None = None,
+        flow_field_gt: jnp.ndarray | None = None,
+    ) -> Metrics:
         """Process and format metrics collected during evaluation.
 
         Converts raw numpy/jax arrays into numpy arrays and updates running
@@ -451,15 +457,17 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
 
         Args:
             metrics: Raw metrics dictionary produced by ``_estimate``.
+            flow_field: Final flow field estimate (unused by this override,
+                kept for signature compatibility).
+            flow_field_gt: Ground-truth flow field (unused by this override).
 
         Returns:
             A ``Metrics`` object with processed numeric arrays.
 
         Raises:
-            TypeError: If ``log_metrics`` in experiment parameters is not a
-                mapping as expected.
             ValueError: If the batch size cannot be inferred from the metrics.
         """
+        del flow_field, flow_field_gt
         # Try to extract the batch size B from any array in metrics
         B = None
         for v in metrics.values():

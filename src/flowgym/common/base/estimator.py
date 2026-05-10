@@ -459,15 +459,28 @@ class Estimator(abc.ABC):
         """
         raise NotImplementedError
 
-    def process_metrics(self, metrics: dict[str, jnp.ndarray]) -> Metrics:
+    def process_metrics(
+        self,
+        metrics: dict[str, jnp.ndarray],
+        *,
+        flow_field: jnp.ndarray | None = None,
+        flow_field_gt: jnp.ndarray | None = None,
+    ) -> Metrics:
         """Process metrics after estimation.
 
         Args:
             metrics: The raw metrics from the estimation step.
+            flow_field: Final flow field estimate, shape (B, H, W, 2).
+                Provided by the evaluation loop; ``None`` in training
+                and comparison contexts.
+            flow_field_gt: Ground-truth flow field, shape (B, H, W, 2).
+                Provided by the evaluation loop; ``None`` in training
+                and comparison contexts.
 
         Returns:
             Processed metrics.
         """
+        del flow_field, flow_field_gt
         # Convert JAX arrays to numpy arrays
         return {k: np.asarray(v) for k, v in metrics.items()}
 
@@ -478,6 +491,22 @@ class Estimator(abc.ABC):
             Finalized metrics.
         """
         return {}
+
+    def record_eval_summary(self, summary: dict[str, float]) -> None:
+        """Persist aggregated evaluation summary on the estimator.
+
+        Stored as ``self._eval_summary_metrics`` for ``finalize_metrics``
+        consumers that emit per-run summary rows.
+        """
+        self._eval_summary_metrics = dict(summary)
+
+    def validation_score(self, val_metrics: Metrics) -> float:
+        """Score a validation pass for best-checkpoint selection.
+
+        Higher is better. Default ranks by ``-mean_error``.
+        """
+        mean_error = float(val_metrics.get("mean_error", float("nan")))
+        return -mean_error
 
     def prepare_experience_for_replay(
         self,

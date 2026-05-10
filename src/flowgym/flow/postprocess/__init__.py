@@ -241,12 +241,19 @@ def apply_postprocessing(
     return globals()[name](flow, valid=valid, state=state, **kwargs)
 
 
+def is_outlier_rejection_step(name: str) -> bool:
+    """Return whether the named postprocessing step rejects outliers."""
+    fn = globals().get(name)
+    return bool(getattr(fn, "is_outlier_rejection", False))
+
+
 __all__ = [
     "adaptive_global_filter",
     "adaptive_global_filter_validate_params",
     "adaptive_local_filter",
     "adaptive_local_filter_validate_params",
     "apply_postprocessing",
+    "is_outlier_rejection_step",
     "average_smoothing",
     "average_smoothing_validate_params",
     "constant_threshold_filter",

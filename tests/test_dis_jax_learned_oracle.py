@@ -4,12 +4,12 @@ import jax.numpy as jnp
 from flax.core import FrozenDict
 
 from flowgym.common.base import EstimatorTrainableState
-from flowgym.flow.base import OUTLIER_REJECTION_STEPS
 from flowgym.flow.dis.dis_jax import DISJAXFlowFieldEstimator
+from flowgym.flow.postprocess import is_outlier_rejection_step
 
 
 def test_learned_oracle_is_tracked_as_outlier_rejection_step():
-    assert "learned_oracle_threshold" in OUTLIER_REJECTION_STEPS
+    assert is_outlier_rejection_step("learned_oracle_threshold")
 
 
 def test_dis_estimator_disables_jit_for_learned_oracle_postprocess():

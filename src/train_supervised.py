@@ -160,9 +160,7 @@ def train_supervised(
 
                 # Build validation message with all scalar metrics
                 mean_error = float(val_metrics.get("mean_error", float("nan")))
-                current_score = float(
-                    val_metrics.get("mask_f1", -mean_error)
-                )
+                current_score = float(estimator.validation_score(val_metrics))
                 init_val_msg = (
                     f"Initial validation (before training): "
                     f"mean_error={mean_error:.5f}"
@@ -422,14 +420,11 @@ def train_supervised(
                             f"no validation computed yet."
                         )
                     else:
-                        # Select best checkpoint by validation mask_f1
-                        # (higher is better). Fallback to -mean_error
-                        # if mask_f1 is unavailable.
                         mean_error = float(
                             last_val_metrics.get("mean_error", float("nan"))
                         )
                         current_score = float(
-                            last_val_metrics.get("mask_f1", -mean_error)
+                            estimator.validation_score(last_val_metrics)
                         )
 
                         should_save = (not has_saved_best_checkpoint) or (
@@ -450,7 +445,7 @@ def train_supervised(
 
                             logger.info(
                                 f"New best estimator saved at batch {batch_idx} "
-                                f"(mask_f1={current_score:.6f}, "
+                                f"(score={current_score:.6f}, "
                                 f"mean_error={mean_error:.6f})"
                             )
 
