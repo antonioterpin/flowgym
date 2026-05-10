@@ -236,6 +236,16 @@ def test_median_consensus_dtype_preserved(flows):
     assert result.dtype == jnp.float32
 
 
+@pytest.mark.parametrize("rho", ["a", [1.0], None, {}])
+def test_invalid_rho_type(rho):
+    """Test ADMM consensus with invalid rho type."""
+    flows = jnp.zeros((2, 3, 4, 4, 2))
+    weights = jnp.ones((2, 3, 4, 4))  # Dummy weights
+    config = {"rho": rho}
+    with pytest.raises(TypeError, match="Invalid rho type"):
+        admm_consensus(flows, weights, config)
+
+
 @pytest.mark.parametrize("rho", [0, -1.5, -1, -1e-6])
 def test_invalid_rho_value(rho):
     """Test ADMM consensus with non-positive rho."""
