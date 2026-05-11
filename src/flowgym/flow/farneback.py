@@ -36,14 +36,13 @@ class FarnebackEstimator(FlowFieldEstimator):
 
         Raises:
             ValueError: If parameters are out of valid range.
-            TypeError: If integer parameters are not integers.
         """
         if pyr_scale < 0.0 or pyr_scale > 1.0:
             raise ValueError(f"pyr_scale {pyr_scale} must be in [0, 1].")
         self.pyr_scale = pyr_scale
 
-        if levels < 0 or not isinstance(levels, int):
-            raise TypeError(f"levels {levels} must be a positive integer.")
+        if levels < 0:
+            raise ValueError(f"levels {levels} must be a positive integer.")
         self.levels = levels
 
         if winsize < 0 or not isinstance(winsize, int):

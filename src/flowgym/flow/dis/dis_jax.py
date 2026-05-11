@@ -74,7 +74,7 @@ class DISJAXFlowFieldEstimator(FlowFieldEstimator):
 
         Raises:
             ValueError: If parameter validation fails.
-            TypeError: If parameter type is incorrect.
+            TypeError: If preset is neither int nor PresetType.
         """
         # Validate and convert preset
         if isinstance(preset, int):
@@ -177,24 +177,18 @@ class DISJAXFlowFieldEstimator(FlowFieldEstimator):
             )
         self.start_level = start_level
 
-        if not isinstance(levels, int) or levels <= 0:
-            raise TypeError(
+        if levels <= 0:
+            raise ValueError(
                 f"levels={levels}, but it must be a positive integer."
             )
         self.levels = levels
 
-        if not isinstance(level_steps, int) or level_steps <= 0:
-            raise TypeError(
+        if level_steps <= 0:
+            raise ValueError(
                 f"level_steps={level_steps}, but it must be a positive integer."
             )
         self.level_steps = level_steps
-
-        if not isinstance(output_full_res, bool):
-            raise TypeError(
-                f"output_full_res={output_full_res}, but it must be a boolean."
-            )
-        self.output_full_res = output_full_res
-
+        self.output_full_res = bool(output_full_res)
         self.use_mean_normalization = bool(use_mean_normalization)
         self.use_spatial_propagation = bool(use_spatial_propagation)
         self.use_temporal_propagation = bool(use_temporal_propagation)

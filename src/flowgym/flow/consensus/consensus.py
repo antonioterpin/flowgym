@@ -51,23 +51,12 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
             **kwargs: Additional keyword arguments for the base class.
 
         Raises:
-            TypeError: If use_temporal_propagation is not a boolean or
-                estimators_list_path is not a string.
             ValueError: If estimators_list_path doesn't end with .yaml,
                 no estimators are found, or invalid consensus algorithm.
         """
-        if not isinstance(use_temporal_propagation, bool):
-            raise TypeError(
-                f"use_temporal_propagation must be a boolean, "
-                f"got {use_temporal_propagation}."
-            )
         self.use_temporal_propagation = bool(use_temporal_propagation)
 
         # Load the DIS algorithms from the specified path
-        if not isinstance(estimators_list_path, str):
-            msg = "estimators_list_path must be str, "
-            msg += f"got {type(estimators_list_path)}."
-            raise TypeError(msg)
         if not estimators_list_path.endswith(".yaml"):
             msg = "estimators_list_path must be .yaml, "
             msg += f"got {estimators_list_path}."
