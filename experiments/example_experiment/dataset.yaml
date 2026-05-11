@@ -1,0 +1,37 @@
+# Self-contained synthetic dataset for the experiments launcher example.
+seed: 0
+batch_size: 2
+flow_fields_per_batch: 2
+batches_per_flow_batch: 1
+buffer_size: 8
+loop: false
+randomize: false
+include_images: false
+
+# Image generation parameters
+image_shape: [128, 128]
+dt: 1
+seeding_density_range: [0.03, 0.04]
+p_hide_img1: 0.0001
+p_hide_img2: 0.0001
+diameter_ranges: [[1.5, 2.5]]
+diameter_var: 0.03
+intensity_ranges: [[150, 230]]
+intensity_var: 0.01
+rho_ranges: [[-0.1, 0.1]]
+rho_var: 0.1
+noise_uniform: 0.001
+noise_gaussian_mean: 0.0
+noise_gaussian_std: 0.001
+
+# Flow generation parameters
+velocities_per_pixel: 1.0
+resolution: 1
+flow_field_size: [128, 128]
+img_offset: [0, 0]
+min_speed_x: -1
+max_speed_x: 1
+min_speed_y: -1
+max_speed_y: 1
+output_units: "pixels"
+num_batches: 2

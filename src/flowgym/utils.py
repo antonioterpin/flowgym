@@ -2,6 +2,7 @@
 
 import csv
 import importlib
+from collections.abc import Mapping
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Literal, cast, overload
@@ -16,6 +17,7 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
+from goggles.media import yaml_dump
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 logger = gg.get_logger(__name__, with_metrics=True)
@@ -95,6 +97,22 @@ def setup_logging(
 GracefulShutdown = gg.GracefulShutdown
 
 load_configuration = gg.load_configuration
+
+
+def dump_yaml(path: str | Path, data: Mapping[str, Any]) -> None:
+    """Write a YAML file via :func:`goggles.media.yaml_dump`.
+
+    Creates parent directories if missing. The serialization (including
+    NumPy normalization) is delegated to goggles so callers do not have to
+    convert ``np.int64`` seeds / array entries before dumping.
+
+    Args:
+        path: Destination path.
+        data: Mapping to serialize as YAML.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml_dump(dict(data)), encoding="utf-8")
 
 
 def clean_for_logging(obj: Any) -> Any:

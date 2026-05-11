@@ -202,3 +202,7 @@ cython_debug/
 
 # Parquet files
 *.parquet
+
+# Experiment outputs
+experiments/*/runs/
+experiments/*/_generated/

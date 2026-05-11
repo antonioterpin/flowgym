@@ -1,8 +1,6 @@
 """Training and evaluation script for the different estimators."""
 
 import argparse
-import copy
-import os
 import time
 
 import goggles as gg
@@ -21,10 +19,11 @@ from flowgym.common.base import NNEstimatorTrainableState
 # Training environment
 from flowgym.environment.fluid_env import FluidEnv
 from flowgym.make import make_estimator, select_gt
+from flowgym.run_setup import prepare_configs, setup_study_run
 from flowgym.training.caching import CacheManager
 
 # Utils
-from flowgym.utils import load_configuration, setup_logging
+from flowgym.utils import setup_logging
 from train import train
 from train_supervised import train_supervised
 
@@ -73,179 +72,12 @@ def parse_args():
     return parser.parse_args()
 
 
-def prepare_configs(
-    args: argparse.Namespace,
-) -> tuple[dict, dict | None, dict, str | None, dict | None, dict | None]:
-    """Prepare dataset and estimator configurations based on command line arguments.
-
-    Args:
-        args: Parsed command line arguments.
-
-    Returns:
-        Tuple containing:
-            - Dataset configuration dictionary.
-            - Second dataset configuration dictionary for comparison,
-                if in compare mode.
-            - Estimator configuration dictionary.
-            - Output directory path if in training mode, else None.
-            - Validation settings dictionary, if validation is enabled.
-            - Caching configuration dictionary, if caching is enabled.
-
-    Raises:
-        ValueError: If validation configuration is invalid or missing.
-    """
-    # Load the dataset
-    dataset_config = load_configuration(args.dataset)
-    dataset_config2 = None
-    validation_settings = None
-    caching_config = None
-
-    # Load the estimator
-    estimator_config = load_configuration(args.estimator)
-
-    # output directory
-    out_dir = None
-
-    if args.mode == "compare-samplers":
-        dataset_config["randomize"] = False
-        dataset_config["include_images"] = False
-    if args.mode not in ["train", "train-supervised"]:
-        dataset_config["loop"] = False
-
-    validation_spec = dataset_config.pop("validation", None)
-    if validation_spec is not None:
-        if not isinstance(validation_spec, dict):
-            raise ValueError(
-                "`validation` entry must be a dictionary if provided."
-            )
-        val_dataset_spec = validation_spec.get("dataset")
-        if val_dataset_spec is None:
-            raise ValueError(
-                "`validation.dataset` must be specified when using validation."
-            )
-        if isinstance(val_dataset_spec, str):
-            val_dataset_config = load_configuration(val_dataset_spec)
-        elif isinstance(val_dataset_spec, dict):
-            val_dataset_config = copy.deepcopy(val_dataset_spec)
-        else:
-            raise ValueError(
-                "`validation.dataset` must be either a path to a YAML file "
-                "or a configuration dict."
-            )
-        if val_dataset_config is None:
-            raise ValueError(
-                "Validation dataset configuration could not be loaded."
-            )
-        val_dataset_config.setdefault("loop", False)
-        val_dataset_config.setdefault("randomize", False)
-        val_dataset_config.setdefault("include_images", False)
-
-        interval = validation_spec.get("interval")
-        if interval is not None:
-            try:
-                interval = int(interval)
-            except (TypeError, ValueError):
-                raise ValueError(
-                    "`validation.interval` must be convertible to an integer."
-                ) from None
-            if interval <= 0:
-                raise ValueError(
-                    "`validation.interval` must be a positive integer."
-                )
-
-        num_batches = validation_spec.get("num_batches", 1)
-        try:
-            num_batches = int(num_batches)
-        except (TypeError, ValueError):
-            raise ValueError(
-                "`validation.num_batches` must be convertible to an integer."
-            ) from None
-        if num_batches <= 0:
-            raise ValueError(
-                "`validation.num_batches` must be a positive integer."
-            )
-
-        validation_settings = {
-            "dataset_config": val_dataset_config,
-            "interval": interval,
-            "num_batches": num_batches,
-        }
-    # Handle the seed for reproducibility
-    if "seed" not in dataset_config or not isinstance(
-        dataset_config["seed"], int
-    ):
-        logger.warning(
-            "Dataset configuration does not contain a valid integer seed."
-            " Defaulting to 0"
-        )
-        dataset_config["seed"] = 0
-
-    # Parse Caching Configuration
-    if "caching" in dataset_config:
-        caching_config = dataset_config["caching"]
-        if "spec" in caching_config:
-            # Parse spec from list/tuple format to (dtype, shape) tuple
-            parsed_spec = {}
-            for k, v in caching_config["spec"].items():
-                dtype_str = v[0]
-                shape = tuple(v[1])
-                parsed_spec[k] = (dtype_str, shape)
-            caching_config["spec"] = parsed_spec
-
-    if args.mode in {"train", "train-supervised"}:
-        # Prepare the output directory to save the estimator
-        out_dir = estimator_config.get("out_dir", "output")
-        out_dir = os.path.join(
-            out_dir, estimator_config["estimator"], str(dataset_config["seed"])
-        )
-        os.makedirs(out_dir, exist_ok=True)
-    elif args.mode == "compare-samplers":
-        # create a second sampler to load real images from files
-        dataset_config2 = load_configuration(args.dataset)
-        dataset_config2["include_images"] = True
-        dataset_config2["loop"] = False
-        dataset_config2["randomize"] = False
-
-    log_estimator_config = {**estimator_config}
-    log_estimator_config["config"] = {**estimator_config["config"]}
-    for k, v in log_estimator_config["config"].items():
-        if isinstance(v, str) and v.endswith(".yaml"):
-            log_estimator_config["config"][k] = load_configuration(v)
-
-    if estimator_config.get("run_name", None) is None:
-        estimator_config["run_name"] = (
-            f"{args.mode}_{estimator_config['estimator']}_{args.dataset.split('/')[-1].split('.')[0]}"
-        )
-
-    gg.attach(
-        gg.WandBHandler(
-            project="Art_of_PIV",
-            run_name=estimator_config["run_name"],
-            config={
-                "estimator_config": log_estimator_config,
-                "dataset_config": dataset_config,
-                "dataset_config2": dataset_config2,
-                "validation": validation_settings,
-                "mode": args.mode,
-                "out_dir": out_dir,
-            },
-        )
-    )
-
-    return (
-        dataset_config,
-        dataset_config2,
-        estimator_config,
-        out_dir,
-        validation_settings,
-        caching_config,
-    )
-
-
 if __name__ == "__main__":
     args = parse_args()
 
-    # Load the dataset
+    # Load and validate configs (also writes resolved configs for non-study
+    # training runs; study runs defer that until `setup_study_run` so the
+    # output directory can include the captured git state label).
     (
         dataset_config,
         dataset_config_to_compare,
@@ -253,40 +85,19 @@ if __name__ == "__main__":
         out_dir,
         validation_settings,
         caching_config,
+        wandb_setup,
     ) = prepare_configs(args)
 
-    # Log the configurations
-    if hasattr(logger, "artifact"):
-        logger.artifact(  # pyright: ignore[reportAttributeAccessIssue]
-            data=dataset_config,
-            name="dataset_config",
-            format="yaml",
-            step=0,
-        )
-        logger.artifact(  # pyright: ignore[reportAttributeAccessIssue]
-            data=estimator_config,
-            name="estimator_config",
-            format="yaml",
-            step=0,
-        )
-        if dataset_config_to_compare is not None:
-            logger.artifact(  # pyright: ignore[reportAttributeAccessIssue]
-                data=dataset_config_to_compare,
-                name="dataset_config_to_compare",
-                format="yaml",
-                step=0,
-            )
-        if validation_settings is not None:
-            logger.artifact(  # pyright: ignore[reportAttributeAccessIssue]
-                data=validation_settings["dataset_config"],
-                name="val_dataset_config",
-                format="yaml",
-                step=0,
-            )
-    else:
-        logger.warning(
-            "Logger does not support artifact logging. "
-            "Configuration artifacts will not be logged."
+    # Only study runs attach W&B (with native code capture). Non-study runs
+    # keep the existing public behavior of running without wandb.
+    if isinstance(wandb_setup["config"].get("study"), dict):
+        out_dir = setup_study_run(
+            args,
+            wandb_setup,
+            dataset_config,
+            dataset_config_to_compare,
+            estimator_config,
+            validation_settings,
         )
     if out_dir is not None:
         logger.info(f"Saving estimators in directory: {out_dir}")
@@ -294,7 +105,7 @@ if __name__ == "__main__":
     key = jax.random.PRNGKey(dataset_config["seed"])
     key, subkey = jax.random.split(key)
 
-    if args.mode not in ["train", "train_supervised"]:
+    if args.mode not in ["train", "train-supervised"]:
         # Load the dataset sampler
         sampler = synthpix.make(
             dataset_config, load_from=dataset_config.get("load_from")
@@ -395,7 +206,7 @@ if __name__ == "__main__":
                 "Initializing CacheManager from dataset config: "
                 f"{caching_config}"
             )
-            # Append estimator-specific suffix to cache_id (e.g. hash of weights)
+            # Append estimator-specific suffix to cache_id (e.g. weight hash)
             if "cache_id" in caching_config:
                 suffix = estimator.get_cache_id_suffix(trainable_state)
                 if suffix:
@@ -511,7 +322,7 @@ if __name__ == "__main__":
                 "Initializing CacheManager from dataset config: "
                 f"{caching_config}"
             )
-            # Append estimator-specific suffix to cache_id (e.g. hash of weights)
+            # Append estimator-specific suffix to cache_id (e.g. weight hash)
             if "cache_id" in caching_config:
                 suffix = estimator.get_cache_id_suffix(trainable_state)
                 if suffix:
