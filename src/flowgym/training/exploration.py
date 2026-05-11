@@ -66,3 +66,37 @@ EXPLORATION_REGISTRY: dict[ExplorationKind, ExplorationPolicy] = {
     "epsilon_greedy": epsilon_greedy_explore,
     "softmax": softmax_explore,
 }
+
+
+def build_exploration_from_config(config: dict) -> ExplorationPolicy:
+    """Build exploration policy from configuration.
+
+    Args:
+        config: Configuration dictionary. Must contain a "name" field;
+            its value is coerced via ``str(...).lower()`` before lookup,
+            matching the convention in `build_loss_from_config` /
+            `build_optimizer_from_config`.
+
+    Returns:
+        ExplorationPolicy: The exploration policy function.
+
+    Raises:
+        TypeError: If `config` is not a dictionary.
+        ValueError: If `config` is missing `name` or `name` is unsupported.
+    """
+    if not isinstance(config, dict):
+        raise TypeError(
+            f"exploration_config must be a dict, got {type(config).__name__}."
+        )
+
+    if "name" not in config:
+        raise ValueError("exploration_config must contain a 'name' field.")
+
+    name = str(config["name"]).lower()
+    if name not in EXPLORATION_REGISTRY:
+        raise ValueError(
+            f"Unknown exploration name '{name}'. "
+            f"Valid names: {list(EXPLORATION_REGISTRY.keys())}"
+        )
+
+    return EXPLORATION_REGISTRY[name]

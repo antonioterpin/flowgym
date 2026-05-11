@@ -193,9 +193,6 @@ class RaftJaxEstimator(FlowFieldEstimator):
             "params"
         ]
 
-        if self.optimizer_config is None:
-            raise ValueError("Optimizer configuration is required.")
-
         return NNEstimatorTrainableState.from_config(
             apply_fn=self.model.apply,
             params=params,
@@ -605,6 +602,11 @@ class RaftJaxEstimator(FlowFieldEstimator):
     ) -> str:
         """Get a suffix for the cache ID based on model config and params hash.
 
+        Only includes configuration parameters that affect the mathematical
+        output during inference. Excludes optimization-only parameters like
+        patches_groups (parallelization) and train mode (caching assumes
+        inference mode with train=False).
+
         Args:
             trainable_state: The current trainable state of the model, used
                 to hash the weights.
@@ -613,7 +615,11 @@ class RaftJaxEstimator(FlowFieldEstimator):
             A string suffix to append to the cache ID, encoding the model
             configuration and weights.
         """
-        # 1. Config hash
+        # 1. Config hash - only output-affecting parameters
+        # Exclude optimization/infrastructure params:
+        # - patches_groups: parallelization strategy (doesn't affect output)
+        # - train: mode flag (caching assumes inference mode)
+        # - dropout, gamma: training-only (not used during inference)
         config = {
             "patch_size": self.patch_size,
             "patch_stride": self.patch_stride,
@@ -622,14 +628,8 @@ class RaftJaxEstimator(FlowFieldEstimator):
             "corr_levels": self.corr_levels,
             "corr_radius": self.corr_radius,
             "iters": self.iters,
-            "patches_groups": self.patches_groups,
             "norm_fn": self.norm_fn,
             "use_temporal_propagation": self.use_temporal_propagation,
-            # Training related params (dropout, gamma, train) affect
-            # training but usually we want to distinguish based on inference
-            # behavior. However, if 'train' is True vs False, behavior
-            # changes (e.g. dropout).
-            "train": self.train,
         }
         config_str = json.dumps(config, sort_keys=True)
         h_config = hashlib.md5(config_str.encode("utf-8")).hexdigest()
