@@ -1,8 +1,9 @@
 """ADMM implementation for distributed flow estimation."""
 
+from typing import cast
+
 import jax
 import jax.numpy as jnp
-from pyparsing import cast
 
 from flowgym.flow.consensus.solvers import (
     SOLVER_CONSENSUS_FACTORY,
@@ -257,10 +258,13 @@ def run_admm(
                 N,
             )
 
-            # Update active mask (per batch item)
-            active_new: jax.Array = (primal_residual > eps_pri) | (
+            # Update active mask (per batch item). The `active &` guard keeps
+            # deactivation monotone, so once a batch item converges it stays
+            # inactive — `stopping_time_new` below relies on this latch.
+            still_active: jax.Array = (primal_residual > eps_pri) | (
                 dual_residual > eps_dual
             )
+            active_new: jax.Array = active & still_active
 
             # Update stopping time
             stopping_time_new: jax.Array = jnp.where(
@@ -384,9 +388,12 @@ def run_admm(
         final_eduals,
     ) = final_carry
 
+    # Cast both branches to ``int32`` so the ``lax.cond`` output dtype is
+    # stable under ``jax_enable_x64`` (Python ints would otherwise be lifted
+    # to ``int64`` while ``stopping_time`` is created as ``int32`` above).
     final_stopping_time = jax.lax.cond(
         final_actives,
-        lambda _: max_admm_iterations,
+        lambda _: jnp.asarray(max_admm_iterations, dtype=jnp.int32),
         lambda _: final_stopping_time,
         operand=None,
     )

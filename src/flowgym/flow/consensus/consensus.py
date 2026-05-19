@@ -246,8 +246,10 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
         # Check if the state has a history of estimates
         if not self.use_temporal_propagation:
             # Use the last estimate from the history
-            state["estimates"] = state["estimates"].at[:, -1, ...].set(
-                jnp.zeros_like(state["estimates"][:, -1, ...])
+            state["estimates"] = (
+                state["estimates"]
+                .at[:, -1, ...]
+                .set(jnp.zeros_like(state["estimates"][:, -1, ...]))
             )
 
         # Prepare the input state for estimators
@@ -560,16 +562,14 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
                         rejected_count = getattr(
                             self, "running_rejected_percentage_count", {}
                         )
-                        rejected_sum[key] = rejected_sum.get(
-                            key, 0.0
-                        ) + float(np.sum(rejected_values[finite]))
-                        rejected_count[key] = rejected_count.get(
-                            key, 0
-                        ) + int(np.sum(finite))
-                        self.running_rejected_percentage_sum = rejected_sum
-                        self.running_rejected_percentage_count = (
-                            rejected_count
+                        rejected_sum[key] = rejected_sum.get(key, 0.0) + float(
+                            np.sum(rejected_values[finite])
                         )
+                        rejected_count[key] = rejected_count.get(key, 0) + int(
+                            np.sum(finite)
+                        )
+                        self.running_rejected_percentage_sum = rejected_sum
+                        self.running_rejected_percentage_count = rejected_count
             if key in [
                 "consensus_final_primal_residuals",
                 "consensus_final_dual_residuals",
@@ -584,68 +584,32 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
         if not isinstance(log_metrics, dict):
             raise TypeError(f"log_metrics must be a dict, got {log_metrics}.")
         for metric_name, log_metric in log_metrics.items():
-            if (
-                log_metric
-                and metric_name in metrics
-                and metric_name != "consensus_stopping_time"
-            ):
+            if log_metric and metric_name in metrics:
                 csv_metrics[metric_name] = metrics[metric_name]
 
         if len(csv_metrics) > 0:
             i = getattr(self, "current_batch_index", 0)
+            # Route per-batch residual CSVs next to ``log_path`` if provided,
+            # otherwise fall back to CWD. ``log_path`` is set per-run by the
+            # experiment driver, so this avoids parallel-run collisions on
+            # the shared filename in the working directory.
+            log_path = self.experiment_params.get("log_path", None)
+            if isinstance(log_path, str):
+                residuals_dir = Path(log_path).parent
+                residuals_dir.mkdir(parents=True, exist_ok=True)
+                residuals_filename = str(residuals_dir / "admm_residuals.csv")
+            else:
+                residuals_filename = "admm_residuals.csv"
             append_metrics_to_csv(
-                csv_metrics, filename="admm_residuals_new_new.csv", batch_idx=i
+                csv_metrics, filename=residuals_filename, batch_idx=i
             )
-
-        if "consensus_stopping_time" in metrics:
-            processed_metrics["mean_consensus_stopping_time"] = np.array(
-                jnp.mean(metrics["consensus_stopping_time"])
-            )
-            stopping_time = np.asarray(
-                metrics["consensus_stopping_time"]
-            )  # (B,)
-
-            if stopping_time.ndim != 1:
-                raise ValueError(
-                    "Expected consensus_stopping_time to be 1D (B,), "
-                    f"got {stopping_time.shape}"
-                )
-
-            # Starting index for images in this batch
-            idx: int = getattr(self, "current_batch_index", 0)
-            if B is None:
-                raise ValueError("Batch size must be specified.")
-            start_img = idx * B
-
-            # Global image indices: [start_img, ..., start_img + B - 1]
-            img_idx = np.arange(start_img, start_img + B)
-
-            cols = [
-                img_idx,
-                stopping_time,
-            ]
-            header = [
-                "img_idx",
-                "stopping_time",
-            ]
-
-            data = np.column_stack(cols)
-
-            file_exists = Path("admm_stats_non_iterated.csv").exists()
-            with open("admm_stats_non_iterated.csv", "a", newline="") as f:
-                writer = csv.writer(f)
-                if not file_exists:
-                    writer.writerow(header)
-                writer.writerows(data)
 
         return processed_metrics
 
     def _get_estimator_rejected_percentages(self) -> dict[str, float]:
         """Get mean rejected percentages aggregated per estimator."""
         rejected_sum = getattr(self, "running_rejected_percentage_sum", {})
-        rejected_count = getattr(
-            self, "running_rejected_percentage_count", {}
-        )
+        rejected_count = getattr(self, "running_rejected_percentage_count", {})
         if not rejected_sum or not rejected_count:
             return {}
 
@@ -763,12 +727,16 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
                     raise TypeError(
                         f"baseline_performance must be a dict, got {baseline}."
                     )
-                
+
                 baseline_mean = baseline.get("mean_epe", None)
                 row_mean = row_data.get("mean_epe", None)
-                if isinstance(baseline_mean, jnp.ndarray) and (baseline_mean.ndim == 0 or baseline_mean.ndim == 1):
+                if isinstance(baseline_mean, jnp.ndarray) and (
+                    baseline_mean.ndim == 0 or baseline_mean.ndim == 1
+                ):
                     baseline_mean = float(baseline_mean)
-                if isinstance(row_mean, jnp.ndarray) and (row_mean.ndim == 0 or row_mean.ndim == 1):
+                if isinstance(row_mean, jnp.ndarray) and (
+                    row_mean.ndim == 0 or row_mean.ndim == 1
+                ):
                     row_mean = float(row_mean)
                 if isinstance(baseline_mean, float) and isinstance(
                     row_mean, float
@@ -779,9 +747,13 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
 
                 baseline_max = baseline.get("max_epe", None)
                 row_max = row_data.get("max_epe", None)
-                if isinstance(baseline_max, jnp.ndarray) and (baseline_max.ndim == 0 or baseline_max.ndim == 1):
+                if isinstance(baseline_max, jnp.ndarray) and (
+                    baseline_max.ndim == 0 or baseline_max.ndim == 1
+                ):
                     baseline_max = float(baseline_max)
-                if isinstance(row_max, jnp.ndarray) and (row_max.ndim == 0 or row_max.ndim == 1):
+                if isinstance(row_max, jnp.ndarray) and (
+                    row_max.ndim == 0 or row_max.ndim == 1
+                ):
                     row_max = float(row_max)
                 if isinstance(baseline_max, float) and isinstance(
                     row_max, float
@@ -792,9 +764,13 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
 
                 baseline_min = baseline.get("min_epe", None)
                 row_min = row_data.get("min_epe", None)
-                if isinstance(baseline_min, jnp.ndarray) and (baseline_min.ndim == 0 or baseline_min.ndim == 1):
+                if isinstance(baseline_min, jnp.ndarray) and (
+                    baseline_min.ndim == 0 or baseline_min.ndim == 1
+                ):
                     baseline_min = float(baseline_min)
-                if isinstance(row_min, jnp.ndarray) and (row_min.ndim == 0 or row_min.ndim == 1):
+                if isinstance(row_min, jnp.ndarray) and (
+                    row_min.ndim == 0 or row_min.ndim == 1
+                ):
                     row_min = float(row_min)
                 if isinstance(baseline_min, float) and isinstance(
                     row_min, float
@@ -805,9 +781,13 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
 
                 baseline_min_rel = baseline.get("min_relative_epe", None)
                 row_min_rel = row_data.get("min_relative_error", None)
-                if isinstance(baseline_min_rel, jnp.ndarray) and (baseline_min_rel.ndim == 0 or baseline_min_rel.ndim == 1):
+                if isinstance(baseline_min_rel, jnp.ndarray) and (
+                    baseline_min_rel.ndim == 0 or baseline_min_rel.ndim == 1
+                ):
                     baseline_min_rel = float(baseline_min_rel)
-                if isinstance(row_min_rel, jnp.ndarray) and (row_min_rel.ndim == 0 or row_min_rel.ndim == 1):
+                if isinstance(row_min_rel, jnp.ndarray) and (
+                    row_min_rel.ndim == 0 or row_min_rel.ndim == 1
+                ):
                     row_min_rel = float(row_min_rel)
                 if isinstance(baseline_min_rel, float) and isinstance(
                     row_min_rel, float
@@ -818,9 +798,13 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
 
                 baseline_mean_rel = baseline.get("mean_relative_epe", None)
                 row_mean_rel = row_data.get("mean_relative_error", None)
-                if isinstance(baseline_mean_rel, jnp.ndarray) and (baseline_mean_rel.ndim == 0 or baseline_mean_rel.ndim == 1):
+                if isinstance(baseline_mean_rel, jnp.ndarray) and (
+                    baseline_mean_rel.ndim == 0 or baseline_mean_rel.ndim == 1
+                ):
                     baseline_mean_rel = float(baseline_mean_rel)
-                if isinstance(row_mean_rel, jnp.ndarray) and (row_mean_rel.ndim == 0 or row_mean_rel.ndim == 1):
+                if isinstance(row_mean_rel, jnp.ndarray) and (
+                    row_mean_rel.ndim == 0 or row_mean_rel.ndim == 1
+                ):
                     row_mean_rel = float(row_mean_rel)
                 if isinstance(baseline_mean_rel, float) and isinstance(
                     row_mean_rel, float
@@ -831,9 +815,13 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
 
                 baseline_max_rel = baseline.get("max_relative_epe", None)
                 row_max_rel = row_data.get("max_relative_error", None)
-                if isinstance(baseline_max_rel, jnp.ndarray) and (baseline_max_rel.ndim == 0 or baseline_max_rel.ndim == 1):
+                if isinstance(baseline_max_rel, jnp.ndarray) and (
+                    baseline_max_rel.ndim == 0 or baseline_max_rel.ndim == 1
+                ):
                     baseline_max_rel = float(baseline_max_rel)
-                if isinstance(row_max_rel, jnp.ndarray) and (row_max_rel.ndim == 0 or row_max_rel.ndim == 1):
+                if isinstance(row_max_rel, jnp.ndarray) and (
+                    row_max_rel.ndim == 0 or row_max_rel.ndim == 1
+                ):
                     row_max_rel = float(row_max_rel)
                 if isinstance(baseline_max_rel, float) and isinstance(
                     row_max_rel, float

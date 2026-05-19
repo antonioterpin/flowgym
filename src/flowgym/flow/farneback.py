@@ -41,7 +41,9 @@ class FarnebackEstimator(FlowFieldEstimator):
             raise ValueError(f"pyr_scale {pyr_scale} must be in [0, 1].")
         self.pyr_scale = pyr_scale
 
-        if levels < 0:
+        if not isinstance(levels, int):
+            raise TypeError(f"levels {levels} must be a positive integer.")
+        if levels <= 0:
             raise ValueError(f"levels {levels} must be a positive integer.")
         self.levels = levels
 

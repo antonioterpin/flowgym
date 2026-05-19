@@ -169,7 +169,7 @@ def admm_consensus(
             "Expected 'sgd', 'adam', 'closed_form_l2', 'closed_form_l1', "
             "or 'closed_form_huber'."
         )
-    
+
     if solver_flows not in [
         "closed_form_l2",
         "closed_form_l1",
@@ -245,7 +245,7 @@ def admm_consensus(
 
     # Extract and validate ADMM solver parameters
     num_iterations_flows: int = cfg.pop("num_iterations_flows", 1)
-    if (not isinstance(num_iterations_flows, int) or num_iterations_flows <= 0):
+    if not isinstance(num_iterations_flows, int) or num_iterations_flows <= 0:
         raise ValueError(
             "num_iterations_flows must be a positive integer, "
             f"got {num_iterations_flows}."
@@ -293,7 +293,7 @@ def admm_consensus(
 
     learning_rate_consensus = cfg.pop("learning_rate_consensus", 0.01)
     if (
-        not isinstance(learning_rate_consensus, float) 
+        not isinstance(learning_rate_consensus, float)
         or learning_rate_consensus <= 0
     ):
         raise ValueError(
@@ -302,26 +302,27 @@ def admm_consensus(
         )
 
     max_admm_iterations = cfg.pop("max_admm_iterations", 10)
-    if (
-        not isinstance(max_admm_iterations, int)
-        or max_admm_iterations <= 0
-    ):
+    if not isinstance(max_admm_iterations, int) or max_admm_iterations <= 0:
         raise ValueError(
             "max_admm_iterations must be a positive integer, "
             f"got {max_admm_iterations}."
         )
 
     # Extract and validate the absolute stopping criterion
-    eps_abs_stopping: float = cfg.pop("eps_abs_stopping", 0.0)
-    if (not isinstance(eps_abs_stopping, float) or eps_abs_stopping < 0):
+    eps_abs_stopping: float | None = cfg.pop("eps_abs_stopping", None)
+    if eps_abs_stopping is not None and (
+        not isinstance(eps_abs_stopping, float) or eps_abs_stopping < 0
+    ):
         raise ValueError(
             "eps_abs_stopping must be a non-negative float or None, "
             f"got {eps_abs_stopping}."
         )
 
     # Extract and validate the relative stopping criterion
-    eps_rel_stopping: float = cfg.pop("eps_rel_stopping", 0.0)
-    if (not isinstance(eps_rel_stopping, float) or eps_rel_stopping < 0):
+    eps_rel_stopping: float | None = cfg.pop("eps_rel_stopping", None)
+    if eps_rel_stopping is not None and (
+        not isinstance(eps_rel_stopping, float) or eps_rel_stopping < 0
+    ):
         raise ValueError(
             "eps_rel_stopping must be a non-negative float or None, "
             f"got {eps_rel_stopping}."

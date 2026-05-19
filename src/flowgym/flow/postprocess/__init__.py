@@ -30,6 +30,7 @@ from .data_validation import (
     universal_median_test,
     universal_median_test_validate_params,
 )
+from .oracle_threshold import LearnedOracleThresholdEstimator
 
 
 def quantize_validate_params(
@@ -248,18 +249,19 @@ def is_outlier_rejection_step(name: str) -> bool:
 
 
 __all__ = [
+    "LearnedOracleThresholdEstimator",
     "adaptive_global_filter",
     "adaptive_global_filter_validate_params",
     "adaptive_local_filter",
     "adaptive_local_filter_validate_params",
     "apply_postprocessing",
-    "is_outlier_rejection_step",
     "average_smoothing",
     "average_smoothing_validate_params",
     "constant_threshold_filter",
     "constant_threshold_filter_validate_params",
     "gaussian_smoothing",
     "gaussian_smoothing_validate_params",
+    "is_outlier_rejection_step",
     "laplace_interpolation",
     "laplace_interpolation_validate_params",
     "learned_oracle_threshold",

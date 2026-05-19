@@ -98,7 +98,7 @@ def closed_form_flows_huber(
     consensus_dual: jnp.ndarray,
     weights_and_anchors_fn: Callable[[], tuple[jnp.ndarray, jnp.ndarray]],
     rho: float,
-    _: object,
+    unused: object,
 ) -> jnp.ndarray:
     """Closed-form x-update for flows with a Huber penalty.
 
@@ -108,6 +108,7 @@ def closed_form_flows_huber(
         consensus_dual: Dual variable for consensus.
         weights_and_anchors_fn: Callable returning (weights, anchor_flows).
         rho: ADMM penalty parameter.
+        unused: Placeholder for compatibility.
 
     Returns:
         Updated flow estimates as a jax numpy array.
