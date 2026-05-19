@@ -72,9 +72,11 @@ new_state, metrics = estimator(images, state, trained_state)
 ```
 
 Because the wrapper preserves the signature whether or not JIT is on,
-toggling `config.jit` does not require any change to the surrounding
-eval or training loop. You can develop and debug with `config.jit:
-false` and flip it to `true` for production runs.
+toggling the `jit` key inside `config` does not require any change to
+the surrounding eval or training loop. The key is nested under
+`config:` in YAML (not a literal dotted `config.jit:` key); you can
+develop and debug with `jit: false` and flip it to `true` for
+production runs.
 
 ## Runtime state and trainable state
 

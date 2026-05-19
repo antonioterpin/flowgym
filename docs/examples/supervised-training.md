@@ -30,7 +30,9 @@ uv run python examples/02_supervised_training.py
   focus on the supervised-training workflow itself: validation cadence,
   checkpoint writing, and config wiring.
 - Validation is wired through the dataset config, not a separate CLI flag.
-- Checkpoints are written under the configured `out_dir`.
+- Checkpoints are written under the configured `out_dir`. `src/main.py`
+  reads `out_dir` from the estimator config and nests checkpoints under
+  `<out_dir>/<estimator>/...`.
 - This is the best example to study before changing training orchestration,
   validation cadence, or checkpoint behavior.
 

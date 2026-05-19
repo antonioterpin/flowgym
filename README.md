@@ -99,9 +99,8 @@ The canonical human-facing docs start at [docs/index.md](docs/index.md).
 - [Getting started](docs/getting-started/index.md)
 - [Example workflows](docs/examples/index.md)
 - [API reference](docs/api/index.md)
-- [Architecture guide](docs/guides/architecture.md)
-- [Contributing guide](docs/guides/contributing.md)
-- [Project docs](docs/project-docs.md)
+- [Architecture guide](docs/contribute/architecture.md)
+- [Contributing guide](docs/contribute/contributing.md)
 
 If you are new to the project, start with
 [docs/getting-started/index.md](docs/getting-started/index.md) for the motivation,
@@ -119,7 +118,7 @@ The repository includes two documented caching walkthroughs:
 ## Contributing
 
 Contributions are welcome. For current setup, quality gates, docs workflow,
-and repository navigation, use [docs/guides/contributing.md](docs/guides/contributing.md).
+and repository navigation, use [docs/contribute/contributing.md](docs/contribute/contributing.md).
 
 ## Citation
 

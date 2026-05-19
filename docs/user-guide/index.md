@@ -7,7 +7,8 @@ workflows.
 
 Pages are ordered the way most readers will want them: the API contract
 first, then the configuration that drives it, then the workflows that
-consume both, with end-to-end example walkthroughs at the end.
+consume both. End-to-end walkthroughs live in the top-level
+[Example workflows](../examples/index.md) section.
 
 - [Estimator API overview](estimator-api.md)
   - [What an `Estimator` is](estimator-api.md#what-an-estimator-is)
@@ -28,8 +29,6 @@ consume both, with end-to-end example walkthroughs at the end.
   - [Training workflows](training-and-evaluation.md#training-workflows)
   - [What's in `flowgym.training`](training-and-evaluation.md#whats-in-flowgymtraining)
 
-- [Example workflows](../examples/index.md)
-
 ```{toctree}
 :hidden:
 :maxdepth: 2
@@ -37,5 +36,4 @@ consume both, with end-to-end example walkthroughs at the end.
 estimator-api
 configuration-and-data
 training-and-evaluation
-../examples/index
 ```

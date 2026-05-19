@@ -59,7 +59,7 @@ batches_per_flow_batch: 1
 loop: false
 randomize: false
 include_images: false
-scheduler_files:
+file_list:
     - path/to/flows.h5
 scheduler_class: ".h5"
 ```
@@ -71,7 +71,7 @@ Load-bearing keys:
 - `loop`, `randomize`, `include_images`: sampler behavior. Note that
   `src/main.py` overrides some of these per `--mode` (e.g. eval modes
   force `loop: false`).
-- `scheduler_files` and `scheduler_class`: the data source — typically
+- `file_list` and `scheduler_class`: the data source — typically
   a list of `.h5` or `.npy` files plus the file extension that selects
   the synthpix scheduler.
 - `caching` (optional): a sub-dict that wires

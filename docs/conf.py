@@ -38,7 +38,6 @@ autodoc_mock_imports = [
     "ipywidgets",
     "openpiv",
     "pyoptflow",
-    "robo_goggles",
     "skimage",
     "synthpix",
     "torch",

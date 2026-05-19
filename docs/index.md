@@ -34,6 +34,7 @@ understand the estimator interface, or navigate the repository.
 
 getting-started/index
 user-guide/index
+examples/index
 api/index
 contribute/index
 ```

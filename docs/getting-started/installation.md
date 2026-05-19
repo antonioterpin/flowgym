@@ -20,6 +20,17 @@ pip install flow-gym-suite
 
 The current package metadata requires Python 3.10+.
 
+```{warning}
+The published `flow-gym-suite` wheel cannot currently run the minimal
+API example in [Quick overview](quick-overview.md) on its own. The
+public API at `flowgym.make.make_estimator` unconditionally imports
+`synthpix` (and `orbax`), which is only available through the `dev`
+group (git-pinned). Until those imports become lazy or land in
+`[project] dependencies`, follow the [Working on the
+repository](#working-on-the-repository) flow below for a runnable
+setup.
+```
+
 ## Working on the repository
 
 If you want to contribute to Flow Gym itself, use the

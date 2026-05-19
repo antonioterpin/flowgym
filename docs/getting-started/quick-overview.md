@@ -59,7 +59,7 @@ The returned objects separate two kinds of state:
   helpers for the runtime estimation loop
 
 This split is what lets Flow Gym use the same interface for classical and
-learning-based methods. The `trained_state` is an empty dictionary for 
+learning-based methods. The `trained_state` is an empty dictionary for
 non-trainable methods, but it can still be passed around and used in the same way as for
 trainable methods, which makes it easier to swap methods in and out of the same workflow.
 
@@ -90,8 +90,8 @@ dataset-backed runs, benchmarking, and repository workflows, move to the
 example and guide pages below.
 
 In particular, the [Example workflows](../examples/index.md) include walkthroughs of
-- running an estimator on a dataset with `src.main`
-- training a learning-based estimator with `src.main`
+- running an estimator on a dataset with `src/main.py`
+- training a learning-based estimator with `src/main.py`
 - using the cache for expensive derived quantities
 
 Instead, if you want to understand the API design and the estimator interface in more depth, see the
