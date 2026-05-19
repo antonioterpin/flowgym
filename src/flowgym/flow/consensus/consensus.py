@@ -3,6 +3,7 @@
 import csv
 import os
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any, cast
 
 import jax
@@ -21,9 +22,9 @@ from flowgym.flow.consensus.consensus_algorithms import (
 from flowgym.flow.consensus.objectives import make_weights
 from flowgym.make import make_estimator
 from flowgym.types import ExperimentParams, PRNGKey
-from flowgym.utils import load_configuration
+from flowgym.utils import append_metrics_to_csv, load_configuration
 
-logger = get_logger(__name__)
+logger = get_logger(__name__, with_metrics=True)
 
 
 class ConsensusFlowEstimator(FlowFieldEstimator):
@@ -242,6 +243,8 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
         prev = state["images"][:, -1, ...]
         curr = images
         metrics = {}
+        experiment_params = self.experiment_params.copy()
+        consensus_config = self.consensus_config.copy()
 
         # Check if the state has a history of estimates
         if not self.use_temporal_propagation:
