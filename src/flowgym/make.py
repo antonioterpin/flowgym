@@ -448,7 +448,7 @@ def make_estimator(
 
     estimator_config keys:
     - estimator: Name of the estimator.
-    - estimator_type: Type of the estimator ("flow" or "density").
+    - estimate_type: Type of the estimator ("flow" or "density").
     - config: Configuration dictionary for the estimator.
 
     Args:
