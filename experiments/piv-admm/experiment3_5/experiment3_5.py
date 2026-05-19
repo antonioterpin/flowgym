@@ -25,7 +25,7 @@ RUN_CMD = [
     "python",
     "-m",
     "src.main",
-    "--model",
+    "--estimator",
     str(CONFIG_PATH),
     "--dataset",
     str(DATASET_PATH),
@@ -255,8 +255,7 @@ def run_sweep() -> None:
         )
 
         result_path = (
-            RESULTS_DIR
-            / f"{BASE_CONSENSUS['name']}__{outlier['name']}.csv"
+            RESULTS_DIR / f"{BASE_CONSENSUS['name']}__{outlier['name']}.csv"
         )
         set_nested_value(
             cfg,

@@ -24,7 +24,7 @@ RUN_CMD = [
     "python",
     "-m",
     "src.main",
-    "--model",
+    "--estimator",
     "PLACEHOLDER",
     "--dataset",
     "experiments/piv-admm/baselines/val_dataset.yaml",

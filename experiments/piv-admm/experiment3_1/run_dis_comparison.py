@@ -65,7 +65,7 @@ RUN_CMD = [
     "python",
     "-m",
     "src.main",
-    "--model",
+    "--estimator",
     str(CONFIG_PATH),
     "--dataset",
     str(DATASET_PATH),
@@ -337,12 +337,9 @@ def main() -> None:
                                     features=features,
                                 )
                             )
-                            temp_estimators = (
-                                temp_dir
-                                / (
-                                    "temp_dis_learned_"
-                                    f"{profile}_{objective}_{_tau_tag(tau)}.yaml"
-                                )
+                            temp_estimators = temp_dir / (
+                                "temp_dis_learned_"
+                                f"{profile}_{objective}_{_tau_tag(tau)}.yaml"
                             )
                             with open(temp_estimators, "w") as f:
                                 yaml.safe_dump(dis_estimators_cfg, f)

@@ -170,7 +170,7 @@ RUN_CMD = [
     "python",
     "-m",
     "src.main",
-    "--model",
+    "--estimator",
     str(CONFIG_PATH),
     "--dataset",
     "experiments/piv-admm/experiment3_1/dataset.yaml",
@@ -324,12 +324,9 @@ def run_sweep():
                     dis_estimators_cfg = inject_dis_learned_oracle_postprocess(
                         base_estimators_cfg, checkpoint_dir
                     )
-                    temp_estimators_path = (
-                        CONFIG_PATH.parent
-                        / (
-                            "temp_estimators_dis_learned_oracle_"
-                            f"{objective_type}_{_tau_tag(val)}.yaml"
-                        )
+                    temp_estimators_path = CONFIG_PATH.parent / (
+                        "temp_estimators_dis_learned_oracle_"
+                        f"{objective_type}_{_tau_tag(val)}.yaml"
                     )
                     with open(temp_estimators_path, "w") as f:
                         yaml.safe_dump(dis_estimators_cfg, f)
@@ -354,9 +351,7 @@ def run_sweep():
                 baseline_performance,
             )
 
-            final_part_path = (
-                Path(estimators_path).name.replace(".yaml", "")
-            )
+            final_part_path = Path(estimators_path).name.replace(".yaml", "")
             # Write temp config
             temp_path = (
                 CONFIG_PATH.parent

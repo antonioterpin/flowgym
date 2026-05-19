@@ -44,7 +44,7 @@ RUN_CMD = [
     "python",
     "-m",
     "src.main",
-    "--model",
+    "--estimator",
     str(MODEL_PATH),
     "--dataset",
     str(DATASET_PATH),
@@ -187,9 +187,7 @@ def run_training_oracle(
                 cfg, "config.include_image_pair", include_image_pair
             )
             # Keep training aligned with downstream consensus estimator set.
-            set_nested_value(
-                cfg, "config.estimator_list", estimator_list_path
-            )
+            set_nested_value(cfg, "config.estimator_list", estimator_list_path)
             if estimator_list_name != "dis":
                 set_nested_value(
                     cfg,

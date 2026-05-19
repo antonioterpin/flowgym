@@ -61,7 +61,7 @@ RUN_CMD = [
     "python",
     "-m",
     "src.main",
-    "--model",
+    "--estimator",
     str(CONFIG_PATH),
     "--dataset",
     "experiments/piv-admm/experiment3_2/dataset.yaml",

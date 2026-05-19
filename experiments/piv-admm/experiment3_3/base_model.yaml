@@ -37,7 +37,7 @@ config:
   preprocess: src/flowgym/config/estimators/pre-processing/common.yaml
   postprocess: src/flowgym/config/estimators/post-processing/common.yaml
 
-  Experimental parameters:
+  # Experimental parameters:
   experiment_params:
     epe_limit:
     log_path: "results/experiment3_3.csv"
