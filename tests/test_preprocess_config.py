@@ -174,8 +174,8 @@ def test_preprocess_config_invalid_params(N, seed):
 
 
 @pytest.mark.skipif(
-    not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="Requires the workstation (4x NVIDIA GeForce RTX 4090).",
+    not any(d.platform == "gpu" for d in jax.devices()),
+    reason="No GPU available.",
 )
 @pytest.mark.parametrize(
     "B, H, time_limit",

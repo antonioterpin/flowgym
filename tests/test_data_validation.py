@@ -90,8 +90,8 @@ def test_constant_threshold_filter_batch(
 
 
 @pytest.mark.skipif(
-    not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="Requires the workstation (4x NVIDIA GeForce RTX 4090).",
+    not any(d.platform == "gpu" for d in jax.devices()),
+    reason="No GPU available.",
 )
 @pytest.mark.parametrize(
     "B, H, W, limit_time",
@@ -200,8 +200,8 @@ def test_local_std_vs_naive(
 
 
 @pytest.mark.skipif(
-    not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="Requires the workstation (4x NVIDIA GeForce RTX 4090).",
+    not any(d.platform == "gpu" for d in jax.devices()),
+    reason="No GPU available.",
 )
 @pytest.mark.parametrize(
     "B, H, W, radius, limit_time",
@@ -333,8 +333,8 @@ def test_universal_vs_naive(batch, height, width, radius, r_threshold):
 
 
 @pytest.mark.skipif(
-    not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="Requires the workstation (4x NVIDIA GeForce RTX 4090).",
+    not any(d.platform == "gpu" for d in jax.devices()),
+    reason="No GPU available.",
 )
 @pytest.mark.parametrize(
     "B, H, W, limit_time, radius",
