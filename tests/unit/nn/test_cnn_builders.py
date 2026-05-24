@@ -1,9 +1,8 @@
-"""Tests for CNN model builders.
+"""Unit tests for flowgym.nn.cnn.
 
-This module tests the config-driven builders for:
-- CNNDensityModel
-- CNNQEstimatorModel
-- Model dispatcher
+Covers config-driven builders for CNNDensityModel, CNNQEstimatorModel,
+CNNFlowFieldModel, and the model dispatcher, including validation and
+forward passes.
 """
 
 import jax
@@ -26,7 +25,7 @@ class TestCNNDensityModelBuilder:
     """Tests for CNNDensityModel builder."""
 
     def test_minimal_config(self):
-        """Build CNNDensityModel with only required fields."""
+        """CNNDensityModel applies defaults when only features_list is given."""
         config = {"features_list": [32, 64]}
         model = build_cnn_density_model_from_config(config)
         assert isinstance(model, CNNDensityModel)
@@ -95,7 +94,7 @@ class TestCNNDensityModelBuilder:
         assert model.norm_fn == "none"
 
     def test_norm_fn_from_registry(self):
-        """Build CNNDensityModel with various normalization types."""
+        """All supported norm_fn values are accepted without error."""
         for norm_type in ["batch", "instance", "group", "none"]:
             config = {"features_list": [32, 64], "norm_fn": norm_type}
             model = build_cnn_density_model_from_config(config)
@@ -109,7 +108,7 @@ class TestCNNDensityModelBuilder:
             )
 
     def test_full_config(self):
-        """Build CNNDensityModel with all fields specified."""
+        """All CNNDensityModel config fields are applied to the model."""
         config = {
             "features_list": [16, 32, 64, 128],
             "use_residual": True,
@@ -121,7 +120,7 @@ class TestCNNDensityModelBuilder:
         assert model.norm_fn == "batch"
 
     def test_model_is_callable(self):
-        """Built CNNDensityModel can be called and produces correct output."""
+        """CNNDensityModel forward gives one scalar per batch item."""
         config = {"features_list": [16, 32]}
         model = build_cnn_density_model_from_config(config)
 
@@ -150,7 +149,7 @@ class TestCNNQEstimatorModelBuilder:
     """Tests for CNNQEstimatorModel builder."""
 
     def test_minimal_config(self):
-        """Build CNNQEstimatorModel with all required fields."""
+        """CNNQEstimatorModel builder applies defaults for optional fields."""
         config = {
             "features_list": (32, 64),
             "kernel_sizes": (4, 3),
@@ -211,7 +210,7 @@ class TestCNNQEstimatorModelBuilder:
             )
 
     def test_features_list_accepts_list_or_tuple(self):
-        """CNNQEstimatorModel features_list can be list or tuple."""
+        """Both list and tuple inputs are normalised to tuples on the model."""
         # Test with list - should be converted to tuple
         config_list = {
             "features_list": [32, 64],
@@ -374,7 +373,7 @@ class TestCNNQEstimatorModelBuilder:
         assert model.norm_fn == "none"
 
     def test_norm_fn_from_registry(self):
-        """Build CNNQEstimatorModel with various normalization types."""
+        """All supported norm_fn values are accepted without error."""
         for norm_type in ["batch", "instance", "group", "none"]:
             config = {
                 "features_list": (32, 64),
@@ -510,7 +509,7 @@ class TestCNNQEstimatorModelBuilder:
             )
 
     def test_full_config(self):
-        """Build CNNQEstimatorModel with all fields specified."""
+        """All CNNQEstimatorModel config fields are applied to the model."""
         config = {
             "features_list": [16, 32, 64],
             "kernel_sizes": [5, 4, 3],
@@ -530,7 +529,7 @@ class TestCNNQEstimatorModelBuilder:
         assert len(model.postprocess) == 1
 
     def test_model_is_callable(self):
-        """Built CNNQEstimatorModel can be called and returns Q-values."""
+        """CNNQEstimatorModel forward returns (batch, num_q_values)."""
         config = {
             "features_list": (16, 32),
             "kernel_sizes": (4, 3),
@@ -555,20 +554,20 @@ class TestModelDispatcher:
     """Tests for model dispatcher and registry."""
 
     def test_registry_contains_expected_models(self):
-        """MODEL_REGISTRY contains expected model types."""
+        """MODEL_REGISTRY exposes all three expected CNN model keys."""
         assert "cnn_density" in MODEL_REGISTRY
         assert "cnn_flow_field" in MODEL_REGISTRY
         assert "cnn_q_estimator" in MODEL_REGISTRY
 
     def test_dispatcher_cnn_density(self):
-        """Dispatcher correctly routes to CNNDensityModel builder."""
+        """type='cnn_density' routes to CNNDensityModel with correct fields."""
         config = {"type": "cnn_density", "features_list": [32, 64]}
         model = build_model_from_config(config)
         assert isinstance(model, CNNDensityModel)
         assert model.features_list == [32, 64]
 
     def test_dispatcher_cnn_q_estimator(self):
-        """Dispatcher correctly routes to CNNQEstimatorModel builder."""
+        """type='cnn_q_estimator' routes to CNNQEstimatorModel."""
         config = {
             "type": "cnn_q_estimator",
             "features_list": (32, 64),
@@ -580,7 +579,7 @@ class TestModelDispatcher:
         assert isinstance(model, CNNQEstimatorModel)
 
     def test_flow_field_builder_and_dispatcher(self):
-        """Flow-field model is buildable directly and via dispatcher."""
+        """CNNFlowFieldModel builds via direct builder and dispatcher."""
         config = {
             "features_list": [32, 64],
             "use_residual": False,
@@ -608,7 +607,7 @@ class TestModelDispatcher:
             )
 
     def test_flow_field_model_forward_conv_and_residual(self):
-        """CNNFlowFieldModel forward supports both branch types."""
+        """CNNFlowFieldModel outputs (B, H, W, 2) for both conv and residual."""
         key = jax.random.PRNGKey(101)
         x = jnp.ones((2, 16, 16, 3))
 
@@ -627,7 +626,7 @@ class TestModelDispatcher:
         assert res_out.shape == (2, 16, 16, 2)
 
     def test_flow_field_builder_validation_errors(self):
-        """Flow-field builder validates required and typed fields."""
+        """Flow-field builder rejects missing, wrong-typed, or empty fields."""
         with pytest.raises(ValueError, match="must contain 'features_list'"):
             build_cnn_flow_field_model_from_config({})
         with pytest.raises(ValueError, match="features_list must be a list"):
@@ -653,7 +652,7 @@ class TestModelDispatcher:
             )
 
     def test_dispatcher_case_insensitive(self):
-        """Dispatcher handles case-insensitive model types."""
+        """Model type lookup is case-insensitive across all casing variants."""
         config_upper = {"type": "CNN_DENSITY", "features_list": [32, 64]}
         model_upper = build_model_from_config(config_upper)
         assert isinstance(model_upper, CNNDensityModel)
@@ -663,7 +662,7 @@ class TestModelDispatcher:
         assert isinstance(model_mixed, CNNDensityModel)
 
     def test_dispatcher_error_message_lists_available(self):
-        """Dispatcher error message lists available model types."""
+        """Unknown type error message includes the Available: hint."""
         with pytest.raises(ValueError, match="Available:"):
             build_model_from_config(
                 {"type": "invalid", "features_list": [32, 64]}

@@ -1,10 +1,6 @@
-"""Tests to validate CACHING.md rules are properly enforced.
+"""Unit tests for flowgym.training.caching: caching rules compliance.
 
-This module tests that the caching system follows the standards defined in
-docs/CACHING.md, including:
-- Unique cache ID generation
-- Meta-estimator delegation to component estimator caches
-- Component estimator cache write-back
+Ensures cache IDs are stable, config-sensitive, and unique per estimator type.
 """
 
 
@@ -15,7 +11,7 @@ class TestUniqueCacheIds:
     """Tests for CACHING.md Rule 1: Estimators provide stable, unique IDs."""
 
     def test_different_configs_produce_different_cache_ids(self):
-        """Cache ID should change when estimator config changes."""
+        """Changing estimator config produces a different cache ID suffix."""
 
         # Create two estimators with different configs
         config1 = {
@@ -59,7 +55,7 @@ class TestUniqueCacheIds:
         )
 
     def test_same_config_produces_same_cache_id(self):
-        """Cache ID should be stable for the same config."""
+        """Identical estimator config always yields the same cache ID suffix."""
         import hashlib
         import json
 
@@ -79,7 +75,7 @@ class TestUniqueCacheIds:
         assert suffix1 == suffix2, "Same config should produce same cache ID"
 
     def test_different_estimator_types_produce_different_cache_ids(self):
-        """Different estimator types should have different cache IDs."""
+        """Different estimator class names guarantee distinct cache IDs."""
         # This is enforced by class name being part of cache_id
         # cache_id = f"{estimator.__class__.__name__}{suffix}"
 

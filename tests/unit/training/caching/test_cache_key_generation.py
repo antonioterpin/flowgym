@@ -1,9 +1,6 @@
-"""Tests for cache key generation behavior.
+"""Unit tests for flowgym.training.caching: cache key generation.
 
-These tests verify that:
-1. Real images (from RealImageSampler) use filename-based keys that are
-   stable across epochs
-2. Synthetic images use batch.keys which depend on generation parameters
+Covers filename-based keys for real images and batch.keys for synthetic images.
 """
 
 import hashlib
@@ -20,7 +17,7 @@ class TestCacheKeyGenerationForRealImages:
     """Tests for cache key generation with real images."""
 
     def test_real_image_key_based_on_filename_only(self, mock_cache_dir):
-        """Test that real image batches use filename-based keys."""
+        """Real-image batches hit the cache across epochs by name."""
         spec = {"epe": (np.dtype("float32"), ())}
         cm = CacheManager(
             root_dir=str(mock_cache_dir),
@@ -73,7 +70,7 @@ class TestCacheKeyGenerationForRealImages:
         np.testing.assert_allclose(payload1.epe, payload2.epe)
 
     def test_real_image_key_ignores_path_prefix(self, mock_cache_dir):
-        """Test that cache key only depends on basename, not full path."""
+        """Cache key is derived from the basename only, not the full path."""
         spec = {"epe": (np.dtype("float32"), ())}
         cm = CacheManager(
             root_dir=str(mock_cache_dir),
@@ -116,7 +113,7 @@ class TestCacheKeyGenerationForRealImages:
         assert estimator.enrich.call_count == 0
 
     def test_different_filenames_produce_different_keys(self, mock_cache_dir):
-        """Test that different filenames produce different cache keys."""
+        """Different filenames produce distinct keys and misses."""
         spec = {"epe": (np.dtype("float32"), ())}
         cm = CacheManager(
             root_dir=str(mock_cache_dir),
@@ -160,7 +157,7 @@ class TestCacheKeyGenerationForSyntheticImages:
     """Tests for cache key generation with synthetic images."""
 
     def test_synthetic_image_uses_batch_keys(self, mock_cache_dir):
-        """Test that synthetic batches use batch.keys for caching."""
+        """Synthetic batches use batch.keys as cache keys, ignoring params."""
         spec = {"epe": (np.dtype("float32"), ())}
         cm = CacheManager(
             root_dir=str(mock_cache_dir),
@@ -204,7 +201,7 @@ class TestCacheKeyGenerationForSyntheticImages:
         assert estimator.enrich.call_count == 0
 
     def test_synthetic_different_keys_produce_miss(self, mock_cache_dir):
-        """Test that different batch.keys produce cache misses."""
+        """Distinct batch.keys each produce a cache miss."""
         spec = {"epe": (np.dtype("float32"), ())}
         cm = CacheManager(
             root_dir=str(mock_cache_dir),
@@ -248,7 +245,7 @@ class TestBatchTypeDetection:
     """Test how batch type (real vs synthetic) is detected."""
 
     def test_files_without_params_triggers_filename_keys(self, mock_cache_dir):
-        """Test that batch with files but no params uses filename-based keys."""
+        """Batch with files and no params uses filename-derived cache keys."""
         spec = {"epe": (np.dtype("float32"), ())}
         cm = CacheManager(
             root_dir=str(mock_cache_dir),
@@ -294,7 +291,7 @@ class TestBatchTypeDetection:
         assert estimator.enrich.call_count == 0
 
     def test_files_with_params_uses_batch_keys(self, mock_cache_dir):
-        """Test batch with files AND params uses batch.keys, not filenames."""
+        """Batch with both files and params uses batch.keys, not filenames."""
         spec = {"epe": (np.dtype("float32"), ())}
         cm = CacheManager(
             root_dir=str(mock_cache_dir),

@@ -1,4 +1,8 @@
-"""Tests for data_interpolation module."""
+"""Unit tests for flowgym.common (data interpolation via flow.postprocess).
+
+Covers tile-average and Laplace interpolation for correctness against a
+naive NumPy reference, convergence on uniform fields, and GPU throughput.
+"""
 
 import timeit
 
@@ -36,6 +40,7 @@ NUMBER_OF_EXECUTIONS = config["EXECUTIONS_POST_PROCESS"]
 @pytest.mark.parametrize("p", [0.95, 0.9])
 @pytest.mark.parametrize("seed", [0, 42])
 def test_algorithms(method, kwargs, B, H, W, p, seed):
+    """Interpolation on a uniform field converges to low end-point error."""
     key = jax.random.PRNGKey(seed)
     valid = jax.random.bernoulli(key, p, (B, H, W))
     flow = jnp.ones((B, H, W, 2))  # Uniform flow field
@@ -131,6 +136,7 @@ def laplace_interpolation_naive(flow, valid, num_iter):
 @pytest.mark.parametrize("p", [0.95, 0.9, 0.8, 0.1])
 @pytest.mark.parametrize("seed", [0])
 def test_algorithms_naive(method, method_naive, kwargs, B, H, W, p, seed):
+    """JAX interpolation matches naive NumPy reference within tolerance."""
     key = jax.random.PRNGKey(seed)
     valid = jax.random.bernoulli(key, p, (B, H, W))
     flow = jax.random.normal(key, (B, H, W, 2))
@@ -175,6 +181,7 @@ def test_algorithms_naive(method, method_naive, kwargs, B, H, W, p, seed):
 @pytest.mark.parametrize("seed", [0, 42])
 @pytest.mark.parametrize("p", [0.1, 0.2, 0.5])
 def test_algorithms_speed(method, kwargs, B, H, W, time_limit, seed, p):
+    """JIT-compiled interpolation meets per-shape GPU throughput time limits."""
     # Generate random flow field with a single outlier
     key = jax.random.PRNGKey(seed)
     flow = jax.random.normal(key, (B, H, W, 2))

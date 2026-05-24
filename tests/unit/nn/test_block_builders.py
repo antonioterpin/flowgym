@@ -1,9 +1,7 @@
-"""Tests for neural network block builders.
+"""Unit tests for flowgym.nn.blocks.
 
-This module tests the config-driven builders for:
-- ConvBlock
-- ResidualBlock
-- Block dispatcher
+Covers config-driven builders for ConvBlock, ResidualBlock, and the
+block dispatcher, including validation, defaults, and forward passes.
 """
 
 import jax
@@ -34,7 +32,7 @@ class TestConvBlockBuilder:
     """Tests for ConvBlock builder."""
 
     def test_minimal_config(self):
-        """Build ConvBlock with only required fields."""
+        """ConvBlock builder uses safe defaults when only features is given."""
         config = {"features": 64}
         block = build_conv_block_from_config(config)
         assert isinstance(block, ConvBlock)
@@ -57,13 +55,13 @@ class TestConvBlockBuilder:
             build_conv_block_from_config({"features": -10})
 
     def test_kernel_size_as_int(self):
-        """Build ConvBlock with kernel_size as int."""
+        """Scalar kernel_size is broadcast to a symmetric (k, k) tuple."""
         config = {"features": 32, "kernel_size": 5}
         block = build_conv_block_from_config(config)
         assert block.kernel_size == (5, 5)
 
     def test_kernel_size_as_list(self):
-        """Build ConvBlock with kernel_size as [H, W]."""
+        """Two-element kernel_size list is preserved as an (H, W) tuple."""
         config = {"features": 32, "kernel_size": [7, 3]}
         block = build_conv_block_from_config(config)
         assert block.kernel_size == (7, 3)
@@ -76,13 +74,13 @@ class TestConvBlockBuilder:
             )
 
     def test_strides_as_int(self):
-        """Build ConvBlock with strides as int."""
+        """Scalar strides value is broadcast to a symmetric (s, s) tuple."""
         config = {"features": 32, "strides": 2}
         block = build_conv_block_from_config(config)
         assert block.strides == (2, 2)
 
     def test_strides_as_list(self):
-        """Build ConvBlock with strides as [H, W]."""
+        """Two-element strides list is preserved as an (H, W) tuple."""
         config = {"features": 32, "strides": [2, 1]}
         block = build_conv_block_from_config(config)
         assert block.strides == (2, 1)
@@ -93,7 +91,7 @@ class TestConvBlockBuilder:
             build_conv_block_from_config({"features": 32, "strides": [1, 2, 3]})
 
     def test_norm_fn_from_registry(self):
-        """Build ConvBlock with various normalization types."""
+        """All supported norm_fn values are accepted without error."""
         for norm_type in ["batch", "instance", "group", "none"]:
             config = {"features": 32, "norm_fn": norm_type}
             block = build_conv_block_from_config(config)
@@ -105,7 +103,7 @@ class TestConvBlockBuilder:
             build_conv_block_from_config({"features": 32, "norm_fn": "layer"})
 
     def test_activation_from_registry(self):
-        """Build ConvBlock with various activation functions."""
+        """All supported activation names are accepted without error."""
         for act_name in ["relu", "gelu", "tanh", "sigmoid"]:
             config = {"features": 32, "activation": act_name}
             block = build_conv_block_from_config(config)
@@ -125,7 +123,7 @@ class TestConvBlockBuilder:
             )
 
     def test_group_size(self):
-        """Build ConvBlock with custom group_size."""
+        """Custom group_size is stored on the block when norm_fn is group."""
         config = {"features": 64, "norm_fn": "group", "group_size": 16}
         block = build_conv_block_from_config(config)
         assert block.group_size == 16
@@ -141,7 +139,7 @@ class TestConvBlockBuilder:
             )
 
     def test_full_config(self):
-        """Build ConvBlock with all fields specified."""
+        """All ConvBlock config fields are applied to the resulting block."""
         config = {
             "features": 128,
             "kernel_size": [5, 5],
@@ -159,7 +157,7 @@ class TestConvBlockBuilder:
         assert block.group_size == 32
 
     def test_block_is_callable(self):
-        """Built ConvBlock can be called."""
+        """ConvBlock forward keeps spatial dims and maps to features."""
         config = {"features": 16}
         block = build_conv_block_from_config(config)
 
@@ -179,7 +177,7 @@ class TestResidualBlockBuilder:
     """Tests for ResidualBlock builder."""
 
     def test_minimal_config(self):
-        """Build ResidualBlock with only required fields."""
+        """ResidualBlock builder uses safe defaults when only features given."""
         config = {"features": 64}
         block = build_residual_block_from_config(config)
         assert isinstance(block, ResidualBlock)
@@ -199,25 +197,25 @@ class TestResidualBlockBuilder:
             build_residual_block_from_config({"features": 0})
 
     def test_kernel_size_as_int(self):
-        """Build ResidualBlock with kernel_size as int."""
+        """Scalar kernel_size is broadcast to a symmetric (k, k) tuple."""
         config = {"features": 32, "kernel_size": 5}
         block = build_residual_block_from_config(config)
         assert block.kernel_size == (5, 5)
 
     def test_kernel_size_as_list(self):
-        """Build ResidualBlock with kernel_size as [H, W]."""
+        """Two-element kernel_size list is preserved as an (H, W) tuple."""
         config = {"features": 32, "kernel_size": [7, 3]}
         block = build_residual_block_from_config(config)
         assert block.kernel_size == (7, 3)
 
     def test_strides_as_int(self):
-        """Build ResidualBlock with strides as int."""
+        """Scalar strides value is broadcast to a symmetric (s, s) tuple."""
         config = {"features": 32, "strides": 2}
         block = build_residual_block_from_config(config)
         assert block.strides == (2, 2)
 
     def test_strides_as_list(self):
-        """Build ResidualBlock with strides as [H, W]."""
+        """Two-element strides list is preserved as an (H, W) tuple."""
         config = {"features": 32, "strides": [2, 1]}
         block = build_residual_block_from_config(config)
         assert block.strides == (2, 1)
@@ -237,7 +235,7 @@ class TestResidualBlockBuilder:
             )
 
     def test_norm_fn_from_registry(self):
-        """Build ResidualBlock with various normalization types."""
+        """All supported norm_fn values are accepted without error."""
         for norm_type in ["batch", "instance", "group", "none"]:
             config = {"features": 32, "norm_fn": norm_type}
             block = build_residual_block_from_config(config)
@@ -251,7 +249,7 @@ class TestResidualBlockBuilder:
             )
 
     def test_full_config(self):
-        """Build ResidualBlock with all fields specified."""
+        """All ResidualBlock config fields apply to the built block."""
         config = {
             "features": 128,
             "kernel_size": [3, 3],
@@ -265,7 +263,7 @@ class TestResidualBlockBuilder:
         assert block.norm_fn == "instance"
 
     def test_block_is_callable(self):
-        """Built ResidualBlock can be called."""
+        """ResidualBlock forward pass maps channels to features, keeps dtype."""
         config = {"features": 16}
         block = build_residual_block_from_config(config)
 
@@ -331,7 +329,7 @@ class TestBlockIntegration:
     """Integration tests for block builders."""
 
     def test_sequential_blocks(self):
-        """Build and chain multiple blocks."""
+        """A sequence of mixed block configs each produces the expected type."""
         configs = [
             {"type": "conv", "features": 32, "activation": "relu"},
             {"type": "conv", "features": 64, "activation": "gelu"},

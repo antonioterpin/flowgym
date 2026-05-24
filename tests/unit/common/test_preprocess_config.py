@@ -1,4 +1,8 @@
-"""Tests for preprocess_config module."""
+"""Unit tests for flowgym.common.preprocess (config-driven pipeline).
+
+Covers end-to-end equivalence of config-constructed preprocessing pipelines
+against direct function calls, invalid-param rejection, and JIT throughput.
+"""
 
 import timeit
 
@@ -108,6 +112,7 @@ def apply_from_idxs(idxs, image):
 )
 @pytest.mark.parametrize("seed", [42, 123, 456, 789, 1, 2, 3, 43, 44, 45])
 def test_preprocess_config(B, N, seed):
+    """Config-driven pipeline matches direct function calls."""
     # Sample idxs
     key = jrandom.PRNGKey(seed)
     key, subkey = jrandom.split(key)
@@ -155,6 +160,7 @@ def test_preprocess_config(B, N, seed):
 )
 @pytest.mark.parametrize("seed", [42, 123, 456, 789, 1, 2, 3, 43, 44, 45])
 def test_preprocess_config_invalid_params(N, seed):
+    """Invalid preprocessing parameters raise ValueError or TypeError."""
     # Sample idxs
     key = jrandom.PRNGKey(seed)
     idxs = jrandom.choice(
@@ -191,6 +197,7 @@ def test_preprocess_config_invalid_params(N, seed):
 )
 @pytest.mark.parametrize("seed", [42])
 def test_preprocess_jit(B, H, time_limit, seed):
+    """JIT-compiled preprocessing pipeline meets GPU throughput time limits."""
     # Sample idxs
     key = jrandom.PRNGKey(seed)
     key, subkey = jrandom.split(key)

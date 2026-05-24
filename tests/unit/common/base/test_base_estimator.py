@@ -1,4 +1,8 @@
-"""Tests for base_estimator module."""
+"""Unit tests for flowgym.common.base.estimator.
+
+Covers create_state shape/tiling, extras merging, RNG handling,
+and validation of invalid input shapes and RNG types.
+"""
 
 import jax
 import jax.numpy as jnp
@@ -20,7 +24,7 @@ def dummy_estimator():
 
 
 def test_create_state_shapes_basic(dummy_estimator):
-    """Ensure 'images', 'estimates' histories created with right shapes."""
+    """create_state produces images/estimates histories with correct shapes."""
     B, H, W = 3, 16, 16
     images = jnp.ones((B, H, W))
     estimates = jnp.zeros((B, 2))
@@ -40,7 +44,7 @@ def test_create_state_shapes_basic(dummy_estimator):
 
 
 def test_create_state_with_extras(dummy_estimator):
-    """Check that extras config fields are merged correctly."""
+    """Extras config fields are merged into the state with correct shapes."""
     B, H, W = 2, 8, 8
     images = jnp.zeros((B, H, W))
     estimates = jnp.ones((B, 4))
@@ -74,7 +78,7 @@ def test_create_state_with_extras(dummy_estimator):
 
 @pytest.mark.parametrize("rng_input", [None, 42, jax.random.PRNGKey(0)])
 def test_rng_behavior(dummy_estimator, rng_input):
-    """Verify RNG key handling: no rng, int seed, or PRNGKey."""
+    """None rng omits keys; int or PRNGKey seeds add per-batch key arrays."""
     B, H, W = 4, 8, 8
     images = jnp.ones((B, H, W))
     estimates = jnp.zeros((B, 3))
@@ -99,7 +103,7 @@ def test_rng_behavior(dummy_estimator, rng_input):
 
 
 def test_invalid_shapes_raise(dummy_estimator):
-    """Ensure invalid input shapes raise appropriate errors."""
+    """Wrong image rank or mismatched batch size raises ValueError."""
     # Wrong image ndim
     bad_images = jnp.ones((4, 4))
     good_estimates = jnp.zeros((4, 2))
@@ -118,7 +122,7 @@ def test_invalid_shapes_raise(dummy_estimator):
 
 
 def test_invalid_rng_type_raises(dummy_estimator):
-    """Check that an invalid RNG type raises a TypeError."""
+    """An unsupported rng type raises TypeError in create_state."""
     images = jnp.ones((2, 4, 4))
     estimates = jnp.zeros((2, 1))
     bad_rng = "not_a_key"

@@ -1,4 +1,7 @@
-"""Integration tests for replay buffer in train_supervised."""
+"""Integration tests for train_supervised replay-buffer pipeline.
+
+Verifies that the replay buffer is populated and sampled during training.
+"""
 
 from unittest.mock import MagicMock
 
@@ -8,7 +11,7 @@ from train_supervised import train_supervised
 
 
 def test_train_supervised_integration_with_replay():
-    """Verify train_supervised uses the replay buffer."""
+    """train_supervised issues one real step and one replay step per batch."""
     # Mock estimator
     estimator = MagicMock()
     train_step_fn = MagicMock()

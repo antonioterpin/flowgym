@@ -1,4 +1,7 @@
-"""Tests for buffered writes in CacheManager."""
+"""Unit tests for flowgym.training.caching: buffered writes.
+
+Verifies pending-buffer accumulation, flush thresholds, and close semantics.
+"""
 
 import shutil
 import tempfile
@@ -20,11 +23,7 @@ def temp_cache_dir():
 
 
 def test_buffered_writes_no_flush_small(temp_cache_dir):
-    """Test that small writes are buffered and not flushed immediately.
-
-    The CacheManager buffers writes until 1000 items accumulate.
-    Small writes should stay in the pending_buffer.
-    """
+    """Small writes stay in the pending buffer and are not flushed to disk."""
     cache_id = "test_buffer_small"
     cm = CacheManager(
         temp_cache_dir,
@@ -51,7 +50,7 @@ def test_buffered_writes_no_flush_small(temp_cache_dir):
 
 
 def test_buffered_writes_flush_trigger_count(temp_cache_dir):
-    """Test that exceeding 1000 items triggers automatic flush."""
+    """Exceeding 1000 buffered items triggers an automatic flush to disk."""
     cache_id = "test_buffer_flush_count"
     cm = CacheManager(
         temp_cache_dir,
@@ -88,7 +87,7 @@ def test_buffered_writes_flush_trigger_count(temp_cache_dir):
 
 
 def test_lookup_sees_pending_buffer(temp_cache_dir):
-    """Test that lookup finds data in the pending buffer before disk."""
+    """Lookup returns buffered entries not yet flushed to disk."""
     cache_id = "test_lookup_pending"
     cm = CacheManager(
         temp_cache_dir,
@@ -118,7 +117,7 @@ def test_lookup_sees_pending_buffer(temp_cache_dir):
 
 
 def test_context_manager_flushes(temp_cache_dir):
-    """Test that context manager flushes on exit."""
+    """Exiting the context manager flushes pending writes to a parquet file."""
     cache_id = "test_ctx_mgr"
 
     with CacheManager(
@@ -144,7 +143,7 @@ def test_context_manager_flushes(temp_cache_dir):
 
 
 def test_close_idempotent(temp_cache_dir):
-    """Test that close is safe to call multiple times or on empty buffer."""
+    """close() is idempotent and never duplicates parquet files."""
     cache_id = "test_close_idem"
     cm = CacheManager(
         temp_cache_dir,
@@ -171,12 +170,7 @@ def test_close_idempotent(temp_cache_dir):
 
 
 def test_warm_start_updates_from_flush(temp_cache_dir):
-    """Test that flushed data can be read via warm start in a new instance.
-
-    Note: The CacheManager's in-memory index is only populated at init time
-    during warm start, not dynamically after flush. To see flushed data in the
-    index, you need to create a new CacheManager instance.
-    """
+    """Flushed data is visible to a new CacheManager opened with warm start."""
     cache_id = "test_warm_update"
 
     # 1. Write and flush data

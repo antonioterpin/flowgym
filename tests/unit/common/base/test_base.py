@@ -1,4 +1,8 @@
-"""Tests for base module."""
+"""Unit tests for flowgym.common.base.
+
+Covers Estimator init, create_state, create_trainable_state,
+create_train_step, and __call__ (preprocessing + history update).
+"""
 
 import jax
 import jax.numpy as jnp
@@ -69,6 +73,7 @@ class TrainableEstimator(NonTrainableEstimator):
 
 
 def test_init_with_no_preprocessing(monkeypatch):
+    """preprocessing_steps defaults to [] and no validators are called."""
     # Arrange
     validate_calls = []
     apply_calls = []
@@ -97,6 +102,7 @@ def test_init_with_no_preprocessing(monkeypatch):
 
 
 def test_init_raises_on_non_dict_preprocessing_step(monkeypatch):
+    """A non-dict preprocessing step raises ValueError on construction."""
     # Arrange
     monkeypatch.setattr(
         base_mod.estimator, "validate_params", lambda *a, **k: None
@@ -113,6 +119,7 @@ def test_init_raises_on_non_dict_preprocessing_step(monkeypatch):
 
 
 def test_init_raises_on_missing_name_key(monkeypatch):
+    """A preprocessing step dict without 'name' raises ValueError."""
     # Arrange
     monkeypatch.setattr(
         base_mod.estimator, "validate_params", lambda *a, **k: None
@@ -131,6 +138,7 @@ def test_init_raises_on_missing_name_key(monkeypatch):
 
 
 def test_init_valid_preprocessing_builds_partials_and_validates(monkeypatch):
+    """Valid preprocessing config builds callable partials and validates."""
     # Arrange
     validate_calls = []
     apply_calls = []
@@ -171,6 +179,7 @@ def test_init_valid_preprocessing_builds_partials_and_validates(monkeypatch):
 
 
 def test_create_state_valid_shapes_and_tiling_no_extras_rng_none():
+    """create_state produces correctly shaped, tiled histories with no RNG."""
     # Arrange
     B, H, W = 3, 8, 9
     images = jnp.ones((B, H, W))
@@ -209,6 +218,7 @@ def test_create_state_valid_shapes_and_tiling_no_extras_rng_none():
 
 
 def test_create_state_estimate_history_size_defaults_to_image_history_size():
+    """estimate_history_size defaults to image_history_size when None."""
     # Arrange
     B, H, W = 2, 5, 6
     images = jnp.zeros((B, H, W))
@@ -230,6 +240,7 @@ def test_create_state_estimate_history_size_defaults_to_image_history_size():
 
 
 def test_create_state_with_rng_int_adds_per_batch_keys():
+    """An integer rng seed produces per-batch-element uint32 key arrays."""
     # Arrange
     B, H, W = 2, 4, 4
     images = jnp.zeros((B, H, W))
@@ -254,6 +265,7 @@ def test_create_state_with_rng_int_adds_per_batch_keys():
 
 
 def test_create_state_rng_int_and_prngkey_are_equivalent():
+    """Integer seed and the equivalent PRNGKey produce identical key arrays."""
     # Arrange
     B, H, W = 2, 4, 4
     images = jnp.zeros((B, H, W))
@@ -289,6 +301,7 @@ def test_create_state_rng_int_and_prngkey_are_equivalent():
     ],
 )
 def test_create_state_raises_on_invalid_shapes(images_shape, estimates_shape):
+    """Mismatched or wrong-rank inputs to create_state raise ValueError."""
     # Arrange
     images = jnp.zeros(images_shape)
     estimates = jnp.zeros(estimates_shape)
@@ -312,6 +325,7 @@ def test_create_state_raises_on_invalid_shapes(images_shape, estimates_shape):
     ],
 )
 def test_create_state_raises_on_invalid_rng_type(rng):
+    """An unsupported rng value raises TypeError in create_state."""
     # Arrange
     images = jnp.zeros((2, 4, 4))
     estimates = jnp.zeros((2, 3))
@@ -334,6 +348,7 @@ def test_create_state_raises_on_invalid_rng_type(rng):
 
 
 def test_create_trainable_state_returns_expected_type():
+    """create_trainable_state returns an EstimatorTrainableState instance."""
     # Arrange
     estimator = NonTrainableEstimator()
     dummy_input = jnp.zeros((2, 4, 4))
@@ -347,6 +362,7 @@ def test_create_trainable_state_returns_expected_type():
 
 
 def test_base_create_train_step_raises_not_implemented():
+    """Base Estimator.create_train_step raises NotImplementedError."""
     # Arrange
     estimator = NonTrainableEstimator()
 
@@ -356,6 +372,7 @@ def test_base_create_train_step_raises_not_implemented():
 
 
 def test_trainable_estimator_create_train_step_returns_callable():
+    """Subclass create_train_step returns a callable with correct behavior."""
     # Arrange
     estimator = TrainableEstimator()
 
@@ -376,6 +393,7 @@ def test_trainable_estimator_create_train_step_returns_callable():
 
 
 def test_call_applies_preprocessing_and_updates_history(monkeypatch):
+    """__call__ applies preprocessing and rolls image/estimate histories."""
     # Arrange
     apply_calls = []
 
@@ -453,7 +471,7 @@ def test_call_applies_preprocessing_and_updates_history(monkeypatch):
 
 
 def test_call_uses_state_without_preprocessing(monkeypatch):
-    """Sanity check when no preprocessing_steps are defined."""
+    """Images pass through unchanged to _estimate when no steps are set."""
     # Arrange
     monkeypatch.setattr(
         base_mod.estimator, "validate_params", lambda *a, **k: None

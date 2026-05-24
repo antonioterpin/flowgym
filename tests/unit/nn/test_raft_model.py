@@ -1,4 +1,8 @@
-"""Tests for RAFT estimator model module."""
+"""Unit tests for flowgym.nn.raft_model.
+
+Covers RaftEstimatorModel coordinate grid generation and the full
+__call__ path via lightweight monkeypatched encoder/correlation blocks.
+"""
 
 import jax
 import jax.numpy as jnp
@@ -34,7 +38,7 @@ def test_coords_grid_shape_values_and_dtype():
 
 
 def test_raft_estimator_forward_path_is_fully_exercised(monkeypatch):
-    """Run RaftEstimatorModel.__call__ with lightweight mocked blocks."""
+    """RaftEstimatorModel.__call__ invokes encoder, correlation, and scan."""
     captured_encoder_inputs: list[object] = []
     captured_corr_args: dict[str, object] = {}
     captured_scan_args: dict[str, object] = {}

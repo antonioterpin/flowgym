@@ -1,4 +1,9 @@
-"""Tests for data_validation module."""
+"""Unit tests for flowgym.flow.postprocess outlier filters.
+
+Covers the constant-threshold, adaptive global/local, and universal
+median validation filters: batched-output correctness, parity with naive
+NumPy references, and GPU timing budgets.
+"""
 
 import timeit
 from functools import partial
@@ -138,6 +143,7 @@ def test_constant_threshold_filter_time(B, H, W, limit_time):
 
 
 def test_adaptive_global_filter_zero_variance():
+    """Equal-magnitude input (zero variance) flags no outliers."""
     # all the same magnitude, sigma=0 threshold=mean
     u = jnp.array([[1.0, 0.0], [-1.0, 0.0], [0.0, 1.0], [0.0, -1.0]])
     u, mask, _ = adaptive_global_filter(u, n_sigma=1.0, valid=None, state=None)
@@ -257,6 +263,7 @@ def test_adaptive_threshold_local_filter_time(B, H, W, radius, limit_time):
 
 
 def test_universal_median_test_center_outlier():
+    """A single central spike is the only pixel flagged as an outlier."""
     # zero field, but put a spike of magnitude 10 at center
     u = jnp.zeros((5, 5, 2))
     u = u.at[2, 2].set(jnp.array([10.0, 0.0]))
@@ -317,6 +324,7 @@ def _naive_median_test(
 )
 @pytest.mark.parametrize("r_threshold", [1.5, 2.0])
 def test_universal_vs_naive(batch, height, width, radius, r_threshold):
+    """JAX universal median test matches the naive NumPy reference."""
     rng = jrandom.PRNGKey(batch * height * width)  # deterministic seed
     ff_jax = jrandom.normal(rng, (batch, height, width, 2))
 

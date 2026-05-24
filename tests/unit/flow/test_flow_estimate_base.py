@@ -1,4 +1,7 @@
-"""Test the flow field computation using synthetic images."""
+"""Unit tests for flowgym.flow.base.
+
+Covers FlowFieldEstimator state creation shape contracts via DummyEstimator.
+"""
 
 import jax
 import jax.numpy as jnp
@@ -17,7 +20,7 @@ def estimator():
 @pytest.mark.parametrize("image_shape", [(128, 64), (64, 64)])
 @pytest.mark.parametrize("history_length", [1, 2, 3])
 def test_estimation_create_state(estimator, image_shape, history_length):
-    """Test the creation of the estimator state."""
+    """create_state allocates image/estimate buffers of correct shape."""
     # Create a synthetic image
     key = jax.random.PRNGKey(0)
 

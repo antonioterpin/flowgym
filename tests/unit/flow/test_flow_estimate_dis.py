@@ -1,4 +1,8 @@
-"""Test the DISFlowFieldEstimator class."""
+"""Unit tests for flowgym.flow.dis.
+
+Covers DISFlowFieldEstimator construction validation, zero-flow identity,
+and single-shift recovery.
+"""
 
 import jax.numpy as jnp
 import numpy as np
@@ -23,6 +27,7 @@ def dis_estimator():
 
 @pytest.mark.parametrize("preset", [-1, 4, "fast"])
 def test_invalid_preset_raises(preset):
+    """DISFlowFieldEstimator raises ValueError for an out-of-range preset."""
     with pytest.raises(ValueError):
         DISFlowFieldEstimator(
             preset=preset,
@@ -31,6 +36,7 @@ def test_invalid_preset_raises(preset):
 
 @pytest.mark.parametrize("patch_size", [0, -5, 3.2])
 def test_invalid_patch_size_raises(patch_size):
+    """DISFlowFieldEstimator raises ValueError for a non-positive patch_size."""
     with pytest.raises(ValueError):
         DISFlowFieldEstimator(
             patch_size=patch_size,
@@ -39,6 +45,7 @@ def test_invalid_patch_size_raises(patch_size):
 
 @pytest.mark.parametrize("patch_stride", [0, -1, 2.5, []])
 def test_invalid_patch_stride_raises(patch_stride):
+    """DISFlowFieldEstimator raises ValueError for an invalid patch_stride."""
     with pytest.raises(ValueError):
         DISFlowFieldEstimator(
             patch_stride=patch_stride,
@@ -53,6 +60,7 @@ def test_invalid_patch_stride_raises(patch_stride):
     ],
 )
 def test_invalid_iteration_counts_raise(iters, name):
+    """DISFlowFieldEstimator raises ValueError for negative iteration counts."""
     kwargs = dict(
         preset=1,
         patch_size=8,
@@ -66,6 +74,7 @@ def test_invalid_iteration_counts_raise(iters, name):
 
 
 def test_call_on_constant_images_returns_zero_flow(dis_estimator):
+    """DISFlowFieldEstimator produces zero flow between identical frames."""
     batch, H, W = 2, 16, 16
     # initial frame and current frame identical zeros
     init_image = jnp.zeros((batch, H, W), dtype=jnp.float32)
@@ -87,6 +96,7 @@ def test_call_on_constant_images_returns_zero_flow(dis_estimator):
 
 
 def test_call_on_simple_shift(dis_estimator):
+    """DISFlowFieldEstimator detects a one-pixel horizontal shift reliably."""
     _, H, W = 1, 32, 32
     rng = np.random.RandomState(0)
     # random texture ensures DIS can match

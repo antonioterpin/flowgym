@@ -1,4 +1,7 @@
-"""Tests for caching integration with the training loop."""
+"""Integration tests for caching with the supervised training pipeline.
+
+Verifies that enrich and cache write-back work end-to-end in train_supervised.
+"""
 
 import tempfile
 from unittest.mock import MagicMock, patch
@@ -46,7 +49,7 @@ def mock_sampler(num_batches, keys_list):
 
 @patch("src.train_supervised.save_estimator")
 def test_train_supervised_caching_integration(mock_save_estimator):
-    """Integration test for caching in train_supervised."""
+    """Misses are computed and cached; a second pass is all hits."""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         cache_id = "integration_test"
@@ -161,7 +164,7 @@ def test_train_supervised_caching_integration(mock_save_estimator):
 
 @patch("src.train_supervised.save_estimator")
 def test_estimator_enrich(mock_save_estimator):
-    """Test that Estimator.enrich is called for cache misses."""
+    """Estimator.enrich is called for missing keys and the result persisted."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         cache_manager = CacheManager(
             root_dir=tmp_dir,

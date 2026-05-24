@@ -1,4 +1,8 @@
-"""Tests for postprocess_config module."""
+"""Unit tests for flowgym.flow.postprocess configuration and operators.
+
+Covers parameter validation, round-trip correctness, JIT performance,
+and quantization for all postprocessing steps.
+"""
 
 import timeit
 
@@ -151,6 +155,7 @@ def apply_from_idxs(idxs, flow):
 )
 @pytest.mark.parametrize("seed", [42, 123, 456, 789, 1, 2, 3, 43, 44, 45])
 def test_postprocess_config(B, N, seed):
+    """Compiled estimator with random postprocessing steps matches ref."""
     # Sample idxs
     key = jrandom.PRNGKey(seed)
     key, subkey = jrandom.split(key)
@@ -197,6 +202,7 @@ def test_postprocess_config(B, N, seed):
 )
 @pytest.mark.parametrize("seed", [42, 123, 456, 789, 1, 2, 3, 43, 44, 45])
 def test_preprocess_config_invalid_params(N, seed):
+    """from_config raises ValueError or TypeError for invalid parameters."""
     # Sample idxs
     key = jrandom.PRNGKey(seed)
     idxs = jrandom.choice(
@@ -233,6 +239,7 @@ def test_preprocess_config_invalid_params(N, seed):
 )
 @pytest.mark.parametrize("seed", [42])
 def test_postprocess_jit(B, H, time_limit, seed):
+    """JIT-compiled postprocessing pipeline executes within time_limit."""
     # Sample idxs
     key = jrandom.PRNGKey(seed)
     key, subkey = jrandom.split(key)
@@ -454,6 +461,7 @@ def test_resize_flow(B, H, W, seed):
     ],
 )
 def test_resize_flow_validate_params_invalid(target_shape):
+    """resize_flow_validate_params raises ValueError for non-positive dims."""
     with pytest.raises(ValueError):
         resize_flow_validate_params(target_shape[0], target_shape[1])
 
@@ -466,6 +474,7 @@ def test_resize_flow_validate_params_invalid(target_shape):
     ],
 )
 def test_resize_flow_validate_params_valid(target_shape):
+    """resize_flow_validate_params accepts positive integer dimensions."""
     # should not raise
     resize_flow_validate_params(target_shape[0], target_shape[1])
 
@@ -479,17 +488,20 @@ class DummyState(dict):
 class TestValidateParams:
     @pytest.mark.parametrize("alpha", [0.0, 0.5, 1.0])
     def test_valid_alphas_do_not_raise(self, alpha):
+        """validate_params accepts float alpha values in [0, 1]."""
         # should not raise for floats in [0,1]
         temporal_smoothing_ema_validate_params(float(alpha))
 
     @pytest.mark.parametrize("alpha", [1, "0.5", None, [], {}])
     def test_non_float_alpha_raises(self, alpha):
+        """validate_params raises ValueError when alpha is not a float."""
         with pytest.raises(ValueError) as exc:
             temporal_smoothing_ema_validate_params(alpha)
         assert "alpha must be a float" in str(exc.value)
 
     @pytest.mark.parametrize("alpha", [-0.1, -1.0, 1.1, 2.0])
     def test_out_of_range_alpha_raises(self, alpha):
+        """validate_params raises ValueError when alpha is outside [0, 1]."""
         with pytest.raises(ValueError) as exc:
             temporal_smoothing_ema_validate_params(float(alpha))
         assert "alpha must be in the range [0, 1]" in str(exc.value)
@@ -509,6 +521,7 @@ class TestTemporalSmoothingEma:
         return flow, state, valid_mask
 
     def test_ema_formula_without_valid(self, dummy_batch):
+        """EMA smoothing applies alpha*flow + (1-alpha)*prev without mask."""
         flow, state, _ = dummy_batch
         alpha = 0.25
 
@@ -528,6 +541,7 @@ class TestTemporalSmoothingEma:
         assert returned_state is state
 
     def test_ema_formula_with_valid(self, dummy_batch):
+        """EMA smoothing passes through the valid mask unchanged."""
         flow, state, valid = dummy_batch
         alpha = 0.6
 
@@ -546,6 +560,7 @@ class TestTemporalSmoothingEma:
 
     @pytest.mark.parametrize("alpha", [0.0, 1.0])
     def test_edge_alpha_values(self, dummy_batch, alpha):
+        """alpha=0 returns the previous estimate; alpha=1 returns the flow."""
         # alpha=0 => smoothed == prev_estimate; alpha=1 => smoothed == flow
         flow, state, _ = dummy_batch
         smoothed, _, _ = temporal_smoothing_ema(flow, alpha, state, valid=None)

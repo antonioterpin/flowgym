@@ -1,4 +1,7 @@
-"""Tests for generic caching with mixed scalar/vector fields."""
+"""Unit tests for flowgym.training.caching: generic payload handling.
+
+Covers write/lookup round-trips for mixed scalar and vector spec fields.
+"""
 
 import tempfile
 
@@ -8,7 +11,7 @@ from flowgym.training.caching import CacheManager
 
 
 def test_generic_payload_write_read():
-    """Test writing/reading generic payload with scalar/vector fields."""
+    """Write/lookup round-trip preserves values for scalar and vector fields."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         cache_id = "test_generic"
         # Spec: "epe": scalar, "scores": vector(3)
@@ -53,7 +56,7 @@ def test_generic_payload_write_read():
 
 
 def test_warm_start_all_generic():
-    """Test warm_start='all' with generic payload."""
+    """warm_start='all' loads all fields from disk into memory on open."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         cache_id = "test_warm_generic"
         spec = {"val": (np.float32, (1,)), "meta": (np.int32, ())}
@@ -84,7 +87,7 @@ def test_warm_start_all_generic():
 
 
 def test_enrich_generic():
-    """Test enrich with generic payload."""
+    """enrich_batch writes computed values to the pending buffer on a miss."""
     from unittest.mock import MagicMock
 
     from flowgym.training.caching import enrich_batch

@@ -1,4 +1,7 @@
-"""Tests for estimator checkpointing."""
+"""Unit tests for flowgym.training checkpointing.
+
+Covers save/load round-trips, fine-tune modes, and optimizer override.
+"""
 
 import time
 from pathlib import Path
@@ -74,6 +77,7 @@ class MockEstimator(Estimator):
 
 
 def test_checkpoint_resume_roundtrip(clean_tmp_path):
+    """Saved state is fully restored and training can continue identically."""
     tmp_path = clean_tmp_path
     params = make_simple_params()
     tx = optax.sgd(learning_rate=0.1)
@@ -162,6 +166,7 @@ def test_checkpoint_resume_roundtrip(clean_tmp_path):
 
 
 def test_checkpoint_finetune_with_new_optimizer(clean_tmp_path):
+    """Params-only restore with a new optimizer resets step and opt_state."""
     tmp_path = clean_tmp_path
     params = make_simple_params()
     tx_old = optax.sgd(learning_rate=0.1)
@@ -253,18 +258,7 @@ def test_checkpoint_finetune_with_new_optimizer(clean_tmp_path):
 def test_finetune_from_params_only_checkpoint_structure_mismatch(
     clean_tmp_path,
 ):
-    """Reproduce RAFT-like bug: params-only checkpoint vs full state template.
-
-    We:
-      1) Save checkpoint with *only* params (no TrainState structure).
-      2) Build full NNEstimatorTrainableState template
-         (params+opt_state+extras).
-      3) Load with load_estimator(..., mode='params_only'), which still
-         builds abstract tree from *full* template_state and hands it to Orbax.
-      4) Orbax complains that tree structure on disk (params-only) and the
-         requested tree (full state) do not match -> ValueError, as in
-         RAFT fine-tune run.
-    """
+    """params_only mode succeeds even when on-disk tree is params-only."""
     tmp_path = clean_tmp_path
     # 1) Create some params
     params = make_simple_params()
@@ -304,6 +298,7 @@ def test_finetune_from_params_only_checkpoint_structure_mismatch(
 
 
 def test_finetune_from_params_only_checkpoint_works(clean_tmp_path):
+    """Params-only checkpoint loads cleanly and supports a new optimizer."""
     tmp_path = clean_tmp_path
 
     # 1) Create some params
@@ -350,7 +345,7 @@ def test_finetune_from_params_only_checkpoint_works(clean_tmp_path):
 
 
 def test_checkpoint_robust_optimizer_override(clean_tmp_path):
-    """Verify checkpointed opt_config overrides template with mismatch."""
+    """Checkpointed optimizer config overrides a mismatched template tx."""
     tmp_path = clean_tmp_path
     params = make_simple_params()
 

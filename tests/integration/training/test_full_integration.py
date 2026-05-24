@@ -1,11 +1,8 @@
-"""Comprehensive integration tests for train and train_supervised loops.
+"""Integration tests for the train and train_supervised end-to-end loops.
 
-These tests exercise all training features using DummyEstimator:
-- Replay buffer (initialization, push, sample)
-- Replay buffer enrichment via prepare_experience_for_replay
-- Checkpointing (save_estimator)
-- Validation (for train_supervised)
-- Metrics processing
+Exercises replay buffer, enrichment, checkpointing, validation, and
+metrics processing across train.py and train_supervised.py using
+DummyEstimator.
 """
 
 from pathlib import Path
@@ -53,7 +50,7 @@ def _mock_save_estimator(
 def test_train_supervised_full_integration(
     tmp_path, mock_sampler, dummy_trainable_state
 ):
-    """Test train_supervised with replay buffer, validation, checkpointing."""
+    """train_supervised runs validation and saves checkpoints end-to-end."""
     estimator = DummyEstimator(train_type="supervised", enrichment_marker=True)
 
     # Create a separate mock for validation sampler
@@ -125,7 +122,7 @@ def test_train_supervised_full_integration(
 def test_train_supervised_replay_enrichment(
     tmp_path, mock_sampler, dummy_trainable_state
 ):
-    """Test that prepare_experience_for_replay is called and enriches data."""
+    """prepare_experience_for_replay enriches experiences before buffer push."""
     estimator = DummyEstimator(train_type="supervised", enrichment_marker=True)
 
     def create_state_fn(img, key):
@@ -178,7 +175,7 @@ def test_train_supervised_replay_enrichment(
 def test_train_supervised_checkpointing_roundtrip(
     tmp_path, mock_sampler, dummy_trainable_state
 ):
-    """Test that checkpoints are saved at the expected intervals."""
+    """save_estimator is called at the configured save_every interval."""
     estimator = DummyEstimator(train_type="supervised")
 
     def create_state_fn(img, key):
@@ -222,7 +219,7 @@ def test_train_supervised_checkpointing_roundtrip(
 def test_train_supervised_no_enrichment_without_flag(
     tmp_path, mock_sampler, dummy_trainable_state
 ):
-    """Test that enrichment is skipped when enrichment_marker is False."""
+    """Replay experiences carry no enrichment marker when the flag is off."""
     estimator = DummyEstimator(train_type="supervised", enrichment_marker=False)
 
     def create_state_fn(img, key):
@@ -275,7 +272,7 @@ def test_train_supervised_no_enrichment_without_flag(
 
 
 def test_train_rl_full_integration(tmp_path, mock_env):
-    """Test train (RL) loop with replay buffer and checkpointing."""
+    """RL train loop completes episodes and writes checkpoint directories."""
     estimator = DummyEstimator(train_type="rl")
     env, obs, env_state = mock_env
 
@@ -332,7 +329,7 @@ def test_train_rl_full_integration(tmp_path, mock_env):
 
 
 def test_train_rl_replay_buffer_used(tmp_path, mock_env):
-    """Test that replay buffer is initialized and used in RL training."""
+    """ReplayBuffer is constructed exactly once when RL training starts."""
     estimator = DummyEstimator(train_type="rl")
     env, obs, env_state = mock_env
 
@@ -382,7 +379,7 @@ def test_train_rl_replay_buffer_used(tmp_path, mock_env):
 
 
 def test_train_rl_replay_buffer_samples(tmp_path, mock_env):
-    """Test that replay buffer sampling is called when replay_ratio > 0."""
+    """A positive replay_ratio causes extra train-step calls from replay."""
     estimator = DummyEstimator(train_type="rl")
     env, obs, env_state = mock_env
 
@@ -451,7 +448,7 @@ def test_train_rl_replay_buffer_samples(tmp_path, mock_env):
 def test_train_supervised_validation_runs(
     tmp_path, mock_sampler, dummy_trainable_state
 ):
-    """Test that validation is executed at specified intervals."""
+    """evaluate_batches is invoked at each val_interval during training."""
     estimator = DummyEstimator(train_type="supervised")
 
     val_sampler = MagicMock()
@@ -505,7 +502,7 @@ def test_train_supervised_validation_runs(
 def test_train_supervised_save_only_best(
     tmp_path, mock_sampler, dummy_trainable_state
 ):
-    """Test save_only_best mode saves only when validation improves."""
+    """save_only_best triggers a checkpoint whenever validation error drops."""
     estimator = DummyEstimator(train_type="supervised")
 
     val_sampler = MagicMock()
@@ -575,7 +572,7 @@ def test_train_supervised_save_only_best(
 def test_train_supervised_metrics_logged(
     tmp_path, mock_sampler, dummy_trainable_state
 ):
-    """Test that metrics from train step are properly logged."""
+    """Metrics returned by the train step are processed without error."""
     estimator = DummyEstimator(train_type="supervised")
 
     def create_state_fn(img, key):

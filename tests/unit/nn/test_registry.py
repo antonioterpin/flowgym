@@ -1,9 +1,7 @@
-"""Tests for neural network registries.
+"""Unit tests for flowgym.nn.registry.
 
-This module tests the registry lookups and primitive functions for:
-- Activation functions
-- Normalization types
-- Pooling operations
+Covers activation, normalisation, and pooling registries: lookup by name,
+case-insensitivity, unknown-key errors, and numerical output behaviour.
 """
 
 import jax.numpy as jnp

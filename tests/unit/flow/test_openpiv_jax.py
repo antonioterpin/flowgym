@@ -1,4 +1,9 @@
-"""Tests for openpiv_jax module."""
+"""Unit tests for flowgym.flow.open_piv.
+
+Covers FFT correlation, peak finding, intensity normalization, sliding
+windows, coordinate grids, sub-pixel displacement, and flow upsampling
+against the reference openpiv.pyprocess implementation.
+"""
 
 import jax.numpy as jnp
 import numpy as np
@@ -28,6 +33,7 @@ def random_images():
 
 # Test for fft_correlate_images with identical inputs
 def test_fft_correlate_images_identical():
+    """fft_correlate_images returns zero correlation for constant windows."""
     win = jnp.ones((1, 2, 2))
     corr = fft_correlate_images(win, win)
     assert corr.shape == (1, 2, 2)
@@ -37,6 +43,7 @@ def test_fft_correlate_images_identical():
 
 # Test for find_all_first_peaks
 def test_find_all_first_peaks_basic():
+    """find_all_first_peaks locates the single injected peak correctly."""
     corr = jnp.zeros((1, 1, 2, 3))
     corr = corr.at[0, 0, 1, 2].set(5)
     peaks_i, peaks_j = find_all_first_peaks(corr)
@@ -45,6 +52,7 @@ def test_find_all_first_peaks_basic():
 
 # Test for normalize_intensity
 def test_normalize_intensity_basic():
+    """normalize_intensity zeros out windows with zero standard deviation."""
     windows = jnp.array([[[1, 2], [3, 4]], [[5, 5], [5, 5]]], dtype=jnp.float32)
     normed = normalize_intensity(windows)
     # First window mean=2.5, std~=1.118, values clipped between 0 and max
@@ -55,6 +63,7 @@ def test_normalize_intensity_basic():
 
 # Test for subpixel_displacement at center peak
 def test_subpixel_displacement_center():
+    """subpixel_displacement returns zero shift for a centered peak."""
     corr = jnp.zeros((1, 3, 3))
     corr = corr.at[0, 1, 1].set(1.0)
     peaks_i = jnp.array([1])
@@ -67,6 +76,7 @@ def test_subpixel_displacement_center():
 
 # Test for upsample_flow
 def test_upsample_flow():
+    """upsample_flow resizes a zero flow field to the target shape."""
     flow = jnp.zeros((1, 2, 2, 2))
     up = upsample_flow(flow, (4, 4))
     assert up.shape == (1, 4, 4, 2)
@@ -89,6 +99,7 @@ def test_upsample_flow():
     ],
 )
 def test_get_field_shape_parametrized(image_size, search_area_size, overlap):
+    """get_field_shape matches pyprocess for various window configs."""
     expected = tuple(
         pyprocess.get_field_shape(image_size, search_area_size, overlap)
     )
@@ -101,6 +112,7 @@ def test_get_field_shape_parametrized(image_size, search_area_size, overlap):
 
 
 def test_get_field_shape_with_random_images(random_images):
+    """get_field_shape matches pyprocess reference on random batch images."""
     img1, _ = random_images
     # take the shape of one frame (batch dim ignored)
     H, W = img1.shape[1], img1.shape[2]
@@ -156,6 +168,7 @@ def test_get_field_shape_with_random_images(random_images):
 def test_get_rect_coordinates_parametrized(
     image_size, window_size, overlap, expected_centers
 ):
+    """get_rect_coordinates returns a uniform grid of patch centre locations."""
     xs, ys = get_rect_coordinates(image_size, window_size, overlap)
 
     # reshape back to grid for easier comparison
@@ -181,6 +194,7 @@ def test_get_rect_coordinates_parametrized(
 def test_number_of_centers_matches_field_shape(
     image_size=(64, 64), window_size=(32, 32), overlap=(16, 16)
 ):
+    """get_rect_coordinates centre count equals rows * cols."""
     # compute num rows/cols
     n_rows, n_cols = get_field_shape(image_size, window_size, overlap)
     xs, ys = get_rect_coordinates(image_size, window_size, overlap)
@@ -191,6 +205,7 @@ def test_number_of_centers_matches_field_shape(
 
 
 def test_get_rect_coordinates_with_random_images(random_images):
+    """Rectangular window centers match pyprocess for random image sizes."""
     img1, _ = random_images
     H, W = img1.shape[1], img1.shape[2]
     image_size = (H, W)
@@ -209,6 +224,7 @@ def test_get_rect_coordinates_with_random_images(random_images):
 
 
 def test_normalize_intensity(random_images):
+    """JAX intensity normalization matches pyprocess for each image."""
     img1, img2 = random_images[0], random_images[1]
     for img in np.vstack((img1, img2)):
         normalized = normalize_intensity(jnp.asarray(img)[None, ...])[0, ...]
@@ -217,6 +233,7 @@ def test_normalize_intensity(random_images):
 
 
 def test_sliding_window(random_images):
+    """Sliding-window extraction matches pyprocess shapes and values."""
     img1, img2 = random_images[0], random_images[1]
     search_area_size = (16, 16)
     overlap = (15, 15)
@@ -243,6 +260,7 @@ def test_sliding_window(random_images):
 
 
 def test_fft_correlate_images(random_images):
+    """FFT cross-correlation matches pyprocess for each window."""
     img1, img2 = random_images[0], random_images[1]
     search_area_size = (16, 16)
     overlap = (15, 15)
@@ -263,6 +281,7 @@ def test_fft_correlate_images(random_images):
 
 
 def test_find_all_first_peaks(random_images):
+    """First-peak detection returns one peak per correlation window."""
     img1, img2 = random_images[0], random_images[1]
     search_area_size = (16, 16)
     overlap = (15, 15)

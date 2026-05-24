@@ -1,4 +1,8 @@
-"""Tests for data_smoothing module."""
+"""Unit tests for flowgym.common (data smoothing via flow.postprocess).
+
+Covers average and median smoothing correctness against naive NumPy
+references and GPU throughput for large batched flow fields.
+"""
 
 import timeit
 from functools import partial
@@ -93,7 +97,7 @@ def _numpy_median_smoothing(flow: np.ndarray, radius: int) -> np.ndarray:
 )
 @pytest.mark.parametrize("seed", [0, 42, 123])
 def test_methods_match_naive_version(seed, shape, method, method_naive, kwargs):
-    """Average filter should match naïve NumPy reference within tolerance."""
+    """Smoothing output matches naïve NumPy loop reference within tolerance."""
     rng = np.random.default_rng(seed)
     flow_np = rng.standard_normal(size=shape).astype(np.float32)
     expected = method_naive(flow_np, **kwargs)
@@ -120,7 +124,7 @@ def test_methods_match_naive_version(seed, shape, method, method_naive, kwargs):
     ],
 )
 def test_average_time(B, H, W, radius, limit_time):
-    """Just makes sure compilation/shape handling hold for >1M voxels."""
+    """JIT-compiled average smoothing meets GPU throughput time limits."""
     rng = jrandom.PRNGKey(0)
     flow_field = jrandom.normal(rng, (B, H, W, 2))
 
@@ -169,7 +173,7 @@ def test_average_time(B, H, W, radius, limit_time):
     ],
 )
 def test_median_time(B, H, W, radius, limit_time):
-    """Just makes sure compilation/shape handling hold for >1M voxels."""
+    """JIT-compiled median smoothing meets GPU throughput time limits."""
     rng = jrandom.PRNGKey(0)
     flow_field = jrandom.normal(rng, (B, H, W, 2))
 

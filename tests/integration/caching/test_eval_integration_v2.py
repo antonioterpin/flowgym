@@ -1,4 +1,7 @@
-"""Robust integration tests for eval.py caching flows."""
+"""Integration tests for caching with the eval pipeline (v2).
+
+Covers evaluate_batches and eval_full_dataset with real CacheManager instances.
+"""
 
 import tempfile
 from unittest.mock import MagicMock
@@ -57,7 +60,7 @@ class MockEvalEstimator(Estimator):
 
 
 def test_evaluate_batches_caching_robust():
-    """Test evaluate_batches correctly enriches and passes payload."""
+    """evaluate_batches enriches misses and passes the merged payload."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         cache_manager = CacheManager(
             root_dir=tmp_dir,
@@ -104,7 +107,7 @@ def test_evaluate_batches_caching_robust():
 
 
 def test_eval_full_dataset_caching_robust():
-    """Test eval_full_dataset with actual CacheManager on-disk state."""
+    """Pre-seeded cache hits are served directly; fresh misses are enriched."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         cache_id = "full_eval_test"
         cache_manager = CacheManager(

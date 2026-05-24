@@ -1,4 +1,9 @@
-"""Tests for dis_jax module."""
+"""Unit tests for flowgym.flow.dis.
+
+Covers gather, patch sampling, pyramid building, flow estimation,
+densification, image resize, and GPU speed budgets for the JAX DIS
+optical-flow implementation.
+"""
 
 import timeit
 
@@ -42,6 +47,7 @@ EXECUTIONS_QUERY_FLOW_AT_POINTS = config["EXECUTIONS_QUERY_FLOW_AT_POINTS"]
 
 
 def test_gather():
+    """gather retrieves pixel values at (y, x) index arrays correctly."""
     # Create a sample image
     img = jnp.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
 
@@ -63,6 +69,7 @@ def test_gather():
 
 # Test for sample_patch without displacement
 def test_sample_patch_no_displacement():
+    """sample_patch with zero displacement returns the top-left patch."""
     img = jnp.arange(16).reshape(4, 4)
     disp = jnp.array([0.0, 0.0])
     patch = sample_patch(img, disp, patch_size=3)
@@ -71,6 +78,7 @@ def test_sample_patch_no_displacement():
 
 
 def test_sample_patch_with_displacement():
+    """sample_patch shifts the sampled region by an integer displacement."""
     img = jnp.arange(16).reshape(4, 4)
     disp = jnp.array([1.0, 1.0])
     patch = sample_patch(img, disp, patch_size=3)
@@ -79,6 +87,7 @@ def test_sample_patch_with_displacement():
 
 
 def test_sample_patch_with_float_displacement():
+    """sample_patch bilinearly interpolates for sub-pixel displacements."""
     img = jnp.arange(16).reshape(4, 4)
     disp = jnp.array([0.5, 0.5])
     patch = sample_patch(img, disp, patch_size=3)
@@ -87,6 +96,7 @@ def test_sample_patch_with_float_displacement():
 
 
 def test_sample_patch_with_uneven_displacement():
+    """sample_patch interpolates correctly for asymmetric fractional shifts."""
     img = jnp.arange(16).reshape(4, 4)
     disp = jnp.array([0.5, 1.5])
     patch = sample_patch(img, disp, patch_size=3)
@@ -96,6 +106,7 @@ def test_sample_patch_with_uneven_displacement():
 
 # Test for extract_patches
 def test_extract_patches_basic():
+    """extract_patches tiles a padded image into overlapping local patches."""
     img = jnp.arange(16).reshape(4, 4)
     # Pad the image with zeros
     img_pad = jnp.pad(img[None, ...], ((0, 0), (1, 1), (1, 1)), mode="constant")
@@ -129,6 +140,7 @@ def test_extract_patches_basic():
 
 # Test for warp_image identity flow
 def test_warp_image_identity():
+    """warp_image with zero flow returns the original image unchanged."""
     img = jnp.arange(9).reshape(3, 3)
     flow = jnp.zeros((3, 3, 2))
     warped = warp_image(img, flow, dt=1)
@@ -137,6 +149,7 @@ def test_warp_image_identity():
 
 # Test for build_pyramid
 def test_build_pyramid():
+    """build_pyramid produces the correct number of levels and sizes."""
     img = jnp.arange(16).reshape(4, 4)
     pyr = build_pyramid(img, levels=2, start_level=0)
     assert len(pyr) == 2
@@ -148,6 +161,7 @@ def test_build_pyramid():
 
 # Test for flow_between with no motion
 def test_flow_between_no_movement():
+    """flow_between produces zero flow for identical constant images."""
     prev = jnp.ones((12, 12)).astype(jnp.float32)
     curr = jnp.ones((12, 12)).astype(jnp.float32)
     # with jax.disable_jit(): #activate this to be able to print variables
@@ -179,7 +193,7 @@ def test_flow_between_no_movement():
     indirect=True,
 )
 def test_flow_between(test_images, visualize=True):
-    """Test for flow_between function."""
+    """flow_between recovers a known integer shift to within 5% error."""
     prev, curr, true_shift = test_images
     levels = 2
     # with jax.disable_jit(): #activate this to bee able to print variables
@@ -239,6 +253,7 @@ def test_flow_between(test_images, visualize=True):
 
 # Test for estimate_dis_flow batch
 def test_estimate_dis_flow_batch_identity():
+    """estimate_dis_flow returns zero flow for a batch of identical images."""
     batch = jnp.ones((2, 4, 4))
     flows = estimate_dis_flow(
         batch,
@@ -336,6 +351,7 @@ def test_images(request):
 @pytest.mark.parametrize("patch_stride", [4])
 @pytest.mark.parametrize("grad_iters", [4])
 def test_output_shape(test_images, patch_size, patch_stride, grad_iters):
+    """compute_flow_level output shape matches the starting flow shape."""
     prev, curr, _ = test_images
     pp, centers, grads, hessians_inv = extract_patches_grad_hess(
         prev, patch_size=patch_size, patch_stride=patch_stride
@@ -371,6 +387,7 @@ def test_output_shape(test_images, patch_size, patch_stride, grad_iters):
     indirect=True,
 )
 def test_zero_flow_identity(patch_size, patch_stride, grad_iters, test_images):
+    """compute_flow_level returns near-zero flow for identical images."""
     prev, curr, _ = test_images
     pp, centers, grads, hessians_inv = extract_patches_grad_hess(
         prev, patch_size=patch_size, patch_stride=patch_stride
@@ -405,6 +422,7 @@ def test_zero_flow_identity(patch_size, patch_stride, grad_iters, test_images):
 @pytest.mark.parametrize("patch_stride", [1])
 @pytest.mark.parametrize("grad_iters", [100])
 def test_small_translation(test_images, patch_size, patch_stride, grad_iters):
+    """compute_flow_level recovers a sub-pixel translation accurately."""
     prev, curr, true_shift = test_images
     pp, centers, grads, hessians_inv = extract_patches_grad_hess(
         prev, patch_size=patch_size, patch_stride=patch_stride
@@ -464,6 +482,7 @@ def test_small_translation(test_images, patch_size, patch_stride, grad_iters):
 def test_dtype_and_finiteness(
     test_images, patch_size, patch_stride, grad_iters
 ):
+    """compute_flow_level output dtype matches input and all values finite."""
     prev, curr, _ = test_images
     pp, centers, grads, hessians_inv = extract_patches_grad_hess(
         prev, patch_size=patch_size, patch_stride=patch_stride
@@ -486,6 +505,7 @@ def test_dtype_and_finiteness(
 @pytest.mark.parametrize("image_size", [(128, 128)])
 @pytest.mark.parametrize("new_size", [(257, 257)])
 def test_img_resize(image_size, new_size):
+    """img_resize matches jax.image.resize bilinear output exactly."""
     img = jax.random.uniform(random.PRNGKey(0), shape=image_size)
     resized_img = img_resize(img, new_size)
     gound_truth = jax.image.resize(
@@ -510,7 +530,7 @@ def test_speed_sample_patch(
     patch_size,
     disp,
 ):
-    """Test the speed of the sample_patch function."""
+    """DIS runs within the time budget on GPU for sample_patch."""
     disp = jnp.array(disp)
     # Limit time in seconds
     limit_time = 4e-5
@@ -564,7 +584,7 @@ def test_speed_compute_flow_level(
     disp,
     grad_iters,
 ):
-    """Test the speed of the compute_flow_level function."""
+    """DIS runs within the time budget on GPU for compute_flow_level."""
     # Limit time in seconds
     limit_time = 9.4e-4
 
@@ -634,7 +654,7 @@ def test_speed_build_pyramid(
     start_level,
     level_steps,
 ):
-    """Test the speed of the build_pyramid function."""
+    """DIS runs within the time budget on GPU for build_pyramid."""
     # Limit time in seconds
     limit_time = 6e-5
 
@@ -699,7 +719,7 @@ def test_speed_flow_between(
     output_full_res,
     var_refine_iters,
 ):
-    """Test the speed of the flow_between function."""
+    """DIS runs within the time budget on GPU for flow_between."""
     # Limit time in seconds
     limit_time = 5.3e-4
 
@@ -780,7 +800,7 @@ def test_speed_estimate_dis_flow(
     output_full_res,
     var_refine_iters,
 ):
-    """Test the speed of the estimate_dis_flow function."""
+    """DIS runs within the time budget on GPU for estimate_dis_flow."""
     # Limit time in seconds
     limit_time = 5.5e-4
 
@@ -851,7 +871,7 @@ def test_speed_densify(
     num_patches,
     patch_size,
 ):
-    """Test the speed of the densify function."""
+    """DIS runs within the time budget on GPU for densify."""
     # Limit time in seconds
     limit_time = 4.2e-4
 
@@ -916,7 +936,7 @@ def test_speed_extract_patches_grad_hess(
     patch_size,
     patch_stride,
 ):
-    """Test the speed of the extract_patches_hess_grad function."""
+    """DIS runs within the time budget on GPU for extract_patches_grad_hess."""
     # Limit time in seconds
     limit_time = 1.5e-3
 
@@ -975,7 +995,7 @@ def test_speed_extract_patches_grad_hess(
 def test_speed_query_flow_at_points(
     image_shape, next_level, level, patch_size, patch_stride
 ):
-    """Test the speed of the query_flow_at_points function."""
+    """DIS runs within the time budget on GPU for query_flow_at_points."""
     # Limit time in seconds
     limit_time = 3.1e-4
 
@@ -1043,8 +1063,7 @@ def test_speed_query_flow_at_points(
 
 
 def test_error_vs_opencv_dis():
-    """Test the error between the flow computed by the function and by
-    OpenCV."""
+    """dis_jax flow error vs OpenCV DIS is below 0.01 on a shifted image."""
     # Because of implementation differences the error is not zero, but it
     # should be small.
     # For example, the error

@@ -1,4 +1,8 @@
-"""Tests for training_utils module."""
+"""Unit tests for flowgym.training.replay.
+
+Covers ReplayBuffer push/length, random and indexed sampling, error
+handling, clearing, and CPU placement of stored experiences.
+"""
 
 import jax
 import jax.numpy as jnp
@@ -35,6 +39,7 @@ def make_experience(seed=0):
 
 
 def test_push_and_length():
+    """Pushing an experience increases the buffer length by one."""
     buf = ReplayBuffer(capacity=10)
     assert len(buf) == 0
 
@@ -50,6 +55,7 @@ def test_push_and_length():
 
 
 def test_sample_batch_shapes():
+    """Sampling a batch stacks experiences with a leading batch axis."""
     buf = ReplayBuffer(capacity=10)
     for i in range(5):
         buf.push(make_experience(i))
@@ -69,6 +75,7 @@ def test_sample_batch_shapes():
 
 
 def test_sample_at_indices():
+    """sample_at returns the experiences at the given indices, in order."""
     buf = ReplayBuffer(capacity=5)
     for i in range(5):
         buf.push(make_experience(i))
@@ -87,6 +94,7 @@ def test_sample_at_indices():
 
 
 def test_sample_too_large_batch_raises():
+    """Sampling more items than are stored raises ValueError."""
     buf = ReplayBuffer(capacity=3)
     buf.push(make_experience(0))
 
@@ -108,6 +116,7 @@ def test_sample_too_large_batch_raises():
     ],
 )
 def test_sample_at_invalid_indices_raises(bad_indices):
+    """Out-of-range or scalar indices raise IndexError or ValueError."""
     buf = ReplayBuffer(capacity=3)
     for i in range(3):
         buf.push(make_experience(i))
@@ -122,6 +131,7 @@ def test_sample_at_invalid_indices_raises(bad_indices):
 
 
 def test_clear_buffer():
+    """clear() empties the buffer back to zero length."""
     buf = ReplayBuffer(capacity=10)
     for i in range(5):
         buf.push(make_experience(i))
@@ -137,6 +147,7 @@ def test_clear_buffer():
 
 
 def test_arrays_are_on_cpu_after_push():
+    """Pushed experience arrays are placed on the buffer's CPU device."""
     buf = ReplayBuffer(capacity=4)
 
     exp = make_experience(0)

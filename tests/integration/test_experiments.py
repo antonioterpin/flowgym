@@ -1,4 +1,7 @@
-"""Tests for experiment-study helpers."""
+"""Integration tests for the experiment-study end-to-end pipeline.
+
+Covers run naming, tag merging, git-state capture, and launcher behaviour.
+"""
 
 from __future__ import annotations
 
@@ -52,6 +55,7 @@ def _init_repo(path: Path) -> str:
 
 
 def test_build_study_run_name_orders_tags_stably():
+    """build_study_run_name produces a deterministically ordered tag string."""
     run_name = build_study_run_name(
         {"loss": "huber", "method": "regression"},
         seed=3,
@@ -61,6 +65,7 @@ def test_build_study_run_name_orders_tags_stably():
 
 
 def test_build_study_run_name_sanitizes_path_like_tags():
+    """build_study_run_name strips path separators and unsafe characters."""
     run_name = build_study_run_name(
         {"group/name": "../unsafe value", "method": "regression"},
         seed=1,
@@ -72,6 +77,7 @@ def test_build_study_run_name_sanitizes_path_like_tags():
 
 
 def test_wandb_run_tags_merges_study_and_dataset_sources():
+    """wandb_run_tags combines study and dataset tags into a sorted list."""
     tags = wandb_run_tags(
         study_tags={"variant": "baseline", "estimator": "dummy"},
         dataset_tags={"dataset": "piv-class1"},
@@ -85,11 +91,13 @@ def test_wandb_run_tags_merges_study_and_dataset_sources():
 
 
 def test_wandb_run_tags_returns_empty_when_both_sources_empty():
+    """wandb_run_tags returns an empty list when both tag sources are absent."""
     assert wandb_run_tags(None, None) == []
     assert wandb_run_tags({}, {}) == []
 
 
 def test_wandb_run_tags_keeps_collisions_distinct():
+    """Duplicate keys across tag sources appear as two separate entries."""
     tags = wandb_run_tags(
         study_tags={"variant": "a"},
         dataset_tags={"variant": "b"},
@@ -101,6 +109,7 @@ def test_wandb_run_tags_keeps_collisions_distinct():
 
 
 def test_validate_model_study_requires_matching_experiment_name():
+    """validate_model_study raises ValueError on study/folder name mismatch."""
     with pytest.raises(
         ValueError,
         match=r"study\.name must equal exp folder name",
@@ -114,6 +123,7 @@ def test_validate_model_study_requires_matching_experiment_name():
 def test_wandb_git_diff_capture_exposes_untracked_files_temporarily(
     tmp_path: Path,
 ):
+    """wandb_git_diff_capture stages untracked files only within its context."""
     repo = tmp_path / "repo"
     _init_repo(repo)
     (repo / ".gitignore").write_text("ignored.txt\n", encoding="utf-8")
@@ -150,6 +160,8 @@ def test_wandb_git_diff_capture_exposes_untracked_files_temporarily(
 
 
 def test_wandb_git_state_labels_distinguish_dirty_cases(tmp_path: Path):
+    """Each distinct dirty-repo scenario yields a unique git state label."""
+
     def _state(root: Path) -> str:
         with wandb_git_diff_capture(root) as label:
             return label
@@ -191,6 +203,7 @@ def test_wandb_git_state_labels_distinguish_dirty_cases(tmp_path: Path):
 def test_experiment_launcher_preserves_relative_model_paths(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
+    """Launcher generates unique per-model config paths for each model entry."""
     exp_dir = tmp_path / "dup_models"
     (exp_dir / "group_a").mkdir(parents=True)
     (exp_dir / "group_b").mkdir(parents=True)
@@ -269,6 +282,7 @@ def test_experiment_launcher_preserves_relative_model_paths(
 def test_setup_study_run_collects_git_state_once_around_wandb_init(
     monkeypatch: pytest.MonkeyPatch,
 ):
+    """setup_study_run captures git state exactly once, wrapping W&B init."""
     active_capture = False
     events: list[tuple[str, object]] = []
     capture_entries = 0
@@ -354,12 +368,7 @@ def test_setup_study_run_collects_git_state_once_around_wandb_init(
 def test_prepare_configs_defers_git_state_for_study_runs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    """Regression: prepare_configs must not collect git state itself.
-
-    Git fields are added later in setup_study_run inside
-    wandb_git_diff_capture so the state_label embedded in the W&B config
-    matches the directory layout (no two-pass collection that could disagree).
-    """
+    """prepare_configs does not enter wandb_git_diff_capture itself."""
 
     def _explode(*args: object, **kwargs: object) -> None:
         raise AssertionError(
@@ -399,13 +408,7 @@ def test_prepare_configs_defers_git_state_for_study_runs(
 def test_prepare_configs_merges_study_and_dataset_tags_for_wandb(
     tmp_path: Path,
 ):
-    """Both tag sources must reach wandb's run-level ``tags`` list.
-
-    Study tags identify the variant within an experiment; dataset tags
-    describe the dataset's properties. Both are useful for cross-run
-    filtering in the W&B UI, so they end up unioned in
-    ``wandb_setup["tags"]`` (forwarded to ``wandb.init(tags=...)``).
-    """
+    """prepare_configs places both study and dataset tags in wandb_setup."""
     model_yaml = tmp_path / "model.yaml"
     model_yaml.write_text(
         "estimator: dummy\n"
@@ -442,6 +445,7 @@ def test_prepare_configs_merges_study_and_dataset_tags_for_wandb(
 
 
 def test_example_experiment_is_well_formed():
+    """example_experiment config references valid dataset and model files."""
     exp_dir = Path("experiments/example_experiment")
     spec = yaml.safe_load((exp_dir / "exp.yaml").read_text(encoding="utf-8"))
 

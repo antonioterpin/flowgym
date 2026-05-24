@@ -1,4 +1,7 @@
-"""Tests for RAFT estimator caching functionality."""
+"""Integration tests for caching with RaftJaxEstimator.
+
+Covers cache ID suffix generation, enrich output, and short-circuit on hit.
+"""
 
 import jax
 import jax.numpy as jnp
@@ -14,7 +17,7 @@ class TestRaftCacheIdSuffix:
     """Test RAFT estimator cache ID suffix generation."""
 
     def test_cache_suffix_includes_config_hash(self):
-        """Test that cache suffix includes config hash."""
+        """RAFT cache suffix starts with _c and reflects the model config."""
         from flowgym.flow.raft.raft_jax import RaftJaxEstimator
 
         estimator = RaftJaxEstimator(
@@ -35,7 +38,7 @@ class TestRaftCacheIdSuffix:
         assert "_w" not in suffix
 
     def test_cache_suffix_changes_with_config(self):
-        """Test that different configs produce different suffixes."""
+        """Different RAFT configurations produce distinct cache ID suffixes."""
         from flowgym.flow.raft.raft_jax import RaftJaxEstimator
 
         estimator1 = RaftJaxEstimator(
@@ -56,7 +59,7 @@ class TestRaftCacheIdSuffix:
 
     @pytest.mark.run_explicitly
     def test_cache_suffix_includes_weights_hash(self, tmp_path):
-        """Test cache suffix includes weights hash with trainable_state."""
+        """Cache suffix adds a _w weights hash for trainable_state."""
         from flowgym.flow.raft.raft_jax import RaftJaxEstimator
 
         estimator = RaftJaxEstimator(
@@ -86,7 +89,7 @@ class TestRaftComputeCacheMiss:
 
     @pytest.mark.run_explicitly
     def test_enrich_returns_epe(self, tmp_path):
-        """Test that enrich returns EPE payload."""
+        """RAFT enrich returns EPE and relative_epe per miss index."""
         from flowgym.flow.raft.raft_jax import RaftJaxEstimator
 
         estimator = RaftJaxEstimator(
@@ -129,7 +132,7 @@ class TestRaftCacheIntegration:
 
     @pytest.mark.run_explicitly
     def test_raft_enrich_cycle(self, mock_cache_dir):
-        """Test full enrich cycle with RAFT estimator."""
+        """Full RAFT enrich writes EPE, then serves it on re-enrich."""
         from flowgym.flow.raft.raft_jax import RaftJaxEstimator
 
         estimator = RaftJaxEstimator(
@@ -185,7 +188,7 @@ class TestRaftCacheIntegration:
 
 
 def test_raft_uses_cached_metrics_without_running_flow(monkeypatch):
-    """RAFT should short-circuit when cache provides precomputed metrics."""
+    """RAFT skips inference and returns cached errors on a hit."""
     from flowgym.flow.raft.raft_jax import RaftJaxEstimator
 
     estimator = RaftJaxEstimator(

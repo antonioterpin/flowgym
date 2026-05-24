@@ -1,4 +1,7 @@
-"""Tests for supervised replay buffer integration."""
+"""Unit tests for flowgym.training.replay with SupervisedExperience.
+
+Covers push, random sampling, indexed sampling, and JAX PyTree compliance.
+"""
 
 import jax
 import jax.numpy as jnp
@@ -8,7 +11,7 @@ from flowgym.types import SupervisedExperience
 
 
 def test_supervised_experience_pytree():
-    """Verify SupervisedExperience is a valid JAX PyTree."""
+    """SupervisedExperience round-trips through JAX tree_flatten/unflatten."""
     state = {"h": jnp.zeros((1, 2))}
     exp = SupervisedExperience(
         state=state,
@@ -26,7 +29,7 @@ def test_supervised_experience_pytree():
 
 
 def test_replay_buffer_with_supervised_experience():
-    """Verify ReplayBuffer works with SupervisedExperience."""
+    """ReplayBuffer push/sample produces correctly shaped batches on CPU."""
     buf = ReplayBuffer(capacity=10)
 
     for i in range(5):
@@ -48,7 +51,7 @@ def test_replay_buffer_with_supervised_experience():
 
 
 def test_replay_buffer_sample_at_with_supervised_experience():
-    """Verify sample_at works with SupervisedExperience."""
+    """sample_at returns experiences at the given indices, in order."""
     buf = ReplayBuffer(capacity=10)
     for i in range(2):
         exp = SupervisedExperience(

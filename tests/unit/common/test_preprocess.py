@@ -1,4 +1,8 @@
-"""Tests for preprocess module."""
+"""Unit tests for flowgym.common.preprocess.
+
+Covers CLAHE, high-pass filter, intensity capping, and intensity clipping
+for correctness, shape preservation, and edge-case inputs.
+"""
 
 import jax.numpy as jnp
 import numpy as np
@@ -32,6 +36,7 @@ def test_clahe_reference_batched(
     seed: int,
     batch_size: int,
 ):
+    """Batched CLAHE output matches per-frame skimage reference."""
     # Generate a batch of random images
     rng = np.random.default_rng(seed)
     batch_shape = (batch_size, *image_shape)
@@ -76,6 +81,7 @@ def test_clahe_reference_batched(
 
 
 def test_zero_image_returns_zero():
+    """High-pass filter of an all-zero image returns all zeros."""
     img = jnp.zeros((16, 16))
     out = high_pass_filter(img[None, ...], sigma=0.1)
     # High-pass of zero image should be zero
@@ -85,6 +91,7 @@ def test_zero_image_returns_zero():
 
 
 def test_constant_image_near_zero():
+    """High-pass filter of a constant image produces near-zero output."""
     img = jnp.ones((16, 16)) * 5.0
     out = high_pass_filter(img[None, ...], sigma=1.0)
     # High-pass of constant image should be (practically) zero
@@ -94,6 +101,7 @@ def test_constant_image_near_zero():
 
 
 def test_shape_preserved():
+    """High-pass filter preserves the spatial shape of a batched input."""
     # Create a batch of 4 images of size 8x8
     batch = jnp.stack([jnp.eye(8) for _ in range(4)], axis=0)
     out = high_pass_filter(batch, 0.3)
@@ -104,6 +112,7 @@ def test_shape_preserved():
 
 @pytest.mark.parametrize("cutoff", [0.1, 0.5])
 def test_high_pass_effect_decreases_with_cutoff(cutoff):
+    """High-pass response to an impulse has total magnitude less than one."""
     # Input impulse at center
     img = jnp.zeros((16, 16))
     img = img.at[8, 8].set(1.0)
@@ -115,6 +124,7 @@ def test_high_pass_effect_decreases_with_cutoff(cutoff):
 
 
 def test_intensity_capping_basic():
+    """Intensity capping clips values above median + n*std, preserving shape."""
     # simple 1x2x2 image
     img = jnp.array([[[0.0, 1.0], [2.0, 3.0]]])
     # compute expected by applying the same formula
@@ -130,6 +140,7 @@ def test_intensity_capping_basic():
 
 
 def test_intensity_capping_n_zero_behaviour():
+    """With n=0 the cap equals the median, clipping all above-median values."""
     # when n==0, upper_limit == median, so anything above median must be
     # clipped to median
     img = jnp.array([[[10.0, 20.0], [30.0, 40.0]]])
@@ -143,6 +154,7 @@ def test_intensity_capping_n_zero_behaviour():
 
 
 def test_intensity_clipping_basic():
+    """Intensity clipping matches manual median±n*std clip element-wise."""
     img = jnp.array([[[0.0, 1.0], [2.0, 3.0]]])
     median = jnp.median(img, axis=(1, 2), keepdims=True)
     std = jnp.std(img, axis=(1, 2), keepdims=True)
@@ -156,6 +168,7 @@ def test_intensity_clipping_basic():
 
 
 def test_batch_processing_preserves_shape():
+    """Capping and clipping both preserve the batch input shape."""
     # a batch of two 3x3 images
     img1 = jnp.arange(9).reshape(3, 3)
     img2 = jnp.arange(9, 18).reshape(3, 3)

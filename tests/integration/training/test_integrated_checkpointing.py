@@ -1,4 +1,8 @@
-"""Tests of integration between flowgym and synthpix."""
+"""Integration tests for the save/load checkpointing pipeline with synthpix.
+
+Verifies that save_estimator and load_estimator round-trip state correctly
+when paired with a real Grain-backed SyntheticImageSampler.
+"""
 
 import pathlib
 
@@ -13,11 +17,7 @@ from flowgym.make import load_estimator, save_estimator
 
 
 def test_real_integration_checkpointing(tmp_path):
-    """Test integration between flowgym.save_estimator and synthpix.make.
-
-    Uses SyntheticImageSampler with real Grain-based scheduler for
-    checkpointing.
-    """
+    """Restoring sampler state yields identical subsequent batches."""
     # 1. Prepare dummy data for NumpyDataSource
     data_dir = tmp_path / "data"
     data_dir.mkdir()

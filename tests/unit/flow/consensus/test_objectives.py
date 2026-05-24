@@ -1,4 +1,7 @@
-"""Tests for objectives module."""
+"""Unit tests for flowgym.flow.consensus.objectives.
+
+Covers z_objective, flows_objective, and photometric weight computation.
+"""
 
 import jax.numpy as jnp
 import pytest
@@ -320,6 +323,7 @@ def test_photometric_weights_uniform_when_equal(config, B, N, H, W):
 
 @pytest.mark.parametrize("N, H, W", [(2, 4, 4), (3, 8, 8)])
 def test_photometric_weights_handles_4d_flows(config, N, H, W):
+    """make_weights expands 4-D flow input to a batch-1 output shape."""
     key = random.PRNGKey(8)
     flows = random.normal(key, (N, H, W, 2))  # 4D input
     prevs = random.normal(key, (H, W))
@@ -331,6 +335,7 @@ def test_photometric_weights_handles_4d_flows(config, N, H, W):
 
 @pytest.mark.parametrize("B, N, H, W", [(1, 2, 64, 64)])
 def test_photometric_weights_zero_error_stability(config, B, N, H, W):
+    """make_weights yields finite uniform weights when all flows are zero."""
     flows = jnp.zeros((B, N, H, W, 2))
     prevs = jnp.zeros((B, H, W))
     currs = jnp.zeros((B, H, W))

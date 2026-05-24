@@ -1,4 +1,7 @@
-"""Tests for caching module."""
+"""Unit tests for flowgym.training.caching: CacheManager core behaviour.
+
+Covers write/lookup, warm-start modes, flush consistency, and enrich_batch.
+"""
 
 import os
 import tempfile
@@ -11,7 +14,7 @@ from flowgym.training.caching import CacheManager
 
 
 def test_cache_manager_functional():
-    """Functional test for CacheManager."""
+    """CacheManager correctly handles full hits, partial hits, and misses."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         # 1. Initialize CacheManager
         cache_id = "test_cache"
@@ -51,7 +54,7 @@ def test_cache_manager_functional():
 
 
 def test_cache_warm_start():
-    """Test warm start capabilities."""
+    """warm_start='index' loads keys only; 'all' loads full data into memory."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         # Setup data
         cache_id = "test_warm"
@@ -190,7 +193,7 @@ def test_lookup_disk_prefers_newest_part_for_duplicate_keys():
 
 
 def test_cache_flush_consistency():
-    """Test that flushing updates the in-memory cache when warm_start='all'."""
+    """Flush clears the pending buffer and makes entries readable from disk."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         cache_id = "test_flush_consistency"
         # Start with empty cache, warm_start="all"
@@ -226,11 +229,7 @@ def test_cache_flush_consistency():
 
 
 def test_cache_shape_validation():
-    """Test that reading cache with mismatched spec still works via lookup.
-
-    Note: The CacheManager doesn't raise errors on shape mismatch during init.
-    Instead, it reads the data as-is and the caller should validate shapes.
-    """
+    """Disk data is read back as-is when the load spec shape differs."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         cache_id = "test_shape"
         # Create cache with shape (2,)
@@ -257,7 +256,7 @@ def test_cache_shape_validation():
 
 
 def test_cache_manager_enrich():
-    """Test enrich_batch with CacheManager."""
+    """enrich_batch calls estimator for misses only and merges the results."""
     from unittest.mock import MagicMock
 
     from flowgym.training.caching import enrich_batch

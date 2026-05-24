@@ -1,7 +1,6 @@
-"""Integration tests for sampler checkpoint/resume via save_estimator.
+"""Unit tests for flowgym.training checkpointing with synthpix samplers.
 
-Tests real save/restore cycles for SyntheticImageSampler and RealImageSampler,
-validating sampler state is preserved across checkpoint boundaries.
+Covers save/restore cycles for SyntheticImageSampler and RealImageSampler.
 """
 
 import pathlib
@@ -130,13 +129,7 @@ def _compare_sampler_states(
 
 
 def test_synthetic_sampler_checkpoint_integration(tmp_path, npy_flow_files):
-    """Test checkpoint/restore cycle for SyntheticImageSampler.
-
-    Verifies that:
-    1. flowgym.save_estimator saves sampler state with estimator state
-    2. synthpix.make(load_from=...) correctly restores sampler state
-    3. The restored sampler produces identical outputs to original
-    """
+    """SyntheticImageSampler state is preserved across checkpoint boundaries."""
     config = _make_synthetic_config(npy_flow_files)
 
     # 1. Create sampler via synthpix.make
@@ -204,13 +197,7 @@ def test_synthetic_sampler_checkpoint_integration(tmp_path, npy_flow_files):
 
 
 def test_real_sampler_checkpoint_integration(tmp_path, mock_mat_files):
-    """Test checkpoint/restore cycle for RealImageSampler.
-
-    Verifies that:
-    1. flowgym.save_estimator saves sampler state with estimator state
-    2. synthpix.make(load_from=...) correctly restores sampler state
-    3. The restored sampler produces identical outputs to original
-    """
+    """Restored RealImageSampler produces identical outputs after reload."""
     file_list, dims = mock_mat_files
     config = _make_real_config(file_list, dims)
 

@@ -1,4 +1,8 @@
-"""Tests for estimation_stats module."""
+"""Unit tests for flowgym.common.evaluation.
+
+Covers angle_error, relative_error, absolute_error, loss_supervised,
+loss_unsupervised, and compute_stats against known numerical values.
+"""
 
 import jax.numpy as jnp
 
@@ -14,6 +18,7 @@ from flowgym.common.evaluation import (
 
 
 def test_angle_error_zero_and_pi_over_two():
+    """Identical vectors yield zero angle error; orthogonal yield pi/2."""
     # Identical vectors -> zero error
     f = jnp.array([[[1.0, 0.0]]])
     gt = jnp.array([[[1.0, 0.0]]])
@@ -29,6 +34,7 @@ def test_angle_error_zero_and_pi_over_two():
 
 
 def test_relative_error_zero_and_nonzero():
+    """relative_error returns |f - gt| / |gt|; zero for identical inputs."""
     # Non-zero case
     f = jnp.array([[[3.0, 4.0]]])  # norm = 5
     gt = jnp.array([[[0.0, 8.0]]])  # norm = 8
@@ -45,6 +51,7 @@ def test_relative_error_zero_and_nonzero():
 
 
 def test_absolute_error():
+    """absolute_error returns the Euclidean norm of the difference vector."""
     f = jnp.array([[[1.0, 2.0]]])
     gt = jnp.array([[[4.0, 6.0]]])
     # Difference vector = [-3, -4] -> norm = 5
@@ -54,6 +61,7 @@ def test_absolute_error():
 
 
 def test_loss_supervised_basic():
+    """loss_supervised returns mean squared per-pixel flow error."""
     flow = jnp.arange(18, dtype=jnp.float32).reshape((1, 3, 3, 2)) * 0.1
     gt = flow + 0.5
     expected = jnp.mean(jnp.sum(jnp.square(flow - gt), axis=-1))
@@ -63,6 +71,7 @@ def test_loss_supervised_basic():
 
 
 def test_loss_unsupervised_zero_flow_identity_warp(monkeypatch):
+    """loss_unsupervised returns mean squared photometric error per pixel."""
     # Monkey-patch apply_flow_to_image_forward to return img1 unchanged
     monkeypatch.setattr(
         eval_mod, "apply_flow_to_image_forward", lambda img, flow, dt: img
@@ -77,6 +86,7 @@ def test_loss_unsupervised_zero_flow_identity_warp(monkeypatch):
 
 
 def test_compute_stats_known_values():
+    """compute_stats returns correct mean, std, quantiles, and whiskers."""
     errors = jnp.array([1.0, 2.0, 3.0, 4.0])
     threshold = 2.5
     stats = compute_stats(errors, threshold=threshold)

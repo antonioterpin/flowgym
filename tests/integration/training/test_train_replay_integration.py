@@ -1,4 +1,8 @@
-"""Tests for ReplayBuffer integration in train.py."""
+"""Integration tests for the ReplayBuffer inside the RL train loop.
+
+Verifies that train.py constructs, populates, and samples the replay
+buffer correctly across environment steps.
+"""
 
 from unittest.mock import MagicMock, patch
 
@@ -10,6 +14,7 @@ from train import train
 
 
 def test_train_replay_initialization(mock_dependencies):
+    """ReplayBuffer is instantiated once when the RL train loop starts."""
     estimator, env, obs, env_state = mock_dependencies
 
     # We want to check if ReplayBuffer is initialized
@@ -39,6 +44,7 @@ def test_train_replay_initialization(mock_dependencies):
 
 
 def test_train_replay_execution(mock_dependencies):
+    """replay_ratio=1.0 fires the train step on live and replay data."""
     estimator, env, obs, env_state = mock_dependencies
     train_step_fn = estimator.create_train_step.return_value
 

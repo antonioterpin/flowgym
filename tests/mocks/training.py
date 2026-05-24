@@ -12,7 +12,7 @@ import pytest
 
 @pytest.fixture
 def mock_dependencies():
-    """Fixture providing mock estimator, env, observations for training tests."""
+    """Mock estimator, env, and observations for training tests."""
     estimator = MagicMock()
     estimator.create_train_step.return_value = MagicMock(
         return_value=(0.1, MagicMock(), {})

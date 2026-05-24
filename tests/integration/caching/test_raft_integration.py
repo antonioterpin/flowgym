@@ -1,4 +1,7 @@
-"""Integration tests for RaftJaxEstimator caching in train_supervised loop."""
+"""Integration tests for caching with RaftJaxEstimator.
+
+Verifies that RAFT enrich populates the cache and subsequent passes hit it.
+"""
 
 import tempfile
 from unittest.mock import MagicMock, patch
@@ -32,7 +35,7 @@ class MiniRaftBatch:
 
 @patch("src.train_supervised.save_estimator")
 def test_raft_integration_caching(mock_save_estimator):
-    """Test RaftJaxEstimator caching in the real training loop."""
+    """RAFT populates the cache on first pass; second pass serves hits only."""
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         # 1. Initialize a mini RAFT estimator

@@ -1,4 +1,8 @@
-"""Tests for consensus module."""
+"""Unit tests for flowgym.flow.consensus.consensus_algorithms.
+
+Covers mean, median, and ADMM consensus algorithms plus photometric
+error helpers used as flow weights.
+"""
 
 import re
 
@@ -394,6 +398,7 @@ def test_admm_consensus_eps_stopping(eps_rel_stopping, eps_abs_stopping):
     ],
 )
 def test_output_shapes_and_types(img_shape, patch_size, patch_stride):
+    """photometric_error_with_patches returns float array of correct shape."""
     key = random.PRNGKey(0)
     prev = random.uniform(key, shape=img_shape, dtype=jnp.float32)
     curr = random.uniform(key, shape=img_shape, dtype=jnp.float32)
@@ -523,6 +528,7 @@ def test_patch_edge_cases(img_shape, patch_size, patch_stride):
 
 # Optionally: test that the function works with jax.jit
 def test_jit_compatibility():
+    """photometric_error_with_patches produces finite results under jax.jit."""
     img_shape = (16, 16)
     patch_size = 5
     patch_stride = 1

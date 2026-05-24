@@ -1,4 +1,8 @@
-"""Tests for base_call module."""
+"""Unit tests for flowgym.common.base Estimator.__call__.
+
+Covers history rolling, RNG key splitting, preprocessing pipeline
+application, and batch-size mismatch error handling.
+"""
 
 import jax
 import jax.numpy as jnp

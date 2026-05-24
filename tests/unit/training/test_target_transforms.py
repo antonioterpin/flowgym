@@ -1,4 +1,8 @@
-"""Tests for target transformations."""
+"""Unit tests for flowgym.training.target_transforms.
+
+Covers build_target_transform_from_config for all named transforms,
+pipelines, nested kwargs, and error paths.
+"""
 
 import jax.numpy as jnp
 import pytest
@@ -9,6 +13,7 @@ from flowgym.training.target_transforms import (
 
 
 def test_build_identity():
+    """None and 'identity' configs both produce a pass-through transform."""
     transform = build_target_transform_from_config(None)
     x = jnp.array([1.0, 2.0, 3.0])
     assert jnp.allclose(transform(x), x)
@@ -24,6 +29,7 @@ def test_build_identity():
 
 
 def test_build_log1p():
+    """log1p transform applies jnp.log1p(x + eps) element-wise."""
     config = {"name": "log1p", "eps": 1e-8}
     transform = build_target_transform_from_config(config)
     x = jnp.array([0.0, 1.0, 10.0])
@@ -32,6 +38,7 @@ def test_build_log1p():
 
 
 def test_build_sqrt():
+    """sqrt transform applies jnp.sqrt(x + eps) element-wise."""
     config = {"name": "sqrt", "eps": 1e-8}
     transform = build_target_transform_from_config(config)
     x = jnp.array([0.0, 1.0, 4.0])
@@ -40,6 +47,7 @@ def test_build_sqrt():
 
 
 def test_build_clip():
+    """clip transform clamps values to [min, max], supporting partial bounds."""
     config = {"name": "clip", "min": 1.0, "max": 5.0}
     transform = build_target_transform_from_config(config)
     x = jnp.array([0.0, 2.0, 10.0])
@@ -53,6 +61,7 @@ def test_build_clip():
 
 
 def test_build_scale():
+    """scale transform multiplies every element by the given factor."""
     config = {"name": "scale", "factor": 2.5}
     transform = build_target_transform_from_config(config)
     x = jnp.array([1.0, 2.0, 3.0])
@@ -61,6 +70,7 @@ def test_build_scale():
 
 
 def test_build_pipeline():
+    """pipeline config composes transforms left-to-right in declared order."""
     config = {
         "pipeline": [
             {"name": "clip", "min": 0.0, "max": 10.0},
@@ -78,6 +88,7 @@ def test_build_pipeline():
 
 
 def test_build_with_nested_kwargs():
+    """Nested 'kwargs' dict merges with inline keys when building."""
     config = {"name": "scale", "kwargs": {"factor": 3.0}}
     transform = build_target_transform_from_config(config)
     x = jnp.array([1.0, 2.0])
@@ -90,11 +101,13 @@ def test_build_with_nested_kwargs():
 
 
 def test_unknown_transform():
+    """Unrecognized transform name raises a descriptive ValueError."""
     with pytest.raises(ValueError, match="Unknown transform name"):
         build_target_transform_from_config({"name": "nonexistent"})
 
 
 def test_malformed_pipeline():
+    """Non-dict pipeline step raises TypeError naming the offending step."""
     with pytest.raises(
         TypeError, match=r"Pipeline step .* must be a dictionary"
     ):

@@ -1,4 +1,7 @@
-"""Basic caching tests for flow field estimators."""
+"""Integration tests for caching with flow field estimators.
+
+Covers write/lookup, persistence, spec storage, enrich_batch, and cache IDs.
+"""
 
 import numpy as np
 
@@ -9,7 +12,7 @@ class TestCacheManagerBasics:
     """Test basic CacheManager functionality."""
 
     def test_write_and_lookup(self, mock_cache_dir):
-        """Test basic write and lookup operations."""
+        """Written entries are all returned as hits with the correct values."""
         spec = {"epe": (np.dtype("float32"), ())}
         cm = CacheManager(
             root_dir=str(mock_cache_dir),
@@ -28,7 +31,7 @@ class TestCacheManagerBasics:
         np.testing.assert_allclose(payload_read["epe"], payload["epe"])
 
     def test_partial_hit(self, mock_cache_dir):
-        """Test lookup with partial cache hits."""
+        """Lookup hits only for stored keys; unwritten keys miss."""
         spec = {"epe": (np.dtype("float32"), ())}
         cm = CacheManager(
             root_dir=str(mock_cache_dir),
@@ -51,7 +54,7 @@ class TestCacheManagerBasics:
         np.testing.assert_allclose(payload_read["epe"][:2], payload["epe"])
 
     def test_persistence_across_instances(self, mock_cache_dir):
-        """Test that cache persists after closing and reopening."""
+        """Data flushed by one instance is readable by a new CacheManager."""
         spec = {"epe": (np.dtype("float32"), ())}
         cache_id = "test_persistence"
 
@@ -80,7 +83,7 @@ class TestCacheManagerBasics:
         np.testing.assert_allclose(payload_read["epe"], payload["epe"])
 
     def test_spec_storage(self, mock_cache_dir):
-        """Test that spec is correctly stored and retrieved in meta.json."""
+        """CacheManager writes the spec to meta.json in the expected format."""
         import json
 
         spec = {"epe": (np.dtype("float32"), ())}
@@ -104,7 +107,7 @@ class TestCacheManagerEnrich:
     """Test CacheManager.enrich integration with estimators."""
 
     def test_enrich_computes_misses(self, mock_cache_dir, mock_synthpix_batch):
-        """Test that enrich_batch calls estimator.enrich for misses."""
+        """enrich_batch calls estimator.enrich for misses and skips hits."""
         from unittest.mock import MagicMock
 
         from flowgym.training.caching import enrich_batch
@@ -140,7 +143,7 @@ class TestCacheManagerEnrich:
         np.testing.assert_allclose(payload2.epe, np.ones(B) * 0.5)
 
     def test_enrich_mixed_hits_misses(self, mock_cache_dir):
-        """Test enrich_batch handles mixed hit/miss scenarios."""
+        """enrich_batch merges cached hits and computed misses in order."""
         from unittest.mock import MagicMock
 
         import jax.numpy as jnp
@@ -191,7 +194,7 @@ class TestEstimatorCacheInterface:
     """Test the estimator.enrich interface."""
 
     def test_base_estimator_returns_none(self):
-        """Test that base FlowFieldEstimator.enrich returns None."""
+        """Estimator.enrich returns None without ground-truth flow."""
         from flowgym.flow.dis.dis_jax import (
             DISJAXFlowFieldEstimator,
             PresetType,
@@ -216,7 +219,7 @@ class TestEstimatorCacheInterface:
         assert result is None
 
     def test_cache_id_suffix_includes_config(self):
-        """Test that cache ID suffix is based on configuration."""
+        """Cache ID suffix reflects the estimator configuration hash."""
         from flowgym.flow.dis.dis_jax import (
             DISJAXFlowFieldEstimator,
             PresetType,

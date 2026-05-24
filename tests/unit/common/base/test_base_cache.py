@@ -1,4 +1,8 @@
-"""Tests for Estimator caching behavior in __call__."""
+"""Unit tests for flowgym.common.base Estimator cache_payload handling.
+
+Covers cache_payload injection, legacy 'errors' normalization, cached
+estimate pass-through, and transient-key exclusion from persisted state.
+"""
 
 import jax.numpy as jnp
 import pytest
@@ -99,10 +103,7 @@ def test_call_normalizes_legacy_errors_field(estimator):
 
 
 def test_call_exposes_cached_estimates_without_apply(estimator):
-    """Cached estimates are passed through.
-
-    Only downstream estimator can apply them.
-    """
+    """Cached estimates are passed through; base class does not apply them."""
     B, H, W = 2, 4, 4
     state = _make_state(B, H, W, 1, 1)
     images = jnp.zeros((B, H, W))

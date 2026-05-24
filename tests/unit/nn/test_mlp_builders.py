@@ -1,6 +1,7 @@
-"""Tests for MLP builder.
+"""Unit tests for flowgym.nn.mlp.
 
-tests/nn/test_mlp_builders.py
+Covers the build_mlp_from_config builder: config validation, defaults,
+type coercion, and forward-pass output shapes with various activations.
 """
 
 import jax
@@ -19,7 +20,7 @@ class TestMLPBuilder:
     """Test the build_mlp_from_config function."""
 
     def test_minimal_config(self):
-        """Build MLP with minimal config (only hidden_dims)."""
+        """MLP builder applies safe defaults when only hidden_dims is given."""
         config = {"hidden_dims": [64, 32]}
         model = build_mlp_from_config(config)
 
@@ -30,7 +31,7 @@ class TestMLPBuilder:
         assert model.use_bias is True  # default
 
     def test_full_config(self):
-        """Build MLP with all config fields."""
+        """All MLP config fields are applied to the built model."""
         config = {
             "hidden_dims": [128, 64, 32],
             "output_dim": 5,
@@ -107,7 +108,7 @@ class TestMLPBuilder:
             build_mlp_from_config(config)
 
     def test_converts_list_to_tuple(self):
-        """Builder converts list to tuple for hidden_dims."""
+        """A list of hidden_dims is coerced to a tuple on the model."""
         config = {"hidden_dims": [64, 32]}
         model = build_mlp_from_config(config)
         assert isinstance(model.hidden_dims, tuple)
@@ -118,7 +119,7 @@ class TestMLPForward:
     """Test MLP forward pass."""
 
     def test_forward_pass_1d_input(self):
-        """MLP forward pass with 1D input."""
+        """MLP maps a 1-D input vector to the expected output_dim shape."""
         config = {"hidden_dims": [8, 4], "output_dim": 1}
         model = build_mlp_from_config(config)
 
@@ -132,7 +133,7 @@ class TestMLPForward:
         assert output.shape == (1,)
 
     def test_forward_pass_batch(self):
-        """MLP forward pass with batched input."""
+        """MLP maps a batched input to (batch, output_dim) output shape."""
         config = {"hidden_dims": [16, 8], "output_dim": 3}
         model = build_mlp_from_config(config)
 
@@ -147,7 +148,7 @@ class TestMLPForward:
         assert output.shape == (4, 3)
 
     def test_different_activations(self):
-        """Test MLP with different activation functions."""
+        """Each supported activation name produces the correct output shape."""
         activations = ["relu", "tanh", "sigmoid", "gelu"]
         for act in activations:
             config = {"hidden_dims": [8], "activation": act}
@@ -160,7 +161,7 @@ class TestMLPForward:
             assert output.shape == (1,)
 
     def test_no_bias(self):
-        """Test MLP without bias terms."""
+        """use_bias=False yields only 2-D weight matrices; no bias vectors."""
         config = {"hidden_dims": [8, 4], "use_bias": False}
         model = build_mlp_from_config(config)
 
@@ -175,7 +176,7 @@ class TestMLPForward:
             assert p.ndim == 2  # Only weight matrices, no bias vectors
 
     def test_with_bias(self):
-        """Test MLP with bias terms."""
+        """use_bias=True produces both weight matrices and 1-D bias vectors."""
         config = {"hidden_dims": [8, 4], "use_bias": True}
         model = build_mlp_from_config(config)
 

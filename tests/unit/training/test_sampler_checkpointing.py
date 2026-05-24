@@ -1,4 +1,7 @@
-"""Tests for estimator checkpointing."""
+"""Unit tests for flowgym.training sampler checkpointing.
+
+Covers atomic save behaviour and grain/non-grain sampler handling.
+"""
 
 import pathlib
 
@@ -43,7 +46,7 @@ class MockManager:
 
 
 def test_save_estimator_is_atomic(monkeypatch):
-    """Test that save_estimator is atomic."""
+    """save_estimator writes state, sampler, and grain in one manager call."""
     manager_instances = []
 
     def mock_init(ckpt_dir, options=None):
@@ -92,7 +95,7 @@ def test_save_estimator_is_atomic(monkeypatch):
 
 
 def test_save_estimator_skips_non_grain_sampler(monkeypatch):
-    """Test that save_estimator skips non-grain samplers."""
+    """Samplers without a grain iterator are omitted from the checkpoint."""
     manager_instances = []
 
     def mock_init(ckpt_dir, options=None):
@@ -127,7 +130,7 @@ def test_save_estimator_skips_non_grain_sampler(monkeypatch):
 
 
 def test_fluid_env_make_passes_load_from(monkeypatch):
-    """Test that FluidEnv.make passes load_from to synthpix.make"""
+    """FluidEnv.make forwards the load_from path to synthpix.make."""
     make_calls = []
 
     def mock_make(config, **kwargs):

@@ -1,4 +1,8 @@
-"""Tests for regularizers module."""
+"""Unit tests for flowgym.flow.consensus.regularizers.
+
+Covers smoothness, divergence-free, total-variation, and Laplacian
+regularizers for known analytic inputs.
+"""
 
 import jax.numpy as jnp
 import pytest
@@ -91,7 +95,7 @@ def test_divergence_free_regularizer_ramp(batch_shape):
     ],
 )
 def test_tv_regularizer_zero(batch_shape):
-    """TV of a constant flow field should be sum(sqrt(eps)) at all locations."""
+    """TV of a constant flow is sum(sqrt(eps)) across all locations."""
     flow = jnp.ones(batch_shape)
     eps = 1e-4
     result = tv_regularizer(flow, eps=eps)
@@ -110,10 +114,7 @@ def test_tv_regularizer_zero(batch_shape):
     ],
 )
 def test_tv_regularizer_ramp(batch_shape):
-    """TV of a ramp flow.
-
-    Only one gradient direction is nonzero (dx=1, dy=0).
-    """
+    """TV of a ramp flow where only dx=1 is nonzero, dy=0 everywhere."""
     H, W, C = batch_shape
     eps = 1e-4
     ramp = jnp.arange(W).reshape(1, W, 1)
@@ -167,7 +168,7 @@ def test_laplacian_regularizer_ramp(batch_shape):
     ],
 )
 def test_laplacian_regularizer_quadratic(batch_shape):
-    """Test laplacian_regularizer output shape and value for quadratic input."""
+    """laplacian_regularizer returns expected value for a quadratic flow."""
     H, W, _ = batch_shape
     x_coords = jnp.arange(W)
     quad = (x_coords**2).reshape(1, W, 1)

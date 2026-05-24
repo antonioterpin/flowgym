@@ -1,4 +1,7 @@
-"""Tests for DIS estimator caching functionality."""
+"""Integration tests for caching with DISJAXFlowFieldEstimator.
+
+Covers enrich output shape, cache write/lookup round-trip, and short-circuit.
+"""
 
 import jax
 import jax.numpy as jnp
@@ -20,7 +23,7 @@ def cache_dir(tmp_path):
 
 
 def test_cache_manager_spec_storage(cache_dir):
-    """Test that spec is correctly stored in the cache meta.json."""
+    """CacheManager persists the spec to meta.json in the expected format."""
     import json
 
     spec = {"epe": (np.dtype("float32"), ())}
@@ -41,7 +44,7 @@ def test_cache_manager_spec_storage(cache_dir):
 
 
 def test_dis_get_config():
-    """Test get_config method of DIS estimator."""
+    """DIS get_config returns a dict with preset and patch_size fields."""
     estimator = DISJAXFlowFieldEstimator(preset=PresetType.FAST)
     config = estimator.get_config()
 
@@ -52,7 +55,7 @@ def test_dis_get_config():
 
 
 def test_dis_enrich(tmp_path):
-    """Test enrich returns correct EPE payload."""
+    """DIS enrich returns an EPE array with the correct shape for each miss."""
     # Setup estimator
     estimator = DISJAXFlowFieldEstimator(preset=PresetType.ULTRAFAST)
 
@@ -95,7 +98,7 @@ def test_dis_enrich(tmp_path):
 
 
 def test_integration_enrich(cache_dir):
-    """Test full enrich flow with CacheManager and DIS estimator."""
+    """Full enrich cycle with DIS writes to cache and hits on re-lookup."""
     spec = {"epe": (np.dtype("float32"), ())}
     estimator = DISJAXFlowFieldEstimator(preset=PresetType.ULTRAFAST)
 
@@ -143,7 +146,7 @@ def test_integration_enrich(cache_dir):
 
 
 def test_dis_uses_cached_metrics_without_running_flow(monkeypatch):
-    """DIS should short-circuit when cache provides precomputed metrics."""
+    """DIS uses cached errors directly and skips flow estimation on a hit."""
     estimator = DISJAXFlowFieldEstimator(preset=PresetType.ULTRAFAST)
 
     B, H, W = 2, 32, 32

@@ -1,4 +1,7 @@
-"""Tests for admm module."""
+"""Unit tests for flowgym.flow.consensus.admm.
+
+Covers shape correctness, iteration count, and consensus value of run_admm.
+"""
 
 import jax
 import jax.numpy as jnp
@@ -41,7 +44,7 @@ def dummy_obj(*args, **kwargs):
 @pytest.mark.usefixtures("dummy_solvers")
 @pytest.mark.parametrize("N, H, W, C", [(2, 3, 4, 1)])
 def test_run_admm_shape_and_basic_flow(N, H, W, C):
-    """Test that run_admm outputs the expected shape and calls the solvers."""
+    """run_admm returns a consensus flow with shape (H, W, C)."""
     flows = jnp.ones((N, H, W, C))
     consensus, _ = consensus_mod.run_admm(
         flows=flows,
@@ -61,7 +64,7 @@ def test_run_admm_shape_and_basic_flow(N, H, W, C):
 @pytest.mark.parametrize("max_iters", [1, 2, 5])
 @pytest.mark.parametrize("N, H, W, C", [(2, 2, 2, 1)])
 def test_run_admm_runs_correct_number_of_iterations(max_iters, N, H, W, C):
-    """Test that run_admm performs exactly max_admm_iterations."""
+    """run_admm invokes each solver exactly max_admm_iterations times."""
     flows = jnp.ones((N, H, W, C))
 
     # We'll count how many times the solvers are called via closure
@@ -109,10 +112,7 @@ def test_run_admm_runs_correct_number_of_iterations(max_iters, N, H, W, C):
 @pytest.mark.usefixtures("dummy_solvers")
 @pytest.mark.parametrize("N, H, W, C", [(3, 2, 2, 1)])
 def test_run_admm_consensus_mean_with_noop_solvers(N, H, W, C):
-    """Solvers return unchanged input.
-
-    consensus_flow is the mean of original flows.
-    """
+    """When solvers are no-ops, consensus equals the mean of input flows."""
     flows = jnp.arange(N * H * W * C).reshape(N, H, W, C).astype(jnp.float32)
 
     # Solvers just return inputs, no changes

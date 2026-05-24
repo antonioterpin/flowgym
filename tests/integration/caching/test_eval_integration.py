@@ -1,3 +1,9 @@
+"""Integration tests for caching with the eval pipeline.
+
+Verifies that eval_full_dataset calls the cache manager and passes enriched
+payload to compute_estimate_fn.
+"""
+
 from unittest.mock import MagicMock, Mock
 
 import numpy as np
@@ -9,7 +15,7 @@ from flowgym.common.base import Estimator
 
 
 def test_eval_full_dataset_with_caching():
-    """Test that eval_full_dataset correctly uses the cache manager."""
+    """eval_full_dataset enriches misses and forwards payload on."""
 
     # Mock dependencies
     mock_estimator = MagicMock(spec=Estimator)

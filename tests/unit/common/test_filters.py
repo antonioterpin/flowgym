@@ -1,4 +1,8 @@
-"""Tests for filters module."""
+"""Unit tests for flowgym.common.filters.
+
+Covers kernel construction (gaussian, uniform) and invalid-vector
+replacement for single frames and batched flow fields.
+"""
 
 import jax.numpy as jnp
 import pytest
@@ -45,6 +49,7 @@ def small_batch_flags():
 @pytest.mark.parametrize("truncate", [2.0, 3.0])
 @pytest.mark.parametrize("n_channels", [1, 3])
 def test_gaussian_kernel(sigma, truncate, n_channels):
+    """Gaussian kernel has the expected shape and sums to one per channel."""
     size = 2 * int(truncate * sigma + 0.5) + 1
     kernel = gaussian_kernel(sigma, truncate, n_channels=n_channels)
     assert kernel.shape == (size, size, n_channels)
@@ -52,6 +57,7 @@ def test_gaussian_kernel(sigma, truncate, n_channels):
 
 
 def test_gaussian_smoothing(small_batch_field):
+    """Gaussian smoothing preserves shape and reduces field variance."""
     sigma = 1.0
     smoothed = gaussian_smoothing(small_batch_field, sigma)
     assert smoothed.shape == small_batch_field.shape
@@ -62,6 +68,7 @@ def test_gaussian_smoothing(small_batch_field):
 @pytest.mark.parametrize("kernel_size", [1, 2, 3])
 @pytest.mark.parametrize("n_channels", [1, 3])
 def test_uniform_kernel(kernel_size, n_channels):
+    """Uniform kernel has a zero centre, correct shape, and unit sum."""
     kernel = uniform_kernel(kernel_size, n_channels=n_channels)
     assert kernel.shape == (
         kernel_size * 2 + 1,
@@ -75,6 +82,7 @@ def test_uniform_kernel(kernel_size, n_channels):
 
 
 def test_replace_invalid_single(small_field, small_flags):
+    """Invalid pixels are replaced while valid pixels remain unchanged."""
     kernel = uniform_kernel(kernel_size=1, n_channels=2)
     max_iter = 5
     flow_field = small_field
@@ -100,6 +108,7 @@ def test_replace_invalid_single(small_field, small_flags):
 def test_replace_outliers(
     small_batch_field, small_batch_flags, kernel_size, n_iter
 ):
+    """Batched outlier replacement keeps shape, edits flagged pixels."""
     updated_flow = replace_outliers(
         small_batch_field,
         small_batch_flags,

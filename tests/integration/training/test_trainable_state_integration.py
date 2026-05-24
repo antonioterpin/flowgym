@@ -1,4 +1,7 @@
-"""Tests for TrainableState."""
+"""Integration tests for TrainableState save/load pipeline.
+
+Covers round-trips, training resumption, and optimizer isolation.
+"""
 
 import os
 import shutil
@@ -74,6 +77,7 @@ def _make_dummy_state(
 
 
 def test_estimator_trainable_state_is_trivial_pytree():
+    """EstimatorTrainableState survives a JAX flatten/unflatten round-trip."""
     state = EstimatorTrainableState(
         step=0,
         apply_fn=None,
@@ -92,6 +96,7 @@ def test_estimator_trainable_state_is_trivial_pytree():
 
 
 def test_nn_estimator_create_initializes_opt_state_and_extras():
+    """create() populates params, opt_state, and extras with correct types."""
     params = FrozenDict({"w": jnp.ones((2,), dtype=jnp.float32)})
     tx = optax.sgd(learning_rate=0.1)
     extras = {"global_step": jnp.array(0, dtype=jnp.int32)}
@@ -121,6 +126,7 @@ def test_nn_estimator_create_initializes_opt_state_and_extras():
 
 
 def test_nn_estimator_tree_flatten_unflatten_roundtrip():
+    """NNEstimatorTrainableState is reconstructed faithfully by JAX tree ops."""
     state = _make_dummy_state(global_step=3)
     children, aux = tree_util.tree_flatten(state)
 
@@ -140,6 +146,7 @@ def test_nn_estimator_tree_flatten_unflatten_roundtrip():
 
 
 def test_apply_gradients_updates_params_and_preserves_tx_and_extras():
+    """apply_gradients applies SGD update and preserves tx and extras."""
     # Simple 1D param with SGD
     params = FrozenDict({"w": jnp.array(1.0)})
     tx = optax.sgd(learning_rate=0.1)
@@ -174,7 +181,7 @@ def test_apply_gradients_updates_params_and_preserves_tx_and_extras():
 
 
 def test_save_and_load_roundtrip_resumable(tmp_path):
-    """save_estimator/load_estimator round-trip preserves dynamic state."""
+    """save_estimator/load_estimator round-trip preserves all dynamic state."""
 
     out_dir = tmp_path
     estimator_name = "dummy_estimator"
@@ -205,7 +212,7 @@ def test_save_and_load_roundtrip_resumable(tmp_path):
 
 
 def test_save_and_load_supports_training_resumption(tmp_path):
-    """Simulate training, save, load, continue training identically."""
+    """Resumed training produces results identical to uninterrupted training."""
     out_dir = tmp_path
     estimator_name = "resumable_estimator"
     ckpt_path = out_dir / "checkpoints" / estimator_name
@@ -241,12 +248,7 @@ def test_save_and_load_supports_training_resumption(tmp_path):
 
 
 def test_load_estimator_uses_template_static_tx_not_checkpoint(tmp_path):
-    """Static tx must come from the template, not from the checkpoint.
-
-    This ensures checkpoints are data-only (params/opt_state/extras) and
-    do not depend on pickled optimizer/transformation objects, which would
-    tie them to module/class names.
-    """
+    """load_estimator binds tx from the template, not from checkpoint data."""
     out_dir = tmp_path
     estimator_name = "dummy_estimator"
     ckpt_path = out_dir / "checkpoints" / estimator_name
@@ -281,11 +283,11 @@ def test_load_estimator_uses_template_static_tx_not_checkpoint(tmp_path):
 
 
 def test_save_estimator_turns_relative_directory_into_absolute(tmp_path):
-    """save_estimator should convert relative out_dir to absolute path."""
+    """save_estimator resolves a relative out_dir to an absolute path."""
     relative_out_dir = "relative_dir"
     estimator_name = "test_estimator"
     # Expected: relative_out_dir/checkpoints/estimator_name/step_0...
-    # But save_estimator places it in relative_out_dir/checkpoints/<name>
+    # save_estimator places it in relative_out_dir/checkpoints/<name>
     # Return value of save_estimator is the full step path.
     # Test checks if directory exists.
     ckpt_path = os.path.abspath(

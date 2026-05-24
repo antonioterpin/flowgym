@@ -1,4 +1,8 @@
-"""Tests for median module."""
+"""Unit tests for flowgym.common.median.
+
+Covers correctness and GPU throughput of fixed-size median primitives
+(median8 through median64) and the generic median dispatcher.
+"""
 
 import timeit
 from functools import partial
@@ -30,6 +34,7 @@ NUMBER_OF_EXECUTIONS = config["EXECUTIONS_POST_PROCESS"]
 @pytest.mark.parametrize("batch_size", [1, 2, 4, 8, 16, 32, 64, 128])
 @pytest.mark.parametrize("seed", [0, 1, 2, 42, 100])
 def test_median(dim, batch_size, seed):
+    """Generic median dispatcher matches jnp.median across dim sizes."""
     key = jax.random.PRNGKey(seed)
     data = jax.random.normal(key, (batch_size, 16, 16, dim))
     res = median(data)
@@ -67,6 +72,7 @@ def test_median(dim, batch_size, seed):
     ],
 )
 def test_median_correctness(fn, dim, seed, shape):
+    """Fixed-size median function agrees with jnp.median for varied shapes."""
     key = jax.random.PRNGKey(seed)
     data = jax.random.normal(key, (*shape, dim))
     res = fn(data)
@@ -121,6 +127,7 @@ def test_median_correctness(fn, dim, seed, shape):
 )
 @pytest.mark.parametrize("seed", [0])
 def test_median_time(fn, dim, limit_time, seed, shape, cmp_std):
+    """JIT-compiled median meets per-shape GPU throughput time limits."""
     compare_to_standard = cmp_std
     key = jax.random.PRNGKey(seed)
     data = jax.random.normal(key, (*shape, dim))

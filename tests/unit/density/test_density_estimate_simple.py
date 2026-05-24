@@ -1,4 +1,8 @@
-"""Test the flow field computation using synthetic images."""
+"""Unit tests for flowgym.density.simple.
+
+Covers SimpleDensityEstimator: threshold validation, pixel-fraction
+density on known arrays, and accuracy on synthetic particle images.
+"""
 
 import jax
 import jax.numpy as jnp
@@ -13,11 +17,7 @@ from flowgym.density.simple import SimpleDensityEstimator
 
 @pytest.mark.parametrize("threshold", [-1.0, 260.0])
 def test_invalid_threshold(threshold):
-    """Test that an invalid threshold raises a ValueError.
-
-    Args:
-        threshold (float): The threshold to test.
-    """
+    """Out-of-range threshold raises ValueError on construction."""
     with pytest.raises(ValueError):
         SimpleDensityEstimator(threshold)
 
@@ -31,13 +31,7 @@ def test_invalid_threshold(threshold):
     ],
 )
 def test_particles_per_pixel(image, threshold, expected):
-    """Test the particles_per_pixel function with various inputs.
-
-    Args:
-        image (jnp.ndarray): The input image.
-        threshold (float): The threshold to apply to the image.
-        expected (float): The expected density.
-    """
+    """Estimated density equals the fraction of pixels above threshold."""
     config = {
         "threshold": threshold,
     }
@@ -60,13 +54,7 @@ def test_particles_per_pixel(image, threshold, expected):
 @pytest.mark.parametrize("density", [0.01, 0.05, 0.1])
 @pytest.mark.parametrize("intensity_range", [(50, 200), (70, 200)])
 def test_density_simple_synthetic_image(image_shape, density, intensity_range):
-    """Test the density estimation on synthetic images.
-
-    Args:
-        image_shape (tuple): Shape of the image.
-        density (float): Density of particles in the image.
-        intensity_range (tuple): Range of pixel intensities.
-    """
+    """Density estimate is within 50 % of the true value."""
     key = jax.random.PRNGKey(0)
     threshold = intensity_range[0] / 2.5
 

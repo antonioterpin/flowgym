@@ -1,4 +1,8 @@
-"""Test TrainableState."""
+"""Unit tests for flowgym.training.trainable_state.
+
+Covers NNEstimatorTrainableState creation, gradient application,
+from_config, and JAX PyTree compliance.
+"""
 
 import jax
 import jax.numpy as jnp
@@ -31,6 +35,7 @@ def make_simple_params() -> FrozenDict:
 
 
 def test_create_sets_extras_default_empty_frozendict():
+    """extras=None produces an empty FrozenDict on the created state."""
     params = make_simple_params()
     tx = optax.sgd(learning_rate=0.1)
 
@@ -46,6 +51,7 @@ def test_create_sets_extras_default_empty_frozendict():
 
 
 def test_create_uses_given_extras():
+    """Provided extras dict is stored as a FrozenDict with correct values."""
     params = make_simple_params()
     tx = optax.sgd(learning_rate=0.1)
     extras = {"alpha": jnp.array(0.5)}
@@ -63,6 +69,7 @@ def test_create_uses_given_extras():
 
 
 def test_create_initializes_opt_state_from_tx():
+    """create initialises opt_state from tx.init and sets step to zero."""
     params = make_simple_params()
     tx = optax.sgd(learning_rate=0.1)
 
@@ -86,6 +93,7 @@ def test_create_initializes_opt_state_from_tx():
 
 
 def test_apply_fn_is_used_correctly():
+    """apply_fn stored on state computes the expected model output."""
     params = make_simple_params()
     tx = optax.sgd(learning_rate=0.1)
 
@@ -108,6 +116,7 @@ def test_apply_fn_is_used_correctly():
 
 
 def test_apply_gradients_updates_params_and_step_and_keeps_extras_and_tx():
+    """apply_gradients updates params/step and preserves extras and tx."""
     params = make_simple_params()
     tx = optax.sgd(learning_rate=0.1)
     extras = {"alpha": jnp.array(0.5)}
@@ -152,6 +161,7 @@ def test_apply_gradients_updates_params_and_step_and_keeps_extras_and_tx():
 
 
 def test_from_config_uses_build_optimizer(monkeypatch):
+    """from_config delegates to build_optimizer_from_config."""
     params = make_simple_params()
 
     # fake optimizer config
@@ -207,6 +217,7 @@ def test_from_config_uses_build_optimizer(monkeypatch):
 
 
 def test_trainable_state_is_a_valid_pytree_and_tx_is_static():
+    """State flattens to array leaves; tx is a static field."""
     params = make_simple_params()
     tx = optax.sgd(learning_rate=0.1)
     extras = {"alpha": jnp.array(0.5)}
