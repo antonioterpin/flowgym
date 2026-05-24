@@ -28,7 +28,7 @@ dependencies = [
     "jax>=0.6.0",
     "flax>=0.12.7",
     "ipywidgets",
-    "robo-goggles @ git+https://github.com/antonioterpin/goggles.git@15a2ef28f58d06179d47804ddb908fb58fd06b20",
+    "robo-goggles>=0.2.0",
     "pip>=25.3",
 ]
 
@@ -46,7 +46,7 @@ exclude = ["tests*", "docs*"]
 # Dependency groups
 [dependency-groups]
 dev = [
-    "synthpix @ git+https://github.com/antonioterpin/synthpix.git@4adea08",
+    "synthpix>=0.1.2",
     "pre-commit==4.0.1",
     "snowballstemmer",
     "pytest==7.4.4",
@@ -62,7 +62,7 @@ dev = [
 ]
 
 synthpix-cuda12 = [
-    "synthpix[cuda12] @ git+https://github.com/antonioterpin/synthpix.git@4adea08",
+    "synthpix[cuda12]>=0.1.2",
 ]
 
 dev-cuda12 = [

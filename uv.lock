@@ -721,7 +721,7 @@ requires-dist = [
     { name = "openpiv", marker = "extra == 'other-methods'" },
     { name = "pip", specifier = ">=25.3" },
     { name = "pyoptflow", marker = "extra == 'other-methods'" },
-    { name = "robo-goggles", git = "https://github.com/antonioterpin/goggles.git?rev=15a2ef28f58d06179d47804ddb908fb58fd06b20" },
+    { name = "robo-goggles", specifier = ">=0.2.0" },
     { name = "robo-goggles", extras = ["wandb"], marker = "extra == 'wandb'" },
     { name = "sphinx", marker = "extra == 'docs'", specifier = "==7.4.7" },
     { name = "sphinx-rtd-theme", marker = "extra == 'docs'", specifier = "==2.0.0" },
@@ -743,7 +743,7 @@ dev = [
     { name = "ruff", specifier = ">=0.14.14" },
     { name = "scikit-image", specifier = ">=0.20.0" },
     { name = "snowballstemmer" },
-    { name = "synthpix", git = "https://github.com/antonioterpin/synthpix.git?rev=4adea08" },
+    { name = "synthpix", specifier = ">=0.1.2" },
     { name = "wandb", specifier = ">=0.16,<1.0" },
 ]
 dev-cuda12 = [
@@ -758,11 +758,11 @@ dev-cuda12 = [
     { name = "ruff", specifier = ">=0.14.14" },
     { name = "scikit-image", specifier = ">=0.20.0" },
     { name = "snowballstemmer" },
-    { name = "synthpix", git = "https://github.com/antonioterpin/synthpix.git?rev=4adea08" },
-    { name = "synthpix", extras = ["cuda12"], git = "https://github.com/antonioterpin/synthpix.git?rev=4adea08" },
+    { name = "synthpix", specifier = ">=0.1.2" },
+    { name = "synthpix", extras = ["cuda12"], specifier = ">=0.1.2" },
     { name = "wandb", specifier = ">=0.16,<1.0" },
 ]
-synthpix-cuda12 = [{ name = "synthpix", extras = ["cuda12"], git = "https://github.com/antonioterpin/synthpix.git?rev=4adea08" }]
+synthpix-cuda12 = [{ name = "synthpix", extras = ["cuda12"], specifier = ">=0.1.2" }]
 
 [[package]]
 name = "fonttools"
@@ -2831,7 +2831,7 @@ wheels = [
 [[package]]
 name = "robo-goggles"
 version = "0.2.0"
-source = { git = "https://github.com/antonioterpin/goggles.git?rev=15a2ef28f58d06179d47804ddb908fb58fd06b20#15a2ef28f58d06179d47804ddb908fb58fd06b20" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "imageio" },
     { name = "matplotlib" },
@@ -2839,6 +2839,10 @@ dependencies = [
     { name = "rich" },
     { name = "ruamel-yaml" },
     { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/53/61/a1dd6f8148fc2948e767f310eff30c2a78de81477cc0c888043a003c540e/robo_goggles-0.2.0.tar.gz", hash = "sha256:16fd1df2f14e64dc198c65e208bd20b9ef5b3334cff146852a58169ead01d9fa", size = 96544, upload-time = "2026-05-01T08:22:30.755Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2d/67/d644914b09193f0e31559c5d73e2e80a64e9a67c0f2882376a7d7006f9d7/robo_goggles-0.2.0-py3-none-any.whl", hash = "sha256:bf24a98a09467a0d949db69c823c8e9eb8d68855acc008318e96002847502dae", size = 86672, upload-time = "2026-05-01T08:22:29.22Z" },
 ]
 
 [package.optional-dependencies]
@@ -3298,7 +3302,7 @@ wheels = [
 [[package]]
 name = "synthpix"
 version = "0.1.2"
-source = { git = "https://github.com/antonioterpin/synthpix.git?rev=4adea08#4adea0897ccf60c5f17e78382c2c042ee744cdd2" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "gdown" },
     { name = "grain" },
@@ -3310,6 +3314,10 @@ dependencies = [
     { name = "robo-goggles" },
     { name = "ruamel-yaml" },
     { name = "tqdm" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/28/6c/3ef16783f875fd531fb77342d03dde1a0cc48102dab37e49319e64f2e131/synthpix-0.1.2.tar.gz", hash = "sha256:b50fcd9012516223d5c250c17479bac925f1684a5e548f85a5fe503adf7fe9ae", size = 91767, upload-time = "2026-01-19T12:59:05.734Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ac/66/f1540c4a7e39c42610102a312aec18af2cec47e89a2d21b271561abb3108/synthpix-0.1.2-py3-none-any.whl", hash = "sha256:9c2420d3edc700fb442ce65b73184fab0e33307ff3fe590ff809cf14099148e7", size = 75643, upload-time = "2026-01-19T12:59:04.05Z" },
 ]
 
 [package.optional-dependencies]
