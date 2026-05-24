@@ -26,7 +26,7 @@ requires-python = ">=3.11"
 # Core dependencies
 dependencies = [
     "jax>=0.6.0",
-    "flax>=0.10.5",
+    "flax>=0.12.7",
     "ipywidgets",
     "robo-goggles @ git+https://github.com/antonioterpin/goggles.git@15a2ef28f58d06179d47804ddb908fb58fd06b20",
     "pip>=25.3",

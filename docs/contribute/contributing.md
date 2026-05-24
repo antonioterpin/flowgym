@@ -106,6 +106,32 @@ uv run pytest -k checkpoint
 `pytest` runs with coverage by default (configured in
 `pyproject.toml`); the HTML coverage report ends up in `htmlcov/`.
 
+#### Optional extras and CUDA
+
+Tests that exercise the `other_methods` baselines (OpenCV-backed DIS, OpenPIV)
+are **skipped automatically** when those dependencies are absent, so a
+`dev`-only install stays green. To run them, add the extra:
+
+```bash
+uv sync --group dev --extra other_methods
+uv run pytest
+```
+
+For GPU runs, install a CUDA extra (`cuda12` or `cuda13`). **Avoid combining
+`cuda13` with `other_methods` in the same environment.** PyTorch (pulled by
+`other_methods`) bundles an older `nvidia-cudnn-cu12` that can shadow the
+`nvidia-cudnn-cu13` `jax[cuda13]` was built against, which may break JAX on the
+GPU (see the warning in [Installation](../getting-started/installation.md)).
+A safe split:
+
+```bash
+# jax-only suite on a CUDA 13 GPU
+uv sync --group dev --extra cuda13 && uv run pytest
+
+# full suite (incl. other_methods) on a CUDA 12 GPU
+uv sync --group dev --extra other_methods --extra cuda12 && uv run pytest
+```
+
 ### Lint, format, and type-check
 
 The default pre-commit run covers Ruff (lint + format), pydoclint, and

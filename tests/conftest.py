@@ -1,5 +1,6 @@
 """Conftest.py for tests."""
 
+import importlib.util
 import shutil
 from datetime import datetime
 from unittest.mock import MagicMock
@@ -8,6 +9,29 @@ import h5py
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Optional-dependency gating
+# ──────────────────────────────────────────────────────────────────────────────
+# Some test modules exercise the comparison/baseline methods that live behind
+# the `other_methods` extra (OpenCV, OpenPIV, PyTorch). Skip collecting them
+# when the underlying dependency is absent so the jax-only suite stays green;
+# install `flow-gym-suite[other_methods]` to run them.
+_OPTIONAL_DEPENDENCY_MODULES = {
+    "test_dis_jax.py": "cv2",
+    "test_flow_estimate_dis.py": "cv2",
+    "test_openpiv_jax.py": "openpiv",
+    "test_train_replay_integration.py": "cv2",
+}
+
+
+def pytest_ignore_collect(collection_path, config):
+    """Skip modules whose optional `other_methods` dependency is not installed."""
+    dependency = _OPTIONAL_DEPENDENCY_MODULES.get(collection_path.name)
+    if dependency is not None and importlib.util.find_spec(dependency) is None:
+        return True
+    return None
 
 
 # ──────────────────────────────────────────────────────────────────────────────

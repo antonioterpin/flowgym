@@ -34,17 +34,17 @@ The `cuda13` extra pulls `jax[cuda13]`, which only exists in jax >=0.10 and
 therefore requires Python 3.11+.
 
 ```{warning}
-**Do not install the `other_methods` extra alongside `cuda13` in the same
+**Avoid installing the `other_methods` extra alongside `cuda13` in the same
 environment.** `other_methods` pulls in PyTorch, which bundles its own
-`nvidia-cudnn-cu12` (e.g. 9.10.2). That older cuDNN shadows the
-`nvidia-cudnn-cu13` (9.22) that `jax[cuda13]` was built against, so JAX fails
-on the GPU with:
+`nvidia-cudnn-cu12` (e.g. 9.10.2). That older cuDNN can shadow the
+`nvidia-cudnn-cu13` (9.22) that `jax[cuda13]` was built against, in which case
+JAX may fail on the GPU with:
 
     Loaded runtime CuDNN library: 9.10.2 but source was compiled with: 9.12.0
     RET_CHECK failure (...gpu_compiler.cc) dnn_support != nullptr
 
-Keep the PyTorch-based `other_methods` baselines and the JAX CUDA 13 GPU stack
-in **separate environments**. (CPU runs are unaffected.)
+If you hit this, keep the PyTorch-based `other_methods` baselines and the JAX
+CUDA 13 GPU stack in **separate environments**. (CPU runs are unaffected.)
 ```
 
 ```{warning}
