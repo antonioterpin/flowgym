@@ -105,6 +105,7 @@ addopts = [
         "-ra",
         "--strict-markers",
         "--strict-config",
+        "--import-mode=importlib",
         "--cov=flowgym",
         "--cov-branch",
         "--cov-report=term-missing",
@@ -112,7 +113,7 @@ addopts = [
         "--cov-report=xml",
 ]
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = [".", "tests"]
 markers = [
         "run_explicitly: marks tests that are only run with -m run_explicitly",
         "slow: marks tests as slow (deselect with '-m \"not slow\"')",
