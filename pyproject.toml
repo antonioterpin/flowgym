@@ -21,7 +21,7 @@ classifiers = [
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 
 # Core dependencies
 dependencies = [
@@ -92,6 +92,10 @@ wandb = [
 
 cuda12 = [
     "jax[cuda12]>=0.6.0",
+]
+
+cuda13 = [
+    "jax[cuda13]>=0.10.1",
 ]
 
 # Pytest configuration
