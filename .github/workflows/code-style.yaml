@@ -1,9 +1,9 @@
 name: Coding style validation
 
 on:
+    pull_request:
     push:
-        branches:
-            - '**'
+        branches: [main, dev]
 
 jobs:
     code-style-check:
@@ -21,9 +21,10 @@ jobs:
 
             # The pre-commit config has local hooks (basedpyright, pydoclint)
             # that shell out to `uv run`, so the project env must be synced
-            # first.
+            # first. The other_methods extra is needed so basedpyright can
+            # resolve the optional cv2/torch/openpiv/pyoptflow imports.
             - name: Install dependencies
-              run: uv sync --group dev
+              run: uv sync --group dev --extra other_methods
 
             - name: Run pre-commit
               run: uv run pre-commit run --all-files

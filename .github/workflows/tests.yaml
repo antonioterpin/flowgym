@@ -1,9 +1,11 @@
 name: Tests
 
+# Runs on PRs and on pushes to the integration branches only — not on every
+# feature-branch push — because the full jax-CPU suite is slow (~40 min).
 on:
+    pull_request:
     push:
-        branches:
-            - '**'
+        branches: [main, dev]
 
 jobs:
     tests:

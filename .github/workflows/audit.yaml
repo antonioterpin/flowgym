@@ -30,5 +30,19 @@ jobs:
                       --format requirements-txt \
                       > /tmp/runtime-requirements.txt
 
+            # Transitive advisories we cannot fix without destabilizing the
+            # tree (pillow is pinned by moviepy; protobuf/pygments by
+            # jax/wandb/sphinx). They are plotting/serialization paths, not
+            # untrusted-input parsing. Revisit when upstreams allow newer
+            # versions; remove an ignore as soon as a clean bump is possible.
             - name: Run pip-audit
-              run: uvx pip-audit --requirement /tmp/runtime-requirements.txt
+              run: |
+                  uvx pip-audit --requirement /tmp/runtime-requirements.txt \
+                      --ignore-vuln CVE-2026-25990 \
+                      --ignore-vuln CVE-2026-40192 \
+                      --ignore-vuln CVE-2026-42308 \
+                      --ignore-vuln CVE-2026-42309 \
+                      --ignore-vuln CVE-2026-42310 \
+                      --ignore-vuln CVE-2026-42311 \
+                      --ignore-vuln CVE-2026-0994 \
+                      --ignore-vuln CVE-2026-4539
