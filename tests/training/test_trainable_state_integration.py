@@ -174,7 +174,7 @@ def test_apply_gradients_updates_params_and_preserves_tx_and_extras():
 
 
 def test_save_and_load_roundtrip_resumable(tmp_path):
-    """Round-trip through save_estimator/load_estimator preserves dynamic state."""
+    """save_estimator/load_estimator round-trip preserves dynamic state."""
 
     out_dir = tmp_path
     estimator_name = "dummy_estimator"
@@ -285,7 +285,7 @@ def test_save_estimator_turns_relative_directory_into_absolute(tmp_path):
     relative_out_dir = "relative_dir"
     estimator_name = "test_estimator"
     # Expected: relative_out_dir/checkpoints/estimator_name/step_0...
-    # But save_estimator places it in relative_out_dir/checkpoints/estimator_name
+    # But save_estimator places it in relative_out_dir/checkpoints/<name>
     # Return value of save_estimator is the full step path.
     # Test checks if directory exists.
     ckpt_path = os.path.abspath(

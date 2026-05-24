@@ -30,7 +30,7 @@ from train_supervised import train_supervised
 def _mock_save_estimator(
     state, out_dir, step=None, estimator=None, estimator_name=None, **kwargs
 ):
-    """Mock save_estimator that creates checkpoint directories without writing."""
+    """Mock save_estimator: make checkpoint dirs without writing."""
     out_dir = Path(out_dir)
     if estimator_name:
         ckpt_dir = out_dir / "checkpoints" / estimator_name

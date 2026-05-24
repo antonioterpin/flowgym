@@ -259,7 +259,7 @@ def test_finetune_from_params_only_checkpoint_structure_mismatch(
       1) Save checkpoint with *only* params (no TrainState structure).
       2) Build full NNEstimatorTrainableState template
          (params+opt_state+extras).
-      3) Load with load_estimator(..., mode='params_only'), which currently still
+      3) Load with load_estimator(..., mode='params_only'), which still
          builds abstract tree from *full* template_state and hands it to Orbax.
       4) Orbax complains that tree structure on disk (params-only) and the
          requested tree (full state) do not match -> ValueError, as in

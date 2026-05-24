@@ -76,7 +76,7 @@ def test_create_initializes_opt_state_from_tx():
     expected_opt_state = tx.init(params)
     # opt_state is a PyTree; compare structure and leaves
     jax.tree_util.tree_map(
-        lambda a, b: jnp.allclose(a, b),
+        jnp.allclose,
         state.opt_state,
         expected_opt_state,
     )

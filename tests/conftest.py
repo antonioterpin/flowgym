@@ -10,7 +10,6 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-
 # ──────────────────────────────────────────────────────────────────────────────
 # Optional-dependency gating
 # ──────────────────────────────────────────────────────────────────────────────
@@ -27,7 +26,7 @@ _OPTIONAL_DEPENDENCY_MODULES = {
 
 
 def pytest_ignore_collect(collection_path, config):
-    """Skip modules whose optional `other_methods` dependency is not installed."""
+    """Skip modules whose optional dependency is not installed."""
     dependency = _OPTIONAL_DEPENDENCY_MODULES.get(collection_path.name)
     if dependency is not None and importlib.util.find_spec(dependency) is None:
         return True
@@ -124,7 +123,7 @@ def npy_flow_files(tmp_path):
 
 @pytest.fixture
 def mock_dependencies():
-    """Fixture providing mock estimator, env, observations for training tests."""
+    """Mock estimator, env, and observations for training tests."""
     estimator = MagicMock()
     estimator.create_train_step.return_value = MagicMock(
         return_value=(0.1, MagicMock(), {})

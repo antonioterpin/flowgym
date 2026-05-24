@@ -54,9 +54,7 @@ def test_raft_integration_caching(mock_save_estimator):
             init_batch.images1, key
         )
 
-        cache_id = (
-            f"raft_test_{estimator.get_cache_id_suffix(trainable_state)}"
-        )
+        cache_id = f"raft_test_{estimator.get_cache_id_suffix(trainable_state)}"
         cache_manager = CacheManager(
             root_dir=tmp_dir, cache_id=cache_id, spec={"epe": (np.float32, ())}
         )

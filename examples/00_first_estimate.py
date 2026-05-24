@@ -19,7 +19,14 @@ from flowgym.make import make_estimator
 def make_test_images(
     shape: tuple[int, int] = (64, 64),
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Create two tiny grayscale images with a shifted bright square."""
+    """Create two tiny grayscale images with a shifted bright square.
+
+    Args:
+        shape: Height and width of the generated images.
+
+    Returns:
+        The (prev, curr) image pair, each of shape (1, height, width).
+    """
     height, width = shape
     prev = jnp.zeros((1, height, width), dtype=jnp.float32)
     curr = jnp.zeros((1, height, width), dtype=jnp.float32)

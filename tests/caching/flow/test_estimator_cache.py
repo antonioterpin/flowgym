@@ -133,7 +133,9 @@ class TestCacheManagerEnrich:
 
         # Second call - all hits
         estimator.enrich.reset_mock()
-        payload2 = enrich_batch(mock_synthpix_batch, estimator, cache_manager=cm)
+        payload2 = enrich_batch(
+            mock_synthpix_batch, estimator, cache_manager=cm
+        )
         assert estimator.enrich.call_count == 0  # No misses
         np.testing.assert_allclose(payload2.epe, np.ones(B) * 0.5)
 
