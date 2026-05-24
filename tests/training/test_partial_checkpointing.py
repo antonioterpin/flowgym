@@ -1,4 +1,4 @@
-"""Integration tests for checkpoint/resume with flowgym.save_estimator and synthpix.
+"""Integration tests for sampler checkpoint/resume via save_estimator.
 
 Tests real save/restore cycles for SyntheticImageSampler and RealImageSampler,
 validating sampler state is preserved across checkpoint boundaries.
@@ -133,7 +133,7 @@ def test_synthetic_sampler_checkpoint_integration(tmp_path, npy_flow_files):
     """Test checkpoint/restore cycle for SyntheticImageSampler.
 
     Verifies that:
-    1. flowgym.save_estimator correctly saves sampler state alongside estimator state
+    1. flowgym.save_estimator saves sampler state with estimator state
     2. synthpix.make(load_from=...) correctly restores sampler state
     3. The restored sampler produces identical outputs to original
     """
@@ -193,7 +193,7 @@ def test_synthetic_sampler_checkpoint_integration(tmp_path, npy_flow_files):
         restored_estimator = load_estimator(
             save_path, template_state, mode="resume"
         )
-        assert restored_estimator.step == 10, "Estimator step should be restored"
+        assert restored_estimator.step == 10, "step should be restored"
         assert jnp.allclose(
             restored_estimator.params["w"], estimator_state.params["w"]
         ), "Estimator params should be restored"
@@ -207,7 +207,7 @@ def test_real_sampler_checkpoint_integration(tmp_path, mock_mat_files):
     """Test checkpoint/restore cycle for RealImageSampler.
 
     Verifies that:
-    1. flowgym.save_estimator correctly saves sampler state alongside estimator state
+    1. flowgym.save_estimator saves sampler state with estimator state
     2. synthpix.make(load_from=...) correctly restores sampler state
     3. The restored sampler produces identical outputs to original
     """
@@ -268,7 +268,7 @@ def test_real_sampler_checkpoint_integration(tmp_path, mock_mat_files):
         restored_estimator = load_estimator(
             save_path, template_state, mode="resume"
         )
-        assert restored_estimator.step == 10, "Estimator step should be restored"
+        assert restored_estimator.step == 10, "step should be restored"
         assert jnp.allclose(
             restored_estimator.params["w"], estimator_state.params["w"]
         ), "Estimator params should be restored"

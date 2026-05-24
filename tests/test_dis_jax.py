@@ -581,20 +581,17 @@ def test_speed_compute_flow_level(
 
     # Create the jit function
     compute_flow_level_jit = jax.jit(
-        lambda curr,
-        starting_flow,
-        pp,
-        centers,
-        grads,
-        h_inv: compute_flow_level(
-            curr,
-            grad_iters=grad_iters,
-            patch_size=patch_size,
-            starting_flow=starting_flow,
-            pp=pp,
-            centers=centers,
-            grads=grads,
-            hessians_inv=h_inv,
+        lambda curr, starting_flow, pp, centers, grads, h_inv: (
+            compute_flow_level(
+                curr,
+                grad_iters=grad_iters,
+                patch_size=patch_size,
+                starting_flow=starting_flow,
+                pp=pp,
+                centers=centers,
+                grads=grads,
+                hessians_inv=h_inv,
+            )
         )
     )
 

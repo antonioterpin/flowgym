@@ -90,7 +90,9 @@ class TestCacheKeyGenerationForRealImages:
         batch1 = batch1.update(files=["/absolute/path/to/test_file.mat"])
 
         estimator = MagicMock()
-        estimator.enrich.return_value = {"epe": np.array([0.5], dtype=np.float32)}
+        estimator.enrich.return_value = {
+            "epe": np.array([0.5], dtype=np.float32)
+        }
 
         # First enrich
         enrich_batch(batch1, estimator, cache_manager=cm)
@@ -131,7 +133,9 @@ class TestCacheKeyGenerationForRealImages:
         batch1 = batch1.update(files=["file_A.mat"])
 
         estimator = MagicMock()
-        estimator.enrich.return_value = {"epe": np.array([0.5], dtype=np.float32)}
+        estimator.enrich.return_value = {
+            "epe": np.array([0.5], dtype=np.float32)
+        }
 
         enrich_batch(batch1, estimator, cache_manager=cm)
         assert estimator.enrich.call_count == 1
@@ -313,7 +317,9 @@ class TestBatchTypeDetection:
         )
 
         estimator = MagicMock()
-        estimator.enrich.return_value = {"epe": np.array([0.1], dtype=np.float32)}
+        estimator.enrich.return_value = {
+            "epe": np.array([0.1], dtype=np.float32)
+        }
 
         enrich_batch(batch, estimator, cache_manager=cm)
         assert estimator.enrich.call_count == 1

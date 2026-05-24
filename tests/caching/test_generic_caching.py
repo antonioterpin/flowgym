@@ -102,7 +102,9 @@ def test_enrich_generic():
 
         estimator = MagicMock()
         # enrich returns correct dict
-        estimator.enrich.return_value = {"foo": np.array([99.9], dtype=np.float32)}
+        estimator.enrich.return_value = {
+            "foo": np.array([99.9], dtype=np.float32)
+        }
 
         payload = enrich_batch(batch, estimator, cache_manager=cm)
         assert payload is not None

@@ -120,8 +120,8 @@ def test_run_admm_consensus_mean_with_noop_solvers(N, H, W, C):
         return args[0]
 
     consensus_mod.SOLVER_FLOWS_FACTORY["noop"] = lambda lr: no_op_solver
-    consensus_mod.SOLVER_CONSENSUS_FACTORY["noop"] = (
-        lambda lr: lambda flows, *a, **k: jnp.mean(flows, axis=0)
+    consensus_mod.SOLVER_CONSENSUS_FACTORY["noop"] = lambda lr: (
+        lambda flows, *a, **k: jnp.mean(flows, axis=0)
     )
     consensus, _ = consensus_mod.run_admm(
         flows=flows,

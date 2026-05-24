@@ -193,7 +193,7 @@ class NNEstimatorTrainableState(TrainState, EstimatorTrainableState):
         *,
         apply_fn: Callable[..., Any],
         params: FrozenDict[str, jnp.ndarray],
-        optimizer_config: dict[str, Any],
+        optimizer_config: dict[str, Any] | None,
         extras: Mapping[str, jnp.ndarray] | None = None,
     ) -> Self:
         """Create a new trainable state from an optimizer configuration.

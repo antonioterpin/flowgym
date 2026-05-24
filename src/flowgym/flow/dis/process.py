@@ -1031,9 +1031,7 @@ def gather(img: jnp.ndarray, y: jnp.ndarray, x: jnp.ndarray) -> jnp.ndarray:
         Gathered pixels of shape (N, M).
     """
     all_batches = jnp.stack([y, x], axis=-1)
-    return jax.vmap(lambda batch: jax.vmap(lambda idx: img[tuple(idx)])(batch))(
-        all_batches
-    )
+    return jax.vmap(jax.vmap(lambda idx: img[tuple(idx)]))(all_batches)
 
 
 def patch_centers(N: int, stride: int) -> jnp.ndarray:
