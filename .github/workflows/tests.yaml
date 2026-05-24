@@ -1,0 +1,34 @@
+name: Tests
+
+on:
+    push:
+        branches:
+            - '**'
+
+jobs:
+    tests:
+        runs-on: ubuntu-latest
+
+        strategy:
+            fail-fast: false
+            matrix:
+                python-version: ['3.11', '3.12']
+
+        steps:
+            - name: Check out code
+              uses: actions/checkout@v6
+
+            - name: Install uv
+              uses: astral-sh/setup-uv@v7
+              with:
+                  python-version: ${{ matrix.python-version }}
+                  enable-cache: true
+
+            # Public git deps were moved to PyPI, so no SSH key is needed.
+            # The jax-only suite runs here; tests behind the `other_methods`
+            # extra (cv2/openpiv/torch) skip cleanly via conftest.py.
+            - name: Install dependencies
+              run: uv sync --group dev
+
+            - name: Run pytest
+              run: uv run pytest
