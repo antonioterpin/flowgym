@@ -174,8 +174,8 @@ def test_preprocess_config_invalid_params(N, seed):
 
 
 @pytest.mark.skipif(
-    not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
+    not any(d.platform == "gpu" for d in jax.devices()),
+    reason="No GPU available.",
 )
 @pytest.mark.parametrize(
     "B, H, time_limit",
@@ -190,7 +190,6 @@ def test_preprocess_config_invalid_params(N, seed):
     ],
 )
 @pytest.mark.parametrize("seed", [42])
-@pytest.mark.speed
 def test_preprocess_jit(B, H, time_limit, seed):
     # Sample idxs
     key = jrandom.PRNGKey(seed)

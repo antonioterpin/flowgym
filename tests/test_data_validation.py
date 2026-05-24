@@ -90,8 +90,8 @@ def test_constant_threshold_filter_batch(
 
 
 @pytest.mark.skipif(
-    not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
+    not any(d.platform == "gpu" for d in jax.devices()),
+    reason="No GPU available.",
 )
 @pytest.mark.parametrize(
     "B, H, W, limit_time",
@@ -105,7 +105,6 @@ def test_constant_threshold_filter_batch(
         (512, 1024, 1024, 0.019),
     ],
 )
-@pytest.mark.speed
 def test_constant_threshold_filter_time(B, H, W, limit_time):
     """Just makes sure compilation/shape handling hold for >1M voxels."""
     rng = jrandom.PRNGKey(0)
@@ -201,8 +200,8 @@ def test_local_std_vs_naive(
 
 
 @pytest.mark.skipif(
-    not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
+    not any(d.platform == "gpu" for d in jax.devices()),
+    reason="No GPU available.",
 )
 @pytest.mark.parametrize(
     "B, H, W, radius, limit_time",
@@ -217,7 +216,6 @@ def test_local_std_vs_naive(
         (32, 1024, 1024, 2, 1.4e-2),
     ],
 )
-@pytest.mark.speed
 def test_adaptive_threshold_local_filter_time(B, H, W, radius, limit_time):
     """Just makes sure compilation/shape handling hold for >1M voxels."""
     rng = jrandom.PRNGKey(0)
@@ -335,8 +333,8 @@ def test_universal_vs_naive(batch, height, width, radius, r_threshold):
 
 
 @pytest.mark.skipif(
-    not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
+    not any(d.platform == "gpu" for d in jax.devices()),
+    reason="No GPU available.",
 )
 @pytest.mark.parametrize(
     "B, H, W, limit_time, radius",
@@ -361,7 +359,6 @@ def test_universal_vs_naive(batch, height, width, radius, r_threshold):
         (8, 1024, 1024, 1.5e-2, 3),
     ],
 )
-@pytest.mark.speed
 def test_universal_median_time(B, H, W, limit_time, radius):
     """Just makes sure compilation/shape handling hold for >1M voxels."""
     rng = jrandom.PRNGKey(0)

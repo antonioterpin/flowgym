@@ -497,15 +497,14 @@ def test_img_resize(image_size, new_size):
     )
 
 
-# skipif is used to skip the test if the user is not connected to the server
+# skipif is used to skip the test if no GPU is available
 @pytest.mark.skipif(
-    not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
+    not any(d.platform == "gpu" for d in jax.devices()),
+    reason="No GPU available.",
 )
 @pytest.mark.parametrize("image_size", [(1936, 1216)])
 @pytest.mark.parametrize("patch_size", [31])
 @pytest.mark.parametrize("disp", [(0.5, 0.5)])
-@pytest.mark.speed
 def test_speed_sample_patch(
     image_size,
     patch_size,
@@ -548,17 +547,16 @@ def test_speed_sample_patch(
     )
 
 
-# skipif is used to skip the test if the user is not connected to the server
+# skipif is used to skip the test if no GPU is available
 @pytest.mark.skipif(
-    not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
+    not any(d.platform == "gpu" for d in jax.devices()),
+    reason="No GPU available.",
 )
 @pytest.mark.parametrize("image_size", [(1936, 1216)])
 @pytest.mark.parametrize("patch_size", [31])
 @pytest.mark.parametrize("patch_stride", [20])
 @pytest.mark.parametrize("grad_iters", [4])
 @pytest.mark.parametrize("disp", [(0.5, 0.5)])
-@pytest.mark.speed
 def test_speed_compute_flow_level(
     image_size,
     patch_size,
@@ -624,16 +622,15 @@ def test_speed_compute_flow_level(
     )
 
 
-# skipif is used to skip the test if the user is not connected to the server
+# skipif is used to skip the test if no GPU is available
 @pytest.mark.skipif(
-    not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
+    not any(d.platform == "gpu" for d in jax.devices()),
+    reason="No GPU available.",
 )
 @pytest.mark.parametrize("image_size", [(1024, 436)])
 @pytest.mark.parametrize("levels", [3])
 @pytest.mark.parametrize("start_level", [3])
 @pytest.mark.parametrize("level_steps", [1])
-@pytest.mark.speed
 def test_speed_build_pyramid(
     image_size,
     levels,
@@ -678,10 +675,10 @@ def test_speed_build_pyramid(
     )
 
 
-# skipif is used to skip the test if the user is not connected to the server
+# skipif is used to skip the test if no GPU is available
 @pytest.mark.skipif(
-    not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
+    not any(d.platform == "gpu" for d in jax.devices()),
+    reason="No GPU available.",
 )
 @pytest.mark.parametrize("image_size", [(1024, 436)])
 @pytest.mark.parametrize("levels", [3])
@@ -693,7 +690,6 @@ def test_speed_build_pyramid(
 @pytest.mark.parametrize("disp", [(0.5, 0.5)])
 @pytest.mark.parametrize("output_full_res", [True])
 @pytest.mark.parametrize("var_refine_iters", [0])
-@pytest.mark.speed
 def test_speed_flow_between(
     image_size,
     levels,
@@ -758,10 +754,10 @@ def test_speed_flow_between(
     )
 
 
-# skipif is used to skip the test if the user is not connected to the server
+# skipif is used to skip the test if no GPU is available
 @pytest.mark.skipif(
-    not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
+    not any(d.platform == "gpu" for d in jax.devices()),
+    reason="No GPU available.",
 )
 @pytest.mark.parametrize("batch_size", [1])
 @pytest.mark.parametrize("image_size", [(1024, 436)])
@@ -774,7 +770,6 @@ def test_speed_flow_between(
 @pytest.mark.parametrize("disp", [(0.5, 0.5)])
 @pytest.mark.parametrize("output_full_res", [True])
 @pytest.mark.parametrize("var_refine_iters", [0])
-@pytest.mark.speed
 def test_speed_estimate_dis_flow(
     batch_size,
     image_size,
@@ -846,15 +841,14 @@ def test_speed_estimate_dis_flow(
     )
 
 
-# skipif is used to skip the test if the user is not connected to the server
+# skipif is used to skip the test if no GPU is available
 @pytest.mark.skipif(
-    not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
+    not any(d.platform == "gpu" for d in jax.devices()),
+    reason="No GPU available.",
 )
 @pytest.mark.parametrize("image_shape", [(1936, 1216)])
 @pytest.mark.parametrize("num_patches", [5917])
 @pytest.mark.parametrize("patch_size", [31])
-@pytest.mark.speed
 def test_speed_densify(
     image_shape,
     num_patches,
@@ -912,15 +906,14 @@ def test_speed_densify(
     )
 
 
-# skipif is used to skip the test if the user is not connected to the server
+# skipif is used to skip the test if no GPU is available
 @pytest.mark.skipif(
-    not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
+    not any(d.platform == "gpu" for d in jax.devices()),
+    reason="No GPU available.",
 )
 @pytest.mark.parametrize("image_shape", [(128, 54)])
 @pytest.mark.parametrize("patch_size", [9])
 @pytest.mark.parametrize("patch_stride", [6])
-@pytest.mark.speed
 def test_speed_extract_patches_grad_hess(
     image_shape,
     patch_size,
@@ -972,17 +965,16 @@ def test_speed_extract_patches_grad_hess(
     )
 
 
-# skipif is used to skip the test if the user is not connected to the server
+# skipif is used to skip the test if no GPU is available
 @pytest.mark.skipif(
-    not all(d.device_kind == "NVIDIA GeForce RTX 4090" for d in jax.devices()),
-    reason="user not connect to the server.",
+    not any(d.platform == "gpu" for d in jax.devices()),
+    reason="No GPU available.",
 )
 @pytest.mark.parametrize("image_shape", [(1936, 1216)])
 @pytest.mark.parametrize("next_level", [0])
 @pytest.mark.parametrize("level", [1])
 @pytest.mark.parametrize("patch_size", [31])
 @pytest.mark.parametrize("patch_stride", [20])
-@pytest.mark.speed
 def test_speed_query_flow_at_points(
     image_shape, next_level, level, patch_size, patch_stride
 ):
