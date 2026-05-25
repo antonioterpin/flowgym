@@ -125,11 +125,14 @@ and repository navigation, use [docs/contribute/contributing.md](docs/contribute
 If you use this code in your research, please cite:
 
 ```bibtex
-@article{banelli2025flowgym,
-   title={Flow Gym},
+@article{banelli2026flowgym,
+   title={Flow Gym: A framework for the development, benchmarking, training, and deployment of flow-field quantification methods},
    author={Banelli, Francesco and Terpin, Antonio and Bonomi, Alan and D'Andrea, Raffaello},
-   year={2025},
-   journal={arXiv preprint arXiv:2512.20642}
+   journal={SoftwareX},
+   volume={34},
+   pages={102641},
+   year={2026},
+   doi={10.1016/j.softx.2026.102641}
 }
 ```
 
