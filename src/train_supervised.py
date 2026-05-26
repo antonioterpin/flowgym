@@ -11,8 +11,8 @@ import numpy as np
 from synthpix.sampler import Sampler
 
 from eval import evaluate_batches
+from flowgym.checkpointing import CheckpointConfig, Checkpointer
 from flowgym.common.base import Estimator, NNEstimatorTrainableState
-from flowgym.make import save_model
 from flowgym.training.caching import CacheManager, enrich_batch
 from flowgym.training.replay import ReplayBuffer
 from flowgym.types import (
@@ -49,6 +49,7 @@ def train_supervised(
     replay_ratio: float = 0.0,
     prefetch_replay_size: int = 0,
     cache_manager: CacheManager | None = None,
+    checkpoint_config: CheckpointConfig | None = None,
 ) -> None:
     """Train the flow estimator.
 
@@ -75,6 +76,10 @@ def train_supervised(
         prefetch_replay_size: Prefetch buffer size for replay. If > 0,
             enables GPU prefetch.
         cache_manager: Optional CacheManager for read-through caching.
+        checkpoint_config: Checkpointer policy (W&B upload mode, best-
+            tracking, save cadence). When omitted, a default is built
+            from ``save_only_best`` and the trainer routes all saves
+            through ``Checkpointer``.
 
     Raises:
         ValueError: If estimate_type is not "flow" or "density", or if
@@ -95,8 +100,7 @@ def train_supervised(
 
     logger.info("Training step function compiled successfully.")
 
-    best_mean_error = float("inf")
-    last_val_metrics: dict | None = None
+    cfg = checkpoint_config or CheckpointConfig(save_only_best=save_only_best)
 
     # Initialize the replay buffer
     replay_buffer = None
@@ -111,6 +115,14 @@ def train_supervised(
         )
 
     with contextlib.ExitStack() as stack:
+        checkpointer = stack.enter_context(
+            Checkpointer(
+                out_dir=out_dir,
+                model=estimator,
+                sampler=sampler,
+                config=cfg,
+            )
+        )
         g = stack.enter_context(
             GracefulShutdown("Stop detected, finishing epoch...")
         )
@@ -171,8 +183,10 @@ def train_supervised(
                     elif isinstance(v, np.ndarray) and v.ndim == 0:
                         init_val_msg += f", {k}={float(v):.5f}"
                 logger.info(init_val_msg)
-                last_val_metrics = dict(val_metrics)
-                best_mean_error = mean_error
+                # Route the baseline through on_validation so it
+                # establishes the best-metric reference (and uploads
+                # when wandb_upload is enabled).
+                checkpointer.on_validation(trainable_state, 0, val_metrics)
             except Exception as e:
                 logger.error(f"Initial validation failed: {e}")
 
@@ -373,7 +387,15 @@ def train_supervised(
                         elif isinstance(v, np.ndarray) and v.ndim == 0:
                             val_msg += f", {k}={float(v):.5f}"
                     logger.info(val_msg)
-                    last_val_metrics = dict(val_metrics)
+                    saved_path = checkpointer.on_validation(
+                        trainable_state, batch_idx, val_metrics
+                    )
+                    if saved_path is not None:
+                        logger.info(
+                            f"Checkpoint saved at batch {batch_idx} -> "
+                            f"{saved_path} (best_metric="
+                            f"{checkpointer.best_metric})"
+                        )
 
                 if batch_idx % log_every == 0:
                     logger.scalar("loss", float(loss), step=batch_idx)
@@ -390,43 +412,14 @@ def train_supervised(
                 if batch_idx > 0 and (
                     batch_idx % save_every == 0 or batch_idx == num_batches - 1
                 ):
-                    if not save_only_best:
-                        save_model(
-                            state=trainable_state,
-                            out_dir=out_dir,
-                            step=batch_idx,
-                            model=estimator,
-                            model_name=estimator.__class__.__name__,
-                            sampler=sampler,
-                        )
-
-                    elif last_val_metrics is None:
+                    saved_path = checkpointer.save_periodic(
+                        trainable_state, batch_idx
+                    )
+                    if saved_path is not None:
                         logger.info(
-                            f"Skipping best-estimator save at batch "
-                            f"{batch_idx}: no validation computed yet."
+                            f"Periodic checkpoint saved at batch "
+                            f"{batch_idx} -> {saved_path}"
                         )
-                    else:
-                        # Only save if validation was actually computed
-                        current_mean_error = float(
-                            last_val_metrics["mean_error"]
-                        )
-
-                        if current_mean_error < best_mean_error:
-                            best_mean_error = current_mean_error
-
-                            save_model(
-                                state=trainable_state,
-                                out_dir=out_dir,
-                                step=batch_idx,
-                                model=estimator,
-                                model_name=estimator.__class__.__name__,
-                                sampler=sampler,
-                            )
-
-                            logger.info(
-                                f"New best estimator saved at batch {batch_idx}"
-                                f" (mean_error={current_mean_error:.6f})"
-                            )
 
                 # Reset sampler timer for next batch
                 t_sample_start = time.time()
@@ -495,6 +488,19 @@ def train_supervised(
                     elif isinstance(v, np.ndarray) and v.ndim == 0:
                         final_val_msg += f", {k}={float(v):.5f}"
                 logger.info(final_val_msg)
+                final_path = checkpointer.save_final(
+                    trainable_state,
+                    final_step,
+                    val_metrics=final_val_metrics,
+                )
+                if final_path is None:
+                    logger.info(
+                        f"Final checkpoint at step {final_step} skipped "
+                        "(orbax rejected the save — likely a duplicate of "
+                        "the last periodic checkpoint)."
+                    )
+                else:
+                    logger.info(f"Final checkpoint saved -> {final_path}")
             except Exception as e:
                 logger.error(f"Final validation failed: {e}")
 
