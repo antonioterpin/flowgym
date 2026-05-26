@@ -1,6 +1,6 @@
 """Integration tests for the save/load checkpointing pipeline with synthpix.
 
-Verifies that save_estimator and load_estimator round-trip state correctly
+Verifies that save_model and load_model round-trip state correctly
 when paired with a real Grain-backed SyntheticImageSampler.
 """
 
@@ -13,7 +13,7 @@ import synthpix
 from flax.core import FrozenDict
 
 from flowgym.common.base.trainable_state import NNEstimatorTrainableState
-from flowgym.make import load_estimator, save_estimator
+from flowgym.make import load_model, save_model
 
 
 def test_real_integration_checkpointing(tmp_path):
@@ -90,12 +90,12 @@ def test_real_integration_checkpointing(tmp_path):
     )
 
     # 5. Save atomically
-    estimator_name = "IntegrationTest"
-    save_path_str = save_estimator(
+    model_name = "IntegrationTest"
+    save_path_str = save_model(
         state=state,
         out_dir=tmp_path,
         step=10,
-        estimator_name=estimator_name,
+        model_name=model_name,
         sampler=sampler,
     )
     save_path = pathlib.Path(save_path_str)
@@ -134,11 +134,11 @@ def test_real_integration_checkpointing(tmp_path):
         )
         print(f"  Batch {i}: ✓ identical")
 
-    # 8. Restore estimator via load_estimator (partial restore)
+    # 8. Restore estimator via load_model (partial restore)
     template_state = NNEstimatorTrainableState.create(
         apply_fn=apply_fn, params=params, tx=tx
     )
-    restored_estimator = load_estimator(
+    restored_estimator = load_model(
         save_path, template_state, mode="resume"
     )
     assert restored_estimator.step == 10

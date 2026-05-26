@@ -68,7 +68,7 @@ def mock_sampler():
     sampler.__iter__.return_value = iter([batch] * 10)
     sampler.shutdown = MagicMock()
     sampler.reset = MagicMock()
-    # Set grain_iterator to None so save_estimator skips sampler serialization
+    # Set grain_iterator to None so save_model skips sampler serialization
     sampler.grain_iterator = None
     return sampler
 

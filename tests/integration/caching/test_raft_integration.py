@@ -33,7 +33,7 @@ class MiniRaftBatch:
         return self
 
 
-@patch("src.train_supervised.save_estimator")
+@patch("src.train_supervised.save_model")
 def test_raft_integration_caching(mock_save_estimator):
     """RAFT populates the cache on first pass; second pass serves hits only."""
 

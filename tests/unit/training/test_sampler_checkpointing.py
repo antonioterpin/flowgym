@@ -9,7 +9,7 @@ import jax.numpy as jnp
 import orbax.checkpoint as ocp
 
 from flowgym.environment.fluid_env import FluidEnv
-from flowgym.make import save_estimator
+from flowgym.make import save_model
 
 
 class DummyState:
@@ -46,7 +46,7 @@ class MockManager:
 
 
 def test_save_estimator_is_atomic(monkeypatch):
-    """save_estimator writes state, sampler, and grain in one manager call."""
+    """save_model writes state, sampler, and grain in one manager call."""
     manager_instances = []
 
     def mock_init(ckpt_dir, options=None):
@@ -67,12 +67,12 @@ def test_save_estimator_is_atomic(monkeypatch):
 
     out_dir = "/tmp/test_ckpt"
 
-    save_estimator(
+    save_model(
         state=state,
         out_dir=out_dir,
         step=10,
         sampler=sampler,
-        estimator_name="TestEstimator",
+        model_name="TestEstimator",
     )
 
     assert len(manager_instances) == 1
@@ -113,12 +113,12 @@ def test_save_estimator_skips_non_grain_sampler(monkeypatch):
 
     out_dir = "/tmp/test_ckpt_no_grain"
 
-    save_estimator(
+    save_model(
         state=state,
         out_dir=out_dir,
         step=10,
         sampler=sampler,
-        estimator_name="TestEstimatorNoGrain",
+        model_name="TestEstimatorNoGrain",
     )
 
     mngr = manager_instances[0]

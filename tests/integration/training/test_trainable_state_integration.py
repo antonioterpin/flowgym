@@ -18,8 +18,8 @@ from flowgym.common.base.trainable_state import (
     NNEstimatorTrainableState,
 )
 from flowgym.make import (
-    load_estimator,
-    save_estimator,
+    load_model,
+    save_model,
 )
 
 # ---------------------------------------------------------------------------
@@ -176,32 +176,32 @@ def test_apply_gradients_updates_params_and_preserves_tx_and_extras():
 
 
 # ---------------------------------------------------------------------------
-# save_estimator / load_estimator: resumability and module-name independence
+# save_model / load_model: resumability and module-name independence
 # ---------------------------------------------------------------------------
 
 
 def test_save_and_load_roundtrip_resumable(tmp_path):
-    """save_estimator/load_estimator round-trip preserves all dynamic state."""
+    """save_model/load_model round-trip preserves all dynamic state."""
 
     out_dir = tmp_path
-    estimator_name = "dummy_estimator"
-    ckpt_path = out_dir / "checkpoints" / estimator_name
+    model_name = "dummy_estimator"
+    ckpt_path = out_dir / "checkpoints" / model_name
 
     # Original state we want to resume later
     original_state = _make_dummy_state(global_step=7)
 
     # Save
-    save_estimator(
+    save_model(
         original_state,
         out_dir=str(out_dir),
-        estimator_name=estimator_name,
+        model_name=model_name,
     )
     assert ckpt_path.exists(), "Checkpoint directory should be created"
 
     # Build a fresh template_state (as if in a new process)
     template_state = _make_dummy_state(global_step=0)
 
-    loaded_state = load_estimator(str(ckpt_path), template_state, mode="resume")
+    loaded_state = load_model(str(ckpt_path), template_state, mode="resume")
 
     assert isinstance(loaded_state, NNEstimatorTrainableState)
 
@@ -214,8 +214,8 @@ def test_save_and_load_roundtrip_resumable(tmp_path):
 def test_save_and_load_supports_training_resumption(tmp_path):
     """Resumed training produces results identical to uninterrupted training."""
     out_dir = tmp_path
-    estimator_name = "resumable_estimator"
-    ckpt_path = out_dir / "checkpoints" / estimator_name
+    model_name = "resumable_estimator"
+    ckpt_path = out_dir / "checkpoints" / model_name
 
     # Initial state
     init_state = _make_dummy_state(global_step=0)
@@ -230,12 +230,12 @@ def test_save_and_load_supports_training_resumption(tmp_path):
 
     # Path B: train 1 step, save, load, train another step
     s1_b = init_state.apply_gradients(grads=grads1)
-    save_estimator(s1_b, out_dir=str(out_dir), estimator_name=estimator_name)
+    save_model(s1_b, out_dir=str(out_dir), model_name=model_name)
     assert ckpt_path.exists()
 
     # Fresh template to simulate new process
     template_state = _make_dummy_state(global_step=0)
-    s1_loaded = load_estimator(str(ckpt_path), template_state, mode="resume")
+    s1_loaded = load_model(str(ckpt_path), template_state, mode="resume")
 
     assert isinstance(s1_loaded, NNEstimatorTrainableState)
 
@@ -248,19 +248,19 @@ def test_save_and_load_supports_training_resumption(tmp_path):
 
 
 def test_load_estimator_uses_template_static_tx_not_checkpoint(tmp_path):
-    """load_estimator binds tx from the template, not from checkpoint data."""
+    """load_model binds tx from the template, not from checkpoint data."""
     out_dir = tmp_path
-    estimator_name = "dummy_estimator"
-    ckpt_path = out_dir / "checkpoints" / estimator_name
+    model_name = "dummy_estimator"
+    ckpt_path = out_dir / "checkpoints" / model_name
 
     # First state uses tx1 (e.g., Adam with lr=1e-3)
     tx1 = optax.adam(learning_rate=1e-3)
     original_state = _make_dummy_state(tx=tx1, global_step=10)
 
-    save_estimator(
+    save_model(
         original_state,
         out_dir=str(out_dir),
-        estimator_name=estimator_name,
+        model_name=model_name,
     )
     assert ckpt_path.exists()
 
@@ -268,7 +268,7 @@ def test_load_estimator_uses_template_static_tx_not_checkpoint(tmp_path):
     tx2 = optax.adam(learning_rate=5e-4)
     template_state = _make_dummy_state(tx=tx2, global_step=0)
 
-    loaded_state = load_estimator(str(ckpt_path), template_state, mode="resume")
+    loaded_state = load_model(str(ckpt_path), template_state, mode="resume")
 
     assert isinstance(loaded_state, NNEstimatorTrainableState)
 
@@ -283,24 +283,24 @@ def test_load_estimator_uses_template_static_tx_not_checkpoint(tmp_path):
 
 
 def test_save_estimator_turns_relative_directory_into_absolute(tmp_path):
-    """save_estimator resolves a relative out_dir to an absolute path."""
+    """save_model resolves a relative out_dir to an absolute path."""
     relative_out_dir = "relative_dir"
-    estimator_name = "test_estimator"
-    # Expected: relative_out_dir/checkpoints/estimator_name/step_0...
-    # save_estimator places it in relative_out_dir/checkpoints/<name>
-    # Return value of save_estimator is the full step path.
+    model_name = "test_estimator"
+    # Expected: relative_out_dir/checkpoints/model_name/step_0...
+    # save_model places it in relative_out_dir/checkpoints/<name>
+    # Return value of save_model is the full step path.
     # Test checks if directory exists.
     ckpt_path = os.path.abspath(
-        os.path.join(relative_out_dir, "checkpoints", estimator_name)
+        os.path.join(relative_out_dir, "checkpoints", model_name)
     )
 
     state = _make_dummy_state(global_step=0)
 
     # Save using relative path
-    save_estimator(
+    save_model(
         state,
         out_dir=relative_out_dir,
-        estimator_name=estimator_name,
+        model_name=model_name,
     )
 
     # Check that the checkpoint directory was created at the absolute path

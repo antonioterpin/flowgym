@@ -47,7 +47,7 @@ def mock_sampler(num_batches, keys_list):
         yield MockBatch(batch_size=len(keys), keys=keys)
 
 
-@patch("src.train_supervised.save_estimator")
+@patch("src.train_supervised.save_model")
 def test_train_supervised_caching_integration(mock_save_estimator):
     """Misses are computed and cached; a second pass is all hits."""
 
@@ -162,7 +162,7 @@ def test_train_supervised_caching_integration(mock_save_estimator):
         assert payload_5["values"][0, 0] == 5.0
 
 
-@patch("src.train_supervised.save_estimator")
+@patch("src.train_supervised.save_model")
 def test_estimator_enrich(mock_save_estimator):
     """Estimator.enrich is called for missing keys and the result persisted."""
     with tempfile.TemporaryDirectory() as tmp_dir:

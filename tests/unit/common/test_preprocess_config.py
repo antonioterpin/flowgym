@@ -22,7 +22,7 @@ from flowgym.common.preprocess import (
     resize_image,
     stretch_contrast,
 )
-from flowgym.make import compile_estimator
+from flowgym.make import compile_model
 from flowgym.utils import load_configuration
 
 config = load_configuration("src/flowgym/config/testing.yaml")
@@ -138,7 +138,7 @@ def test_preprocess_config(B, N, seed):
     # Instantiate the dummy estimator
     estimator = DummyEstimator.from_config(pre_processing_config)
     trainable_state = estimator.create_trainable_state(image, key)
-    create_state_fn, compute_estimate_fn = compile_estimator(
+    create_state_fn, compute_estimate_fn = compile_model(
         estimator, processed_image_reference, False
     )
     # Create the state
@@ -217,7 +217,7 @@ def test_preprocess_jit(B, H, time_limit, seed):
     # Instantiate the dummy estimator
     estimator = DummyEstimator.from_config(pre_processing_config)
     trainable_state = estimator.create_trainable_state(image, key)
-    create_state_fn, compute_estimate_fn = compile_estimator(
+    create_state_fn, compute_estimate_fn = compile_model(
         estimator, image, True
     )
     # Warm up

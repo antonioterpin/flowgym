@@ -14,7 +14,7 @@ import synthpix
 from flax.core import FrozenDict
 
 from flowgym.common.base.trainable_state import NNEstimatorTrainableState
-from flowgym.make import load_estimator, save_estimator
+from flowgym.make import load_model, save_model
 
 
 def _make_synthetic_config(file_list: list[str]) -> dict:
@@ -147,13 +147,13 @@ def test_synthetic_sampler_checkpoint_integration(tmp_path, npy_flow_files):
 
         # 3. Create estimator state and save checkpoint
         estimator_state = _make_estimator_state()
-        estimator_name = "CheckpointTest_synthetic"
+        model_name = "CheckpointTest_synthetic"
 
-        save_path_str = save_estimator(
+        save_path_str = save_model(
             state=estimator_state,
             out_dir=tmp_path,
             step=10,
-            estimator_name=estimator_name,
+            model_name=model_name,
             sampler=sampler,
         )
         save_path = pathlib.Path(save_path_str)
@@ -183,7 +183,7 @@ def test_synthetic_sampler_checkpoint_integration(tmp_path, npy_flow_files):
 
         # 9. Verify estimator state can also be restored independently
         template_state = _make_estimator_state()
-        restored_estimator = load_estimator(
+        restored_estimator = load_model(
             save_path, template_state, mode="resume"
         )
         assert restored_estimator.step == 10, "step should be restored"
@@ -216,13 +216,13 @@ def test_real_sampler_checkpoint_integration(tmp_path, mock_mat_files):
 
         # 3. Create estimator state and save checkpoint
         estimator_state = _make_estimator_state()
-        estimator_name = "CheckpointTest_real"
+        model_name = "CheckpointTest_real"
 
-        save_path_str = save_estimator(
+        save_path_str = save_model(
             state=estimator_state,
             out_dir=tmp_path,
             step=10,
-            estimator_name=estimator_name,
+            model_name=model_name,
             sampler=sampler,
         )
         save_path = pathlib.Path(save_path_str)
@@ -252,7 +252,7 @@ def test_real_sampler_checkpoint_integration(tmp_path, mock_mat_files):
 
         # 9. Verify estimator state can also be restored independently
         template_state = _make_estimator_state()
-        restored_estimator = load_estimator(
+        restored_estimator = load_model(
             save_path, template_state, mode="resume"
         )
         assert restored_estimator.step == 10, "step should be restored"

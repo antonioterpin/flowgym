@@ -12,7 +12,7 @@ from synthpix.sampler import Sampler
 
 from eval import evaluate_batches
 from flowgym.common.base import Estimator, NNEstimatorTrainableState
-from flowgym.make import save_estimator
+from flowgym.make import save_model
 from flowgym.training.caching import CacheManager, enrich_batch
 from flowgym.training.replay import ReplayBuffer
 from flowgym.types import (
@@ -391,12 +391,12 @@ def train_supervised(
                     batch_idx % save_every == 0 or batch_idx == num_batches - 1
                 ):
                     if not save_only_best:
-                        save_estimator(
+                        save_model(
                             state=trainable_state,
                             out_dir=out_dir,
                             step=batch_idx,
-                            estimator=estimator,
-                            estimator_name=estimator.__class__.__name__,
+                            model=estimator,
+                            model_name=estimator.__class__.__name__,
                             sampler=sampler,
                         )
 
@@ -414,12 +414,12 @@ def train_supervised(
                         if current_mean_error < best_mean_error:
                             best_mean_error = current_mean_error
 
-                            save_estimator(
+                            save_model(
                                 state=trainable_state,
                                 out_dir=out_dir,
                                 step=batch_idx,
-                                estimator=estimator,
-                                estimator_name=estimator.__class__.__name__,
+                                model=estimator,
+                                model_name=estimator.__class__.__name__,
                                 sampler=sampler,
                             )
 
