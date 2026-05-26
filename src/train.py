@@ -1,5 +1,6 @@
 """Train flow estimators with synthetic data using reinforcement learning."""
 
+import contextlib
 import time
 
 import goggles as gg
@@ -8,9 +9,9 @@ import jax.numpy as jnp
 import numpy as np
 from goggles import Metrics
 
+from flowgym.checkpointing import CheckpointConfig, Checkpointer
 from flowgym.common.base import Estimator, NNEstimatorTrainableState
 from flowgym.environment.fluid_env import EnvState, FluidEnv, Observation
-from flowgym.make import save_model
 from flowgym.training.replay import ReplayBuffer
 from flowgym.types import (
     CompiledComputeEstimateFn,
@@ -42,6 +43,7 @@ def train(
     replay_buffer_capacity: int = 10000,
     replay_ratio: float = 0.0,
     prefetch_replay_size: int = 0,
+    checkpoint_config: CheckpointConfig | None = None,
 ) -> None:
     """Train the flow estimator.
 
@@ -63,6 +65,11 @@ def train(
         replay_ratio: Ratio of replay samples to collected samples.
         prefetch_replay_size: Prefetch buffer size for replay. If > 0,
             enables GPU prefetch.
+        checkpoint_config: Checkpointer policy. RL training has no
+            validation loop, so only ``save_periodic`` fires here and
+            ``save_only_best`` / ``wandb_upload="best"`` modes are
+            effectively no-ops; ``wandb_upload="every"`` still uploads
+            each periodic save (alias ``latest``).
     """
     # Create the training step function
     train_step_fn = estimator.create_train_step()
@@ -96,7 +103,18 @@ def train(
             f"Replay buffer initialized with capacity {replay_buffer_capacity}."
         )
 
-    with GracefulShutdown("Stop detected, finishing epoch...") as g:
+    with contextlib.ExitStack() as stack:
+        checkpointer = stack.enter_context(
+            Checkpointer(
+                out_dir=out_dir,
+                model=estimator,
+                sampler=env_state[0],
+                config=checkpoint_config or CheckpointConfig(),
+            )
+        )
+        g = stack.enter_context(
+            GracefulShutdown("Stop detected, finishing epoch...")
+        )
         episode_idx = 0
         done = jnp.array([False] * obs[0].shape[0], dtype=jnp.bool_)
         t_total = time.time()
@@ -255,13 +273,14 @@ def train(
                 logger.info(f"Episode {episode_idx} - {k}: {avg_value}")
 
             if episode_idx % save_every == 0:
-                save_model(
-                    state=trainable_state,
-                    out_dir=out_dir,
-                    model=estimator,
-                    model_name=f"{estimator.__class__.__name__}-{episode_idx}",
-                    sampler=env_state[0],
+                saved_path = checkpointer.save_periodic(
+                    trainable_state, episode_idx
                 )
+                if saved_path is not None:
+                    logger.info(
+                        f"Checkpoint saved at episode {episode_idx} -> "
+                        f"{saved_path}"
+                    )
 
     t_total = time.time() - t_total
     logger.info(f"Training took {t_total} seconds.")
