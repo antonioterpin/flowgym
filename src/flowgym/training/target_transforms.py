@@ -82,6 +82,21 @@ def _scale(x: jax.Array, factor: float = 1.0) -> jax.Array:
     return x * factor
 
 
+def _log(x: jax.Array, eps: float = 1e-8) -> jax.Array:
+    """Log transform with epsilon and non-negative clamp.
+
+    Args:
+        x: Input array.
+        eps: Small positive constant added before log. Defaults to ``1e-8``
+            so a bare ``name: log`` config never injects ``-inf`` on exact
+            zeros (EPE targets/rewards can be 0).
+
+    Returns:
+        Log of (max(x, 0) + eps).
+    """
+    return jnp.log(jnp.maximum(x, 0.0) + eps)
+
+
 TransformFn = Callable[..., jax.Array]
 
 TRANSFORM_REGISTRY: dict[str, TransformFn] = {
@@ -90,6 +105,7 @@ TRANSFORM_REGISTRY: dict[str, TransformFn] = {
     "sqrt": _sqrt,
     "clip": _clip,
     "scale": _scale,
+    "log": _log,
 }
 
 
@@ -131,6 +147,12 @@ def build_target_transform_from_config(
     """
     if config is None:
         return _identity
+
+    if not isinstance(config, dict):
+        config_type = type(config).__name__
+        raise TypeError(
+            f"Target transform config must be a dictionary; got {config_type}"
+        )
 
     if "pipeline" in config:
         pipeline = config["pipeline"]

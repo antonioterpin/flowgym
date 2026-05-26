@@ -69,6 +69,28 @@ def test_build_scale():
     assert jnp.allclose(transform(x), expected)
 
 
+def test_build_log():
+    """log transform clamps negatives to zero, adds eps, then applies log."""
+    # Explicit eps applied after clamping negatives to zero.
+    config = {"name": "log", "eps": 1.0}
+    transform = build_target_transform_from_config(config)
+    x = jnp.array([-1.0, 0.0, 1.0, 10.0])
+    expected = jnp.log(jnp.array([0.0, 0.0, 1.0, 10.0]) + 1.0)
+    assert jnp.allclose(transform(x), expected)
+
+    # Default eps is a safe positive so a bare ``name: log`` config does not
+    # produce -inf on exact zeros (e.g. EPE targets that can be 0).
+    transform = build_target_transform_from_config({"name": "log"})
+    out = transform(jnp.array([0.0, 1.0, 10.0]))
+    assert jnp.all(jnp.isfinite(out))
+
+
+def test_non_dict_config_raises():
+    """A non-dict, non-None config raises a descriptive TypeError."""
+    with pytest.raises(TypeError, match="must be a dictionary"):
+        build_target_transform_from_config(["not", "a", "dict"])  # type: ignore[arg-type]
+
+
 def test_build_pipeline():
     """pipeline config composes transforms left-to-right in declared order."""
     config = {
