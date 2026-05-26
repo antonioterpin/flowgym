@@ -86,6 +86,40 @@ def test_warm_start_all_generic():
         )
 
 
+def test_index_lookup_populates_all_spec_columns():
+    """An index warm-start hit must fill every spec column, not just the
+    first. Regression: the per-column loop flipped hit_mask while writing the
+    first field, so subsequent fields were skipped and read back as zeros."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        cache_id = "test_index_multicol"
+        spec = {
+            "epe": (np.float32, ()),
+            "scores": (np.float32, (3,)),
+        }
+
+        cm_write = CacheManager(tmp_dir, cache_id, spec=spec)
+        keys = np.array([7], dtype=np.uint64)
+        payload = {
+            "epe": np.array([0.5], dtype=np.float32),
+            "scores": np.array([[1.0, 2.0, 3.0]], dtype=np.float32),
+        }
+        cm_write.write(keys, payload)
+        cm_write.close()
+
+        # Warm start by index so the hit is served from the on-disk parquet
+        # via _lookup_index (the path that carried the bug).
+        cm_read = CacheManager(
+            tmp_dir, cache_id, spec=spec, warm_start="index"
+        )
+        payload_out, hit = cm_read.lookup(keys)
+
+        assert bool(hit[0])
+        np.testing.assert_allclose(payload_out["epe"][0], payload["epe"][0])
+        np.testing.assert_allclose(
+            payload_out["scores"][0], payload["scores"][0]
+        )
+
+
 def test_enrich_generic():
     """enrich_batch writes computed values to the pending buffer on a miss."""
     from unittest.mock import MagicMock
