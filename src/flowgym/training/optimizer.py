@@ -19,6 +19,7 @@ OPTIMIZER_REGISTRY: dict[str, Any] = {
 }
 
 TRANSFORM_REGISTRY: dict[str, Any] = {
+    "clip": optax.clip,
     "clip_by_global_norm": optax.clip_by_global_norm,
     "add_decayed_weights": optax.add_decayed_weights,
     "scale": optax.scale,
