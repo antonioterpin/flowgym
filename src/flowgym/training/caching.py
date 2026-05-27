@@ -157,6 +157,14 @@ class CacheManager:
         if not files:
             return
 
+        # Deterministic duplicate-key policy across parts:
+        # prefer values from newer parquet files.
+        files = sorted(
+            files,
+            key=lambda p: (p.stat().st_mtime_ns, str(p)),
+            reverse=True,
+        )
+
         num_files = len(files)
         logger.info(
             f"Warm-starting cache ({self.warm_start}) from {num_files} files..."
@@ -187,12 +195,18 @@ class CacheManager:
             )
 
         elif self.warm_start == "index":
+            best_stamp_by_key: dict[int, tuple[int, str]] = {}
             for f in files:
+                stamp = (f.stat().st_mtime_ns, str(f))
                 table = pq.read_table(f, columns=["key"])
                 keys = table["key"].to_numpy()
                 file_path = str(f)
                 for i, k in enumerate(keys):
-                    self.index[int(k)] = (file_path, i)
+                    key_int = int(k)
+                    prev_stamp = best_stamp_by_key.get(key_int)
+                    if prev_stamp is None or stamp > prev_stamp:
+                        self.index[key_int] = (file_path, i)
+                        best_stamp_by_key[key_int] = stamp
             logger.info(f"Loaded {len(self.index)} keys into index.")
 
     def _lookup_pending_buffer(
@@ -211,9 +225,14 @@ class CacheManager:
             hit_mask: Boolean array marking which keys were found.
             payload_out: Output payload dictionary to fill.
         """
+        # Prefer the latest pending value for duplicate keys.
+        latest_pos: dict[int, int] = {}
+        for idx, key in enumerate(self.pending_buffer["key"]):
+            latest_pos[key] = idx
+
         for i, k in enumerate(keys_int):
-            if k in self.pending_buffer["key"]:
-                idx = self.pending_buffer["key"].index(k)
+            idx = latest_pos.get(k)
+            if idx is not None:
                 for name in self.spec:
                     payload_out[name][i] = self.pending_buffer[name][idx]
                 hit_mask[i] = True
@@ -295,12 +314,16 @@ class CacheManager:
             if not row_idxs:
                 continue
             sub = table.take(pa.array(row_idxs, type=pa.int64()))
-            for name in self.spec:
-                values = sub[name].to_pylist()
-                for i, v in zip(input_idxs, values, strict=True):
-                    if not hit_mask[i]:
-                        payload_out[name][i] = v
-                        hit_mask[i] = True
+            # Materialise every spec column once, then write all fields for
+            # each row before flipping hit_mask — otherwise the second-and-
+            # onward spec entries would be skipped.
+            values_by_name = {name: sub[name].to_pylist() for name in self.spec}
+            for pos, i in enumerate(input_idxs):
+                if hit_mask[i]:
+                    continue
+                for name in self.spec:
+                    payload_out[name][i] = values_by_name[name][pos]
+                hit_mask[i] = True
 
     def _process_parquet_file(
         self,

@@ -8,7 +8,6 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 from flowgym.training.caching import CacheManager
 
@@ -155,14 +154,11 @@ def test_lookup_all_warm_start_handles_duplicate_requested_keys():
         np.testing.assert_allclose(payload["values"], [[1.0, 1.0], [1.0, 1.0]])
 
 
-@pytest.mark.xfail(
-    reason="CacheManager returns oldest part for duplicate keys; see #44",
-    strict=False,
-)
 def test_lookup_disk_prefers_newest_part_for_duplicate_keys():
     """Disk lookup should deterministically prefer the newest parquet part."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         cache_id = "test_disk_dupe_policy"
+        data_dir = Path(tmp_dir) / cache_id / "data"
         cm = CacheManager(
             tmp_dir, cache_id, spec={"values": (np.float32, (1,))}
         )
@@ -172,17 +168,23 @@ def test_lookup_disk_prefers_newest_part_for_duplicate_keys():
             {"values": np.array([[1.0]], dtype=np.float32)},
         )
         cm.flush()
+        first_files = set(data_dir.glob("*.parquet"))
+        assert len(first_files) == 1, "Expected one parquet file after flush"
 
         cm.write(
             np.array([7], dtype=np.uint64),
             {"values": np.array([[2.0]], dtype=np.float32)},
         )
         cm.flush()
+        all_files = set(data_dir.glob("*.parquet"))
+        assert len(all_files) == 2, "Expected two parquet files for two flushes"
 
-        files = sorted((Path(tmp_dir) / cache_id / "data").glob("*.parquet"))
-        assert len(files) == 2, "Expected two parquet files for two flushes"
-        os.utime(files[0], (1, 1))
-        os.utime(files[1], (2, 2))
+        # Identify the parts by write order, not by (random uuid) filename, then
+        # stamp mtimes so the second write (value 2.0) is unambiguously newest.
+        older = first_files.pop()
+        newer = (all_files - first_files).pop()
+        os.utime(older, (1, 1))
+        os.utime(newer, (2, 2))
 
         cm_read = CacheManager(
             tmp_dir, cache_id, spec={"values": (np.float32, (1,))}
