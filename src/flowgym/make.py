@@ -59,8 +59,8 @@ def make_manager(ckpt_dir: Path, keep: int = 3) -> ocp.CheckpointManager:
 
 
 @overload
-def compile_estimator(
-    estimator: Estimator,
+def compile_model(
+    model: Estimator,
     estimates: None,
     jit: bool = True,
     history_size: int = 1,
@@ -71,8 +71,8 @@ def compile_estimator(
 
 
 @overload
-def compile_estimator(
-    estimator: Estimator,
+def compile_model(
+    model: Estimator,
     estimates: jnp.ndarray,
     jit: bool = True,
     history_size: int = 1,
@@ -82,8 +82,8 @@ def compile_estimator(
 ]: ...
 
 
-def compile_estimator(
-    estimator: Estimator,
+def compile_model(
+    model: Estimator,
     estimates: jnp.ndarray | None,
     jit: bool = True,
     history_size: int = 1,
@@ -91,13 +91,13 @@ def compile_estimator(
     CompiledCreateStateFn | None,
     CompiledComputeEstimateFn,
 ]:
-    """Compile the estimator for JAX.
+    """Compile the model for JAX.
 
     Args:
-        estimator: The flow field estimator instance.
+        model: The flow field model instance.
         estimates: Example estimates for shape inference.
         jit: Whether to use JIT compilation.
-        history_size: The size of the history for the estimator.
+        history_size: The size of the history for the model.
 
     Returns:
         Compiled functions.
@@ -106,7 +106,7 @@ def compile_estimator(
     if estimates is not None:
 
         def create_state_fn_impl(images: jnp.ndarray, rng: PRNGKey) -> History:
-            return estimator.create_state(
+            return model.create_state(
                 images,
                 estimates=estimates,
                 image_history_size=history_size,
@@ -124,7 +124,7 @@ def compile_estimator(
         trainable_state: EstimatorTrainableState,
         cache_payload: CachePayload | None = None,
     ) -> tuple[History, dict]:
-        return estimator(
+        return model(
             images, state, trainable_state, cache_payload=cache_payload
         )
 
@@ -135,25 +135,25 @@ def compile_estimator(
     return create_state_fn, compute_estimate_fn
 
 
-def save_estimator(
+def save_model(
     state: NNEstimatorTrainableState,
     out_dir: str | Path,
     step: int | None = None,
-    estimator: Estimator | None = None,
-    estimator_name: str | None = None,
+    model: Estimator | None = None,
+    model_name: str | None = None,
     sampler: Any | None = None,
     keep: int = 3,
 ) -> str:
     """Save a training checkpoint using Orbax.
 
-    Checkpoint saved to out_dir/checkpoints/<estimator_name>/<step>.
+    Checkpoint saved to out_dir/checkpoints/<model_name>/<step>.
 
     Args:
         state: The trainable state to save (PyTree).
         out_dir: Root output directory for this experiment/run.
         step: Training step/batch index. If None, reads from `state.step`.
-        estimator: The estimator instance (to extract optimizer_config).
-        estimator_name: Optional estimator name for directory nesting.
+        model: The model instance (to extract optimizer_config).
+        model_name: Optional model name for directory nesting.
         sampler: The sampler instance to save (must be Sampler with
             Grain scheduler for full state saving).
         keep: Number of checkpoints to keep.
@@ -175,10 +175,10 @@ def save_estimator(
             raise ValueError("step not provided and state has no 'step' attr")
     step = int(step)
 
-    # Nesting: out_dir/checkpoints/<estimator_name>/<step>
+    # Nesting: out_dir/checkpoints/<model_name>/<step>
     parts = [out_dir, "checkpoints"]
-    if estimator_name is not None:
-        parts.append(estimator_name)
+    if model_name is not None:
+        parts.append(model_name)
 
     ckpt_root = Path(*parts)
     ckpt_root.mkdir(parents=True, exist_ok=True)
@@ -197,11 +197,11 @@ def save_estimator(
     }
 
     # Extract and save optimizer config separately (as it contains strings)
-    if estimator is not None:
+    if model is not None:
         opt_cfg = getattr(
-            estimator,
+            model,
             "optimizer_config",
-            getattr(estimator, "opt_config", None),
+            getattr(model, "opt_config", None),
         )
         if opt_cfg is not None:
             save_args["opt_config"] = ocp.args.JsonSave(opt_cfg)  # pyright: ignore[reportCallIssue]
@@ -224,7 +224,7 @@ def save_estimator(
     return str(ckpt_root / str(step))
 
 
-def load_estimator(
+def load_model(
     ckpt_dir: str | Path,
     template_state: NNEstimatorTrainableState,
     mode: Literal["resume", "params_only"] = "params_only",
@@ -518,7 +518,7 @@ def make_estimator(
                 jnp.zeros(image_shape, dtype=jnp.float32), key=rng
             )
             if isinstance(template_state, NNEstimatorTrainableState):
-                trained_state = load_estimator(
+                trained_state = load_model(
                     load_from, template_state, mode=mode
                 )
             else:
@@ -549,7 +549,7 @@ def make_estimator(
         dummy_estimates = None
     else:
         dummy_estimates = jnp.zeros(estimate_shape, dtype=jnp.float32)
-    create_state_fn, compute_estimate_fn = compile_estimator(
+    create_state_fn, compute_estimate_fn = compile_model(
         estimator,
         dummy_estimates,
         estimator_config["config"].get("jit", False) and not DEBUG,
