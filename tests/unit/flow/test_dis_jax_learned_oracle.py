@@ -25,8 +25,7 @@ def test_dis_estimator_disables_jit_for_learned_oracle_postprocess():
                 "name": "learned_oracle_threshold",
                 "threshold_value": 0.5,
                 "load_from": (
-                    "results/training_oracle/tau_0_5/"
-                    "learned_oracle_threshold/0"
+                    "results/training_oracle/tau_0_5/learned_oracle_threshold/0"
                 ),
                 "features": [16, 32],
             }

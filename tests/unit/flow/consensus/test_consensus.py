@@ -373,9 +373,7 @@ def test_admm_consensus_eps_stopping(eps_rel_stopping, eps_abs_stopping):
     assert isinstance(stopping_time, (int, jnp.ndarray)), (
         "Stopping time is not an int or jnp.ndarray"
     )
-    assert jnp.array(stopping_time).ndim == 0, (
-        "Stopping time is not a scalar"
-    )
+    assert jnp.array(stopping_time).ndim == 0, "Stopping time is not a scalar"
     assert jnp.all(stopping_time >= 0), "Stopping time is negative"
 
 

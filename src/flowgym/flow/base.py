@@ -139,7 +139,7 @@ class FlowFieldEstimator(Estimator):
                     if is_outlier_rejection_step(step_name):
                         metrics[
                             f"postprocess_{step_name}_{idx}_rejected_percentage"
-                        ] = (outlier_frac * 100.0)
+                        ] = outlier_frac * 100.0
                         if combined_rejected_mask is None:
                             combined_rejected_mask = jnp.logical_not(
                                 valid.astype(jnp.bool_)

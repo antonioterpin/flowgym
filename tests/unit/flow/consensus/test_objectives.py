@@ -317,7 +317,7 @@ def test_photometric_weights_uniform_when_equal(config, B, N, H, W):
     weights = make_weights(flows, prevs, currs, config)
     interior = weights[:, :, 1:-1, 1:-1]
     expected = 1.0 / N
-    # Tolerance increased to account for numerical precision 
+    # Tolerance increased to account for numerical precision
     # in photometric error
     # computation and per-pixel normalization effects.
     assert jnp.allclose(interior, expected, atol=2e-2)

@@ -370,15 +370,14 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
                 if key in forwarded_experiment_keys:
                     consensus_config["exp_" + key] = value
 
-        # Experimental: Oracle-based selection of weights
-        oracle_select_weights = experiment_params.pop(
-            "oracle_select_weights", False
-        )
-
-        # Apply the consensus function to combine the flow estimates
+        # Apply the consensus function to combine the flow estimates.
+        # Use the local consensus_config, which carries the forwarded
+        # experiment parameters (exp_log_metrics, exp_log_path,
+        # exp_baseline_performance, exp_oracle_select_weights); the instance
+        # attribute self.consensus_config does not.
         def map_fn(args):
             flows_i, weights_i = args
-            return self.consensus_fn(flows_i, weights_i, self.consensus_config)
+            return self.consensus_fn(flows_i, weights_i, consensus_config)
 
         new_flow, consensus_metrics = jax.lax.map(map_fn, (flows, weights))
 
@@ -520,9 +519,11 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
                 self.running_min_epe = running_min_epe
 
             if key == "relative_error":
-                # No running stats for relative error, just store the mean
+                # Summarize over valid images only, matching the epe block and
+                # the valid-only `total_valid_images` denominator (using the
+                # unfiltered `value` here biases the running mean).
                 processed_metrics["mean_relative_error"] = np.array(
-                    jnp.mean(value)
+                    jnp.mean(filtered_value)
                 )
                 processed_metrics[key] = np.array(value)
 
@@ -532,8 +533,8 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
                 )
                 running_mean_relative_error = (
                     running_mean_relative_error
-                    * (self.total_valid_images - value.shape[0])
-                    + jnp.sum(value)
+                    * (self.total_valid_images - filtered_value.shape[0])
+                    + jnp.sum(filtered_value)
                 ) / (self.total_valid_images)
                 self.running_mean_relative_error = running_mean_relative_error
 
@@ -542,7 +543,7 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
                     self, "running_max_relative_error", 0.0
                 )
                 running_max_relative_error = max(
-                    running_max_relative_error, jnp.max(value)
+                    running_max_relative_error, jnp.max(filtered_value)
                 )
                 self.running_max_relative_error = running_max_relative_error
 
@@ -551,7 +552,7 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
                     self, "running_min_relative_error", jnp.inf
                 )
                 running_min_relative_error = min(
-                    running_min_relative_error, jnp.min(value)
+                    running_min_relative_error, jnp.min(filtered_value)
                 )
                 self.running_min_relative_error = running_min_relative_error
             if key.endswith("_rejected_percentage"):
@@ -606,6 +607,14 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
             append_metrics_to_csv(
                 csv_metrics, filename=residuals_filename, batch_idx=i
             )
+
+        # Preserve the eval-level per-batch EPE arrays computed in eval.py.
+        # process_metrics returns a fresh dict, so without this the consensus
+        # estimator would drop "errors"/"relative_errors" and eval_full_dataset
+        # (which gates on `"errors" in metrics`) would never accumulate them.
+        for eval_key in ("errors", "relative_errors"):
+            if eval_key in metrics:
+                processed_metrics[eval_key] = metrics[eval_key]
 
         return processed_metrics
 
@@ -734,11 +743,11 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
                 baseline_mean = baseline.get("mean_epe", None)
                 row_mean = row_data.get("mean_epe", None)
                 if isinstance(baseline_mean, jnp.ndarray) and (
-                    baseline_mean.ndim == 0 or baseline_mean.ndim == 1
+                    baseline_mean.ndim in {0, 1}
                 ):
                     baseline_mean = float(baseline_mean)
                 if isinstance(row_mean, jnp.ndarray) and (
-                    row_mean.ndim == 0 or row_mean.ndim == 1
+                    row_mean.ndim in {0, 1}
                 ):
                     row_mean = float(row_mean)
                 if isinstance(baseline_mean, float) and isinstance(
@@ -751,11 +760,11 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
                 baseline_max = baseline.get("max_epe", None)
                 row_max = row_data.get("max_epe", None)
                 if isinstance(baseline_max, jnp.ndarray) and (
-                    baseline_max.ndim == 0 or baseline_max.ndim == 1
+                    baseline_max.ndim in {0, 1}
                 ):
                     baseline_max = float(baseline_max)
                 if isinstance(row_max, jnp.ndarray) and (
-                    row_max.ndim == 0 or row_max.ndim == 1
+                    row_max.ndim in {0, 1}
                 ):
                     row_max = float(row_max)
                 if isinstance(baseline_max, float) and isinstance(
@@ -768,11 +777,11 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
                 baseline_min = baseline.get("min_epe", None)
                 row_min = row_data.get("min_epe", None)
                 if isinstance(baseline_min, jnp.ndarray) and (
-                    baseline_min.ndim == 0 or baseline_min.ndim == 1
+                    baseline_min.ndim in {0, 1}
                 ):
                     baseline_min = float(baseline_min)
                 if isinstance(row_min, jnp.ndarray) and (
-                    row_min.ndim == 0 or row_min.ndim == 1
+                    row_min.ndim in {0, 1}
                 ):
                     row_min = float(row_min)
                 if isinstance(baseline_min, float) and isinstance(
@@ -785,11 +794,11 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
                 baseline_min_rel = baseline.get("min_relative_epe", None)
                 row_min_rel = row_data.get("min_relative_error", None)
                 if isinstance(baseline_min_rel, jnp.ndarray) and (
-                    baseline_min_rel.ndim == 0 or baseline_min_rel.ndim == 1
+                    baseline_min_rel.ndim in {0, 1}
                 ):
                     baseline_min_rel = float(baseline_min_rel)
                 if isinstance(row_min_rel, jnp.ndarray) and (
-                    row_min_rel.ndim == 0 or row_min_rel.ndim == 1
+                    row_min_rel.ndim in {0, 1}
                 ):
                     row_min_rel = float(row_min_rel)
                 if isinstance(baseline_min_rel, float) and isinstance(
@@ -802,11 +811,11 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
                 baseline_mean_rel = baseline.get("mean_relative_epe", None)
                 row_mean_rel = row_data.get("mean_relative_error", None)
                 if isinstance(baseline_mean_rel, jnp.ndarray) and (
-                    baseline_mean_rel.ndim == 0 or baseline_mean_rel.ndim == 1
+                    baseline_mean_rel.ndim in {0, 1}
                 ):
                     baseline_mean_rel = float(baseline_mean_rel)
                 if isinstance(row_mean_rel, jnp.ndarray) and (
-                    row_mean_rel.ndim == 0 or row_mean_rel.ndim == 1
+                    row_mean_rel.ndim in {0, 1}
                 ):
                     row_mean_rel = float(row_mean_rel)
                 if isinstance(baseline_mean_rel, float) and isinstance(
@@ -819,11 +828,11 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
                 baseline_max_rel = baseline.get("max_relative_epe", None)
                 row_max_rel = row_data.get("max_relative_error", None)
                 if isinstance(baseline_max_rel, jnp.ndarray) and (
-                    baseline_max_rel.ndim == 0 or baseline_max_rel.ndim == 1
+                    baseline_max_rel.ndim in {0, 1}
                 ):
                     baseline_max_rel = float(baseline_max_rel)
                 if isinstance(row_max_rel, jnp.ndarray) and (
-                    row_max_rel.ndim == 0 or row_max_rel.ndim == 1
+                    row_max_rel.ndim in {0, 1}
                 ):
                     row_max_rel = float(row_max_rel)
                 if isinstance(baseline_max_rel, float) and isinstance(

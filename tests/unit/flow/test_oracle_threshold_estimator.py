@@ -607,11 +607,7 @@ def test_learned_oracle_threshold_supports_legacy_flow_only_params():
     ts = EstimatorTrainableState(
         apply_fn=apply_fn,
         params=FrozenDict(
-            {
-                "Conv_0": {
-                    "kernel": jnp.zeros((3, 3, 2, 8), dtype=jnp.float32)
-                }
-            }
+            {"Conv_0": {"kernel": jnp.zeros((3, 3, 2, 8), dtype=jnp.float32)}}
         ),
     )
     _, mask, _ = learned_oracle_threshold(
@@ -632,11 +628,7 @@ def test_learned_oracle_threshold_rejects_invalid_inferred_channels():
     ts = EstimatorTrainableState(
         apply_fn=lambda variables, x, **kwargs: x[..., 0],
         params=FrozenDict(
-            {
-                "Conv_0": {
-                    "kernel": jnp.zeros((3, 3, 4, 8), dtype=jnp.float32)
-                }
-            }
+            {"Conv_0": {"kernel": jnp.zeros((3, 3, 4, 8), dtype=jnp.float32)}}
         ),
     )
 
@@ -687,9 +679,9 @@ def test_learned_oracle_estimator_call_without_cache_uses_state_estimate():
     trainable_state = estimator.create_trainable_state(
         images, jax.random.PRNGKey(0)
     )
-    state_flow = jnp.zeros((1, 5, 5, 2), dtype=jnp.float32).at[
-        0, 1, 3, 0
-    ].set(1.5)
+    state_flow = (
+        jnp.zeros((1, 5, 5, 2), dtype=jnp.float32).at[0, 1, 3, 0].set(1.5)
+    )
     state = estimator.create_state(
         images=images,
         estimates=state_flow,
@@ -787,7 +779,7 @@ def test_learned_oracle_validation_metrics_include_classification_scores():
         )
 
     results = evaluate_batches(
-        model=estimator,
+        estimator=estimator,
         sampler=_OneBatchSampler(),
         create_state_fn=create_state_fn,
         compute_estimate_fn=compute_estimate_fn,

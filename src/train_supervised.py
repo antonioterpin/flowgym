@@ -452,8 +452,8 @@ def train_supervised(
                             )
 
                             logger.info(
-                                f"New best estimator saved at batch {batch_idx} "
-                                f"(score={current_score:.6f}, "
+                                "New best estimator saved at batch "
+                                f"{batch_idx} (score={current_score:.6f}, "
                                 f"mean_error={mean_error:.6f})"
                             )
 

@@ -4,14 +4,20 @@ import functools
 
 import jax
 
+# x64 must be enabled before any jax array work so the closed-form vs optax
+# comparisons below run in double precision; the imports therefore follow this
+# call and are exempt from E402.
 jax.config.update("jax_enable_x64", True)
 
-import jax.numpy as jnp
-import optax
-import pytest
+import jax.numpy as jnp  # noqa: E402
+import optax  # noqa: E402
+import pytest  # noqa: E402
 
-from flowgym.flow.consensus.objectives import flows_objective, weights_and_anchors
-from flowgym.flow.consensus.solvers import (
+from flowgym.flow.consensus.objectives import (  # noqa: E402
+    flows_objective,
+    weights_and_anchors,
+)
+from flowgym.flow.consensus.solvers import (  # noqa: E402
     closed_form_flows_huber,
     closed_form_flows_l1,
     closed_form_flows_l2,
@@ -33,9 +39,7 @@ def _make_problem(seed: int = 0):
 
     anchor_flows = jax.random.normal(k_a, (n_agents, height, width, channels))
     consensus_flow = jax.random.normal(k_z, (height, width, channels))
-    consensus_dual = jax.random.normal(
-        k_d, (n_agents, height, width, channels)
-    )
+    consensus_dual = jax.random.normal(k_d, (n_agents, height, width, channels))
     x0 = jax.random.normal(k_x, (n_agents, height, width, channels))
 
     weights_and_anchors_fn = functools.partial(
@@ -117,7 +121,6 @@ def test_closed_form_flows_match_optax(
 ):
     problem = _make_problem(seed=seed)
     objective = _make_objective(problem, objective_type)
-    
 
     x_closed = closed_form_solver(
         problem["x0"],
@@ -139,9 +142,7 @@ def test_closed_form_flows_match_optax(
     obj_closed = float(objective(x_closed))
     obj_opt = float(objective(x_opt))
 
-    assert jnp.allclose(
-        x_closed, x_opt, rtol=state_rtol, atol=state_atol
-    ), (
+    assert jnp.allclose(x_closed, x_opt, rtol=state_rtol, atol=state_atol), (
         f"{objective_type}: state mismatch. "
         f"max_abs_diff={max_abs_diff:.3e}, "
         f"obj_closed={obj_closed:.12e}, obj_opt={obj_opt:.12e}"

@@ -1,8 +1,9 @@
 """Consensus specific types."""
 
-from jax import Array
-from typing import Any, TypeAlias
 from collections.abc import Callable
+from typing import Any, TypeAlias
+
+from jax import Array
 
 ObjectiveFn: TypeAlias = Callable[..., Any]
 

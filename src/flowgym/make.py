@@ -518,9 +518,7 @@ def make_estimator(
                 jnp.zeros(image_shape, dtype=jnp.float32), key=rng
             )
             if isinstance(template_state, NNEstimatorTrainableState):
-                trained_state = load_model(
-                    load_from, template_state, mode=mode
-                )
+                trained_state = load_model(load_from, template_state, mode=mode)
             else:
                 raise ValueError("Estimator is not a neural network estimator.")
         logger.info("Trainable state loaded successfully.")

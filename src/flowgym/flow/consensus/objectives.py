@@ -175,7 +175,8 @@ def _extract_patch_params(cfg: dict) -> tuple[int, int]:
 
     if "patch_stride" not in cfg:
         logger.warning(
-            "No patch_stride specified in the configuration. Using 1 as default."
+            "No patch_stride specified in the configuration. "
+            "Using 1 as default."
         )
         patch_stride = 1
     else:
@@ -353,14 +354,12 @@ def _make_weights_gradient(
     patch_size, patch_stride = _extract_patch_params(cfg)
     half = patch_size // 2
 
-    # Tile prevs and currs to match the number of flow estimates
+    # Tile prevs to match the number of flow estimates (gradient weights are
+    # derived from the previous image only).
     prevs = jnp.tile(prevs[:, jnp.newaxis, ...], (1, N, 1, 1))
-    currs = jnp.tile(currs[:, jnp.newaxis, ...], (1, N, 1, 1))
 
     # Reshape to use vmap
     prevs_flat = prevs.reshape(-1, H, W)
-    currs_flat = currs.reshape(-1, H, W)
-    flows_flat = flows.reshape(-1, H, W, 2)
 
     # Compute gradients using Sobel filter
     kx, ky = sobel()
@@ -476,7 +475,9 @@ def _normalize_weights(
     """
     if normalization == "per_batch":
         weights = weights / (
-            jnp.sum(weights, axis=(1, 2, 3))[:, jnp.newaxis, jnp.newaxis, jnp.newaxis]
+            jnp.sum(weights, axis=(1, 2, 3))[
+                :, jnp.newaxis, jnp.newaxis, jnp.newaxis
+            ]
             + epsilon
         )
 
@@ -502,7 +503,9 @@ def _normalize_weights(
         max_mask = (weights == jnp.max(weights, axis=1, keepdims=True)).astype(
             weights.dtype
         )
-        weights = max_mask / (jnp.sum(max_mask, axis=1, keepdims=True) + epsilon)
+        weights = max_mask / (
+            jnp.sum(max_mask, axis=1, keepdims=True) + epsilon
+        )
 
     elif normalization != "none":
         raise ValueError(f"Unknown normalization technique: {normalization}")
@@ -606,7 +609,8 @@ def make_weights(
     if mask is not None:
         if mask.shape != weights.shape:
             raise ValueError(
-                f"Mask shape {mask.shape} does not match weights shape {weights.shape}."
+                f"Mask shape {mask.shape} does not match weights shape "
+                f"{weights.shape}."
             )
         weights = jnp.where(mask, weights, 0.0)
 
@@ -617,7 +621,8 @@ def make_weights(
     if mask is not None:
         if mask.shape != weights.shape:
             raise ValueError(
-                f"Mask shape {mask.shape} does not match weights shape {weights.shape}."
+                f"Mask shape {mask.shape} does not match weights shape "
+                f"{weights.shape}."
             )
         weights = jnp.where(mask, weights, 0.0)
 

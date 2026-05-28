@@ -14,7 +14,7 @@ from flowgym.common.base import (
 )
 from flowgym.common.median import median
 from flowgym.flow.postprocess.oracle_model import OracleMaskCNN
-from flowgym.make import load_estimator
+from flowgym.make import load_model
 from flowgym.utils import DEBUG
 
 _DEFAULT_ORACLE_FEATURES = (16, 32)
@@ -37,12 +37,10 @@ def _normalize_oracle_features(
         raise ValueError("`features` must be a non-empty list/tuple.")
     normalized = tuple(features)
     if not all(
-        isinstance(feature, int) and feature > 0
-        for feature in normalized
+        isinstance(feature, int) and feature > 0 for feature in normalized
     ):
         raise ValueError(
-            "`features` must contain only positive integers, got "
-            f"{features}."
+            f"`features` must contain only positive integers, got {features}."
         )
     return normalized
 
@@ -68,7 +66,7 @@ def _load_learned_oracle_state_from_checkpoint(
         params=params,
         optimizer_config=_LEARNED_ORACLE_OPTIMIZER_CONFIG,
     )
-    loaded_state = load_estimator(
+    loaded_state = load_model(
         ckpt_dir=checkpoint_path,
         template_state=template_state,
         mode="params_only",
@@ -135,8 +133,7 @@ def _build_oracle_model_input(
         return flow_for_model.astype(jnp.float32)
     if input_channels not in (3, 5):
         raise ValueError(
-            "input_channels must be 2, 3, or 5, got "
-            f"{input_channels}."
+            f"input_channels must be 2, 3, or 5, got {input_channels}."
         )
 
     b, h, w, _ = flow_for_model.shape
@@ -156,6 +153,9 @@ def _build_oracle_model_input(
     if estimator_count is not None:
         norm_denom = float(max(estimator_count - 1, 1))
     else:
+        # For K-flow input the indices span [0..K-1], so max(index) == K-1 and
+        # this matches training. Single-flow callers (constant index) must pass
+        # estimator_count; that case is guarded where the indices are built.
         norm_denom = jnp.maximum(jnp.max(estimator_indices_f), 1.0)
     estimator_index_channel = jnp.broadcast_to(
         (estimator_indices_f / norm_denom)[:, None, None, None],
@@ -553,10 +553,7 @@ def learned_oracle_threshold(
         else trainable_state
     )
     model_input_channels = 3
-    if (
-        model_trainable_state is None
-        or model_trainable_state.apply_fn is None
-    ):
+    if model_trainable_state is None or model_trainable_state.apply_fn is None:
         if load_from is None:
             raise ValueError("trainable_state.apply_fn cannot be None.")
         model_trainable_state, model_input_channels = (
@@ -657,8 +654,7 @@ def learned_oracle_threshold(
     elif flow_in.ndim == 4:
         if flow_in.shape[-1] != 2:
             raise ValueError(
-                "Expected flow field shape (B, H, W, 2), got "
-                f"{flow_in.shape}."
+                f"Expected flow field shape (B, H, W, 2), got {flow_in.shape}."
             )
         flow_for_model = flow_in
         if estimator_indices is not None:
@@ -672,6 +668,21 @@ def learned_oracle_threshold(
         elif estimator_index is not None:
             flat_estimator_indices = jnp.full(
                 (flow_in.shape[0],), estimator_index, dtype=jnp.float32
+            )
+        # Single-flow indices are a constant repeated over the batch, so the
+        # max(index) fallback in _build_oracle_model_input would map index i to
+        # i/i = 1.0 — out-of-distribution vs training's idx/(K-1). Require an
+        # explicit estimator_count whenever the index channel is non-zero.
+        if (
+            estimator_count is None
+            and flat_estimator_indices is not None
+            and float(jnp.max(flat_estimator_indices)) > 0.0
+        ):
+            raise ValueError(
+                "estimator_count is required for single-flow input with a "
+                "non-zero estimator index, to normalize the index channel "
+                "consistently with training (idx / (K - 1)). Pass "
+                "estimator_count=K, the number of sub-estimators."
             )
         if model_input_channels == 5:
             if previous_image is None or current_image is None:
@@ -784,8 +795,7 @@ def learned_oracle_threshold_validate_params(
         0.0 < threshold_value < 1.0
     ):
         raise ValueError(
-            "`threshold_value` must be in (0, 1), got "
-            f"{threshold_value}."
+            f"`threshold_value` must be in (0, 1), got {threshold_value}."
         )
     if load_from is not None and not isinstance(load_from, str):
         raise ValueError(

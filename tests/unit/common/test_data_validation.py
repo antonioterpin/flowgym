@@ -84,16 +84,14 @@ def test_constant_threshold_filter_batch(
 
         # check that all the True values in the mask correspond to inliers
         mag = jnp.linalg.norm(flow_field[b], axis=-1)
-        assert jnp.all(
-            (mag[mask[b]] >= vel_min) & (mag[mask[b]] <= vel_max)
-        ), (
+        assert jnp.all((mag[mask[b]] >= vel_min) & (mag[mask[b]] <= vel_max)), (
             f"Mask does not correctly identify inliers for batch {b}"
         )
 
         # check that all the False values in the mask correspond to outliers
-        assert jnp.all(
-            (mag[~mask[b]] < vel_min) | (mag[~mask[b]] > vel_max)
-        ), f"Mask does not correctly identify outliers for batch {b}"
+        assert jnp.all((mag[~mask[b]] < vel_min) | (mag[~mask[b]] > vel_max)), (
+            f"Mask does not correctly identify outliers for batch {b}"
+        )
 
 
 @pytest.mark.skipif(

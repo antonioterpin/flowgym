@@ -279,9 +279,9 @@ def closed_form_consensus(
 
     # Closed form solution: z = (N * rho * I + Q)^(-1) * (N * rho * x_avg)
     updated_consensus = jnp.linalg.solve(
-        N * rho * jnp.eye(Q.shape[0]) + Q + 1e-8,
+        (N * rho + 1e-8) * jnp.eye(Q.shape[0]) + Q,
         (N * rho * updated_consensus.flatten()),
-    )  # small epsilon to avoid division by zero
+    )  # small epsilon on the diagonal to keep the system non-singular
     updated_consensus = updated_consensus.reshape(consensus_flow.shape)
 
     return updated_consensus

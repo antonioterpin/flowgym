@@ -99,9 +99,7 @@ class LearnedOracleThresholdEstimator(Estimator):
         if not isinstance(threshold, (int, float)) or not (
             0.0 < threshold < 1.0
         ):
-            raise ValueError(
-                f"`threshold` must be in (0, 1), got {threshold}."
-            )
+            raise ValueError(f"`threshold` must be in (0, 1), got {threshold}.")
         if not isinstance(oracle_epe_threshold, (int, float)) or (
             oracle_epe_threshold <= 0.0
         ):
@@ -620,10 +618,7 @@ class LearnedOracleThresholdEstimator(Estimator):
     ) -> SupervisedExperience:
         """Precompute non-jittable sub-estimator flows before train step."""
         del trainable_state
-        if (
-            self.num_sub_estimators <= 0
-            or self._inner_estimators_support_jit
-        ):
+        if self.num_sub_estimators <= 0 or self._inner_estimators_support_jit:
             return experience
 
         existing_payload = experience.cache_payload
@@ -752,9 +747,7 @@ class LearnedOracleThresholdEstimator(Estimator):
                 recall = jnp.mean(tp / (tp + fn + eps))
                 specificity = jnp.mean(tn / (tn + fp + eps))
                 balanced_accuracy = 0.5 * (recall + specificity)
-                f1 = jnp.mean(
-                    (2.0 * tp) / (2.0 * tp + fp + fn + eps)
-                )
+                f1 = jnp.mean((2.0 * tp) / (2.0 * tp + fp + fn + eps))
                 iou = jnp.mean(tp / (tp + fp + fn + eps))
                 pred_inlier_frac = jnp.mean(preds_f)
                 oracle_inlier_frac = jnp.mean(labels_f)

@@ -1,5 +1,7 @@
 """Postprocessing module for flow estimation."""
 
+from typing import Any
+
 import jax.image as jimg
 import jax.numpy as jnp
 from goggles.history.types import History
@@ -69,6 +71,7 @@ def quantize(
     dtype: jnp.dtype = jnp.uint8,
     valid: jnp.ndarray | None = None,
     state: History | None = None,
+    **kwargs: Any,
 ) -> tuple[jnp.ndarray, jnp.ndarray | None, History | None]:
     """Quantize flow values to a specified number of bits.
 
@@ -79,6 +82,8 @@ def quantize(
         dtype: Data type for the quantized output.
         valid: Optional mask of shape (B, H, W) where 1 means valid.
         state: Current state of the estimator.
+        **kwargs: Additional step kwargs forwarded by the postprocess
+            pipeline (e.g. trainable_state, previous_image, current_image).
 
     Returns:
         Quantized flow values.
@@ -119,6 +124,7 @@ def resize_flow(
     target_width: int,
     valid: jnp.ndarray | None = None,
     state: History | None = None,
+    **kwargs: Any,
 ) -> tuple[jnp.ndarray, jnp.ndarray | None, History | None]:
     """Resize flow to a target shape.
 
@@ -128,6 +134,8 @@ def resize_flow(
         target_width: Target width.
         valid: Optional mask of shape (B, H, W) where 1 means valid.
         state: Current state of the estimator.
+        **kwargs: Additional step kwargs forwarded by the postprocess
+            pipeline (e.g. trainable_state, previous_image, current_image).
 
     Returns:
         Resized flow values.
@@ -172,6 +180,7 @@ def temporal_smoothing_ema(
     alpha: float,
     state: History,
     valid: jnp.ndarray | None = None,
+    **kwargs: Any,
 ) -> tuple[jnp.ndarray, jnp.ndarray | None, History | None]:
     """Apply exponential moving average smoothing to the flow.
 
@@ -180,6 +189,8 @@ def temporal_smoothing_ema(
         alpha: Smoothing factor, should be in the range [0, 1].
         state: Current state of the estimator.
         valid: Optional mask of shape (B, H, W) where 1 means valid.
+        **kwargs: Additional step kwargs forwarded by the postprocess
+            pipeline (e.g. trainable_state, previous_image, current_image).
 
     Returns:
         Smoothed flow values.
