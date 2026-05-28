@@ -82,6 +82,21 @@ def _scale(x: jax.Array, factor: float = 1.0) -> jax.Array:
     return x * factor
 
 
+def _log(x: jax.Array, eps: float = 1e-8) -> jax.Array:
+    """Log transform with epsilon and non-negative clamp.
+
+    Args:
+        x: Input array.
+        eps: Small positive constant added before log. Defaults to ``1e-8``
+            so a bare ``name: log`` config never injects ``-inf`` on exact
+            zeros (EPE targets/rewards can be 0).
+
+    Returns:
+        Log of (max(x, 0) + eps).
+    """
+    return jnp.log(jnp.maximum(x, 0.0) + eps)
+
+
 TransformFn = Callable[..., jax.Array]
 
 TRANSFORM_REGISTRY: dict[str, TransformFn] = {
@@ -90,6 +105,7 @@ TRANSFORM_REGISTRY: dict[str, TransformFn] = {
     "sqrt": _sqrt,
     "clip": _clip,
     "scale": _scale,
+    "log": _log,
 }
 
 
@@ -100,21 +116,24 @@ def build_target_transform_from_config(
 
     Accepts either a single transform config or a pipeline of transforms.
 
-    Config format:
-        name: The transform name (from TRANSFORM_REGISTRY)
-        **kwargs: Arguments for the transform function
+    Single-transform format::
 
-    Pipeline format:
-        pipeline: List of transform configs to apply sequentially.
+        {
+            "name": "log1p",
+            "eps": 1e-8,
+        }
 
-    Example:
-        config = {"name": "log1p", "eps": 1e-8}
-        config = {
+    Pipeline format::
+
+        {
             "pipeline": [
                 {"name": "clip", "min": 0.0, "max": 10.0},
-                {"name": "log1p"}
-            ]
+                {"name": "log1p"},
+            ],
         }
+
+    ``name`` selects a transform from ``TRANSFORM_REGISTRY``. Any additional
+    keys are passed as keyword arguments to that transform.
 
     Args:
         config: Configuration dictionary for the transform(s).

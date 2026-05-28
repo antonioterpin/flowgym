@@ -19,6 +19,7 @@ OPTIMIZER_REGISTRY: dict[str, Any] = {
 }
 
 TRANSFORM_REGISTRY: dict[str, Any] = {
+    "clip": optax.clip,
     "clip_by_global_norm": optax.clip_by_global_norm,
     "add_decayed_weights": optax.add_decayed_weights,
     "scale": optax.scale,
@@ -53,21 +54,6 @@ def build_optimizer_from_config(
 ) -> optax.GradientTransformation:
     """Build a GradientTransformation from a config mapping.
 
-    Config format example:
-        name: "adam"
-        hyperparams:
-            learning_rate:
-                schedule:
-                    name: "exponential_decay"
-                    ...  # schedule kwargs
-            b1: 0.9
-            b2: 0.999
-        chain:
-            - name: "clip_by_global_norm"
-            kwargs: {max_norm: 1.0}
-            - name: "add_decayed_weights"
-            kwargs: {weight_decay: 1.0e-4}
-
     Args:
         config: Configuration dictionary for the optimizer. If ``None``,
             defaults to ``{"name": "set_to_zero"}`` (a no-op optimizer)
@@ -78,6 +64,32 @@ def build_optimizer_from_config(
 
     Raises:
         ValueError: If config is invalid or optimizer name is unknown.
+
+    Example:
+        Example optimizer config::
+
+            {
+                "name": "adam",
+                "hyperparams": {
+                    "learning_rate": {
+                        "schedule": {
+                            "name": "exponential_decay",
+                        },
+                    },
+                    "b1": 0.9,
+                    "b2": 0.999,
+                },
+                "chain": [
+                    {
+                        "name": "clip_by_global_norm",
+                        "kwargs": {"max_norm": 1.0},
+                    },
+                    {
+                        "name": "add_decayed_weights",
+                        "kwargs": {"weight_decay": 1.0e-4},
+                    },
+                ],
+            }
     """
     if config is None:
         config = {"name": "set_to_zero"}

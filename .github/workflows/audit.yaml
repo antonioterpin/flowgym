@@ -1,0 +1,48 @@
+name: Dependency audit
+
+on:
+    push:
+        branches: [main, dev]
+    pull_request:
+        branches: [main, dev]
+    schedule:
+        - cron: '0 7 * * 1'   # Monday 07:00 UTC
+
+permissions:
+    contents: read
+
+jobs:
+    pip-audit:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Check out code
+              uses: actions/checkout@v6
+
+            - name: Install uv
+              uses: astral-sh/setup-uv@v7
+              with:
+                  python-version: '3.12'
+
+            - name: Export runtime dependency tree
+              run: |
+                  uv export --no-hashes --no-dev \
+                      --format requirements-txt \
+                      > /tmp/runtime-requirements.txt
+
+            # Transitive advisories we cannot fix without destabilizing the
+            # tree (pillow is pinned by moviepy; protobuf/pygments by
+            # jax/wandb/sphinx). They are plotting/serialization paths, not
+            # untrusted-input parsing. Revisit when upstreams allow newer
+            # versions; remove an ignore as soon as a clean bump is possible.
+            - name: Run pip-audit
+              run: |
+                  uvx pip-audit --requirement /tmp/runtime-requirements.txt \
+                      --ignore-vuln CVE-2026-25990 \
+                      --ignore-vuln CVE-2026-40192 \
+                      --ignore-vuln CVE-2026-42308 \
+                      --ignore-vuln CVE-2026-42309 \
+                      --ignore-vuln CVE-2026-42310 \
+                      --ignore-vuln CVE-2026-42311 \
+                      --ignore-vuln CVE-2026-0994 \
+                      --ignore-vuln CVE-2026-4539

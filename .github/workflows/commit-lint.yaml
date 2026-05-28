@@ -1,15 +1,26 @@
 name: Commit style validation
 
 on:
-    workflow_dispatch:
+    pull_request:
 
 jobs:
     commit-lint:
         runs-on: ubuntu-latest
         steps:
-            - name: Checkout code
-              uses: actions/checkout@v3
-            - name: Run Commitlint
-              uses: wagoid/commitlint-github-action@v5
+            - name: Check out code
+              uses: actions/checkout@v6
               with:
-                configFile: commitlint.config.js
+                  fetch-depth: 0   # full history -> lint the PR commit range
+
+            - name: Install uv
+              uses: astral-sh/setup-uv@v7
+              with:
+                  python-version: '3.12'
+
+            # flowgym lints commit messages with gitlint (Conventional Commits
+            # via the .gitlint contrib rule), matching the local commit-msg
+            # pre-commit hook.
+            - name: Run gitlint
+              run: |
+                  uvx gitlint --commits \
+                      "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"

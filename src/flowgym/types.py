@@ -274,8 +274,8 @@ class CompiledCreateStateFn(Protocol):
     """Protocol for the compiled state creation function.
 
     NOTE: This protocol is for the create-state callable returned by
-    `make_estimator`/`compile_estimator`, not `Estimator.create_state`.
-    `compile_estimator` binds `estimates` and history sizes ahead of time.
+    `make_estimator`/`compile_model`, not `Estimator.create_state`.
+    `compile_model` binds `estimates` and history sizes ahead of time.
     """
 
     def __call__(

@@ -86,17 +86,18 @@ REDUCTION_REGISTRY: dict[str, Callable[[jax.Array], jax.Array]] = {
 def build_loss_from_config(config: dict[str, Any]) -> LossFn:
     """Build a loss function from a config.
 
-    Config format:
-        name: The loss function name (from LOSS_REGISTRY)
-        kwargs: Optional kwargs to pass to the base loss function
-        reduction: Optional reduction to apply ("mean", "sum", "none")
+    Config format::
 
-    Example:
-        config = {
+        {
             "name": "huber",
             "kwargs": {"delta": 1.0},
-            "reduction": "mean"
+            "reduction": "mean",
         }
+
+    ``name`` selects a base loss from ``LOSS_REGISTRY``. ``kwargs`` passes
+    optional keyword arguments to that loss. ``reduction`` selects the
+    reduction applied to the per-element output and may be ``"mean"``,
+    ``"sum"``, or ``"none"``.
 
     Args:
         config: Configuration dictionary for the loss function.

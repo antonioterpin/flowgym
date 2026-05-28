@@ -1,5 +1,7 @@
 """Filters for velocity field processing."""
 
+from typing import Literal
+
 import jax.numpy as jnp
 from jax import vmap
 from jax.scipy.signal import convolve as jax_convolve
@@ -52,7 +54,10 @@ def gaussian_kernel(
 
 
 def gaussian_smoothing(
-    data: jnp.ndarray, sigma: float, truncate: float = 4.0, mode: str = "same"
+    data: jnp.ndarray,
+    sigma: float,
+    truncate: float = 4.0,
+    mode: Literal["same", "valid", "reflect"] = "same",
 ) -> jnp.ndarray:
     """Smooth each channel of the velocity field using a Gaussian kernel.
 

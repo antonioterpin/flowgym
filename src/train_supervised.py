@@ -12,7 +12,7 @@ from synthpix.sampler import Sampler
 
 from eval import evaluate_batches
 from flowgym.common.base import Estimator, NNEstimatorTrainableState
-from flowgym.make import save_estimator
+from flowgym.make import save_model
 from flowgym.training.caching import CacheManager, enrich_batch
 from flowgym.training.replay import ReplayBuffer
 from flowgym.types import (
@@ -181,6 +181,12 @@ def train_supervised(
                 logger.info(init_val_msg)
                 last_val_metrics = dict(val_metrics)
                 best_validation_score = current_score
+                # Seed the best-checkpoint guard from the initial validation:
+                # with a baseline in hand, the first periodic save must beat
+                # it rather than being forced (and clobbering this score).
+                # Without initial validation the flag stays False so the first
+                # periodic checkpoint is still saved unconditionally.
+                has_saved_best_checkpoint = True
             except Exception as e:
                 logger.error(f"Initial validation failed: {e}")
 
@@ -265,8 +271,10 @@ def train_supervised(
                 # Store experience in the replay buffer
                 if replay_buffer is not None:
                     # Allow estimator to enrich experience before storing
-                    enriched_experience = estimator.prepare_experience_for_replay(
-                        experience, trainable_state
+                    enriched_experience = (
+                        estimator.prepare_experience_for_replay(
+                            experience, trainable_state
+                        )
                     )
                     # We store unbatched experiences
                     B = images1.shape[0]
@@ -405,19 +413,19 @@ def train_supervised(
                     batch_idx % save_every == 0 or batch_idx == num_batches - 1
                 ):
                     if not save_only_best:
-                        save_estimator(
+                        save_model(
                             state=trainable_state,
                             out_dir=out_dir,
                             step=batch_idx,
-                            estimator=estimator,
-                            estimator_name=estimator.__class__.__name__,
+                            model=estimator,
+                            model_name=estimator.__class__.__name__,
                             sampler=sampler,
                         )
 
                     elif last_val_metrics is None:
                         logger.info(
-                            f"Skipping best-estimator save at batch {batch_idx}: "
-                            f"no validation computed yet."
+                            f"Skipping best-estimator save at batch "
+                            f"{batch_idx}: no validation computed yet."
                         )
                     else:
                         mean_error = float(
@@ -434,12 +442,12 @@ def train_supervised(
                             best_validation_score = current_score
                             has_saved_best_checkpoint = True
 
-                            save_estimator(
+                            save_model(
                                 state=trainable_state,
                                 out_dir=out_dir,
                                 step=batch_idx,
-                                estimator=estimator,
-                                estimator_name=estimator.__class__.__name__,
+                                model=estimator,
+                                model_name=estimator.__class__.__name__,
                                 sampler=sampler,
                             )
 

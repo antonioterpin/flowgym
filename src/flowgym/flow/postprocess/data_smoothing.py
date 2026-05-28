@@ -1,6 +1,6 @@
 """Data smoothing functions for optical flow estimation."""
 
-from typing import Any
+from typing import Any, Literal
 
 import jax.numpy as jnp
 from goggles.history.types import History
@@ -138,7 +138,7 @@ def gaussian_smoothing(
     truncate: float = 4.0,
     valid: jnp.ndarray | None = None,
     state: History | None = None,
-    mode: str = "same",
+    mode: Literal["same", "valid", "reflect"] = "same",
     **kwargs: Any,
 ) -> tuple[jnp.ndarray, jnp.ndarray | None, History | None]:
     """Gaussian smoothing (channel-wise).

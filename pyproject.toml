@@ -21,15 +21,15 @@ classifiers = [
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 
 # Core dependencies
 dependencies = [
     "jax>=0.6.0",
-    "flax>=0.10.5",
+    "flax>=0.12.7",
     "ipywidgets",
-    "robo-goggles @ git+https://github.com/antonioterpin/goggles.git@15a2ef28f58d06179d47804ddb908fb58fd06b20",
-    "pip>=25.3",
+    "robo-goggles>=0.2.0",
+    "pip>=26.1",
 ]
 
 [project.urls]
@@ -46,7 +46,7 @@ exclude = ["tests*", "docs*"]
 # Dependency groups
 [dependency-groups]
 dev = [
-    "synthpix @ git+https://github.com/antonioterpin/synthpix.git@4adea08",
+    "synthpix>=0.2.0",
     "pre-commit==4.0.1",
     "snowballstemmer",
     "pytest==7.4.4",
@@ -62,7 +62,7 @@ dev = [
 ]
 
 synthpix-cuda12 = [
-    "synthpix[cuda12] @ git+https://github.com/antonioterpin/synthpix.git@4adea08",
+    "synthpix[cuda12]>=0.2.0",
 ]
 
 dev-cuda12 = [
@@ -70,24 +70,14 @@ dev-cuda12 = [
     {include-group = "synthpix-cuda12"},
 ]
 
-docs = [
-    "Sphinx==7.4.7",
-    "sphinx-copybutton==0.5.2",
-    "sphinx-rtd-theme==2.0.0",
-    "sphinx-tabs==3.4.7",
-    "sphinx-togglebutton==0.3.2",
-    "sphinxcontrib-applehelp==2.0.0",
-    "sphinxcontrib-bibtex==2.6.2",
-    "sphinxcontrib-devhelp==2.0.0",
-    "sphinxcontrib-htmlhelp==2.1.0",
-    "sphinxcontrib-jquery==4.1",
-    "sphinxcontrib-jsmath==1.0.1",
-    "sphinxcontrib-qthelp==2.0.0",
-    "sphinxcontrib-serializinghtml==2.0.0",
-]
-
 # Optional dependencies
 [project.optional-dependencies]
+docs = [
+    "Sphinx==7.4.7",
+    "myst-parser==3.0.1",
+    "sphinx-rtd-theme==2.0.0",
+]
+
 other_methods = [
     "pyoptflow",
     "openpiv",
@@ -104,6 +94,10 @@ cuda12 = [
     "jax[cuda12]>=0.6.0",
 ]
 
+cuda13 = [
+    "jax[cuda13]>=0.10.1",
+]
+
 # Pytest configuration
 [tool.pytest.ini_options]
 minversion = "7.0"
@@ -111,6 +105,7 @@ addopts = [
         "-ra",
         "--strict-markers",
         "--strict-config",
+        "--import-mode=importlib",
         "--cov=flowgym",
         "--cov-branch",
         "--cov-report=term-missing",
@@ -118,11 +113,10 @@ addopts = [
         "--cov-report=xml",
 ]
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = [".", "tests"]
 markers = [
         "run_explicitly: marks tests that are only run with -m run_explicitly",
         "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-        "speed: marks performance tests (deselect with '-m \"not speed\"')",
 ]
 filterwarnings = [
         "error",
