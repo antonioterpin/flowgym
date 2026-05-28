@@ -282,5 +282,15 @@ def train(
                         f"{saved_path}"
                     )
 
+        # RL has no validation loop, so ``save_only_best`` and
+        # ``wandb_upload="best"`` never flip the unsaved-best latch and
+        # every ``save_periodic`` above is a no-op under those policies.
+        # Always write a final checkpoint so the trained model is
+        # persisted regardless of policy (uploaded with the ``final``
+        # alias when W&B uploads are enabled).
+        final_path = checkpointer.save_final(trainable_state, episode_idx)
+        if final_path is not None:
+            logger.info(f"Final checkpoint saved -> {final_path}")
+
     t_total = time.time() - t_total
     logger.info(f"Training took {t_total} seconds.")

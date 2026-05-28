@@ -21,6 +21,7 @@ class _FakeManager:
 
     def __init__(self, directory, options):
         self._dir = directory
+        self._options = options
         self._best_fn = options.best_fn
         self._best_mode = options.best_mode
         self._steps: list[int] = []
@@ -167,16 +168,64 @@ def test_best_step_tracks_higher_is_better(tmp_path):
         assert ckpt.best_metric == pytest.approx(0.9)
 
 
-def test_on_validation_ignores_missing_or_nonfinite_metric(tmp_path):
-    cfg = CheckpointConfig(wandb_upload="every")
+def test_on_validation_best_ignores_missing_or_nonfinite_metric(tmp_path):
+    """``best`` never saves on a missing or non-finite metric."""
+    cfg = CheckpointConfig(wandb_upload="best")
     for ckpt, fake, _ in _make(tmp_path, cfg=cfg):
         assert ckpt.on_validation(MagicMock(), 5, {}) is None
         assert (
             ckpt.on_validation(MagicMock(), 6, {"mean_error": float("nan")})
             is None
         )
-        # Neither call reached orbax.
-        assert all(not c["ok"] for c in fake.save_args) or not fake.save_args
+        # Neither call reached orbax and no best was registered.
+        assert not any(c["ok"] for c in fake.save_args)
+        assert ckpt.best_metric is None
+
+
+def test_on_validation_every_saves_even_on_nonfinite_metric(tmp_path):
+    """``every`` snapshots the latest model after *every* validation.
+
+    A non-finite (or missing) metric must still produce a save/upload
+    — the documented "upload after every validation" contract — but the
+    non-finite value must never become the tracked best, and the save
+    carries no metrics so orbax cannot rank it as best.
+    """
+    cfg = CheckpointConfig(wandb_upload="every")
+    for ckpt, fake, logger_mock in _make(tmp_path, cfg=cfg):
+        ckpt.on_validation(MagicMock(), 5, {"mean_error": 0.5})
+        out = ckpt.on_validation(MagicMock(), 6, {"mean_error": float("nan")})
+        assert out is not None
+        assert len(fake.save_args) == 2
+        # The NaN save reached orbax with no metrics attached.
+        assert fake.save_args[-1]["ok"] is True
+        assert fake.save_args[-1]["metrics"] is None
+        # It uploads under "latest", never "best".
+        last_aliases = logger_mock.artifact.call_args.args[0]["aliases"]
+        assert "latest" in last_aliases and "best" not in last_aliases
+        # Best tracker still reflects the finite 0.5 from step 5.
+        assert ckpt.best_metric == pytest.approx(0.5)
+
+
+def test_on_validation_rolls_back_best_when_orbax_rejects_save(tmp_path):
+    """A rejected save in ``on_validation`` must not advance best trackers.
+
+    If orbax rejects the write (duplicate / backward step), nothing
+    lands on disk, so ``best_metric`` must stay at its prior value and
+    the unsaved-best latch must not be left set (which would otherwise
+    trip a spurious later ``save_periodic`` write).
+    """
+    cfg = CheckpointConfig(wandb_upload="best", save_only_best=True)
+    for ckpt, _fake, _ in _make(tmp_path, cfg=cfg):
+        # First improvement saves cleanly at step 10.
+        ckpt.on_validation(MagicMock(), 10, {"mean_error": 0.5})
+        assert ckpt.best_metric == pytest.approx(0.5)
+        # A "better" metric at a backward step is rejected by orbax.
+        out = ckpt.on_validation(MagicMock(), 10, {"mean_error": 0.2})
+        assert out is None
+        # No new on-disk checkpoint, so the tracker stays at 0.5 and the
+        # latch is not left armed.
+        assert ckpt.best_metric == pytest.approx(0.5)
+        assert ckpt.save_periodic(MagicMock(), step=5) is None
 
 
 # ---------------------------------------------------------------------------
@@ -520,6 +569,32 @@ def test_manager_options_higher_is_better_sets_max(tmp_path):
     )
     for _, fake, _ in _make(tmp_path, cfg=cfg):
         assert fake._best_mode == "max"
+
+
+def test_retention_keeps_latest_n_and_best(tmp_path):
+    """Retention must keep the most-recent N (for resume) *and* the best.
+
+    Regression for the resume-from-latest blocker: driving orbax's
+    ``max_to_keep`` off ``best_fn`` alone retains best-N *by metric* and
+    evicts the newest checkpoints when the metric degrades. The
+    constructor must instead install a composite policy combining
+    ``LatestN(keep)`` and ``BestN(1)``. ``BestN.reverse`` puts the
+    better metric last so it survives: ``reverse=True`` for
+    lower-is-better, ``False`` otherwise.
+    """
+    from orbax.checkpoint import checkpoint_managers as ocp_cm
+
+    for higher_is_better, expected_reverse in [(False, True), (True, False)]:
+        cfg = CheckpointConfig(keep=5, higher_is_better=higher_is_better)
+        for _, fake, _ in _make(tmp_path, cfg=cfg):
+            policy = fake._options.preservation_policy
+            assert isinstance(policy, ocp_cm.AnyPreservationPolicy)
+            kinds = {type(p): p for p in policy.policies}
+            latest = kinds[ocp_cm.LatestN]
+            best = kinds[ocp_cm.BestN]
+            assert latest.n == 5
+            assert best.n == 1
+            assert best.reverse is expected_reverse
 
 
 # ---------------------------------------------------------------------------

@@ -535,6 +535,18 @@ def make_estimator(
         if estimator_config["estimator"] == "raft_torch":
             if torch is None:
                 raise ValueError("torch required for raft_torch model")
+            # ``torch.load`` needs the checkpoint *file*. A ``wandb://``
+            # URI without a ``/subpath`` resolves to the artifact
+            # directory, which would raise ``IsADirectoryError`` here;
+            # point the user at the subpath grammar instead.
+            if resolved_load_from.is_dir():
+                raise ValueError(
+                    f"raft_torch load_from {load_from!r} resolved to a "
+                    f"directory ({resolved_load_from}); torch checkpoints "
+                    "require a file. Append the in-artifact checkpoint "
+                    "path after an explicit ':alias', e.g. "
+                    "'wandb://entity/project/name:alias/model.pt'."
+                )
             checkpoint = torch.load(resolved_load_from, map_location="cuda")
             model_any = model  # type: Any
             model_any.raft.load_state_dict(

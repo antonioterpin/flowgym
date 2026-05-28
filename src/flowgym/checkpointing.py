@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import goggles as gg
 import orbax.checkpoint as ocp
+from orbax.checkpoint import checkpoint_managers as ocp_cm
 
 from flowgym.make import build_save_args
 
@@ -44,9 +45,11 @@ class CheckpointConfig:
             orbax's per-step ``metrics`` so ``best_step`` survives a
             process restart.
         higher_is_better: When True, larger metric values are better.
-        keep: Maximum number of on-disk checkpoint steps to retain
-            (orbax ``max_to_keep``). The best step is exempt from
-            eviction (orbax preserves it alongside the most recent N).
+        keep: Number of most-recent on-disk checkpoint steps to retain
+            for resume. The best step is preserved on top of these
+            latest N (see ``Checkpointer`` for the orbax retention
+            policy), so resuming from the newest checkpoint always
+            works even when the metric degrades over training.
         artifact_type: W&B artifact type label.
         artifact_name: W&B artifact name; defaults to
             ``f"{model.__class__.__name__}_checkpoint"``.
@@ -112,9 +115,19 @@ class Checkpointer:
 
     Owns **one** ``ocp.CheckpointManager`` for the lifetime of the
     training run, rooted at ``out_dir/checkpoints/``. Best-step
-    tracking is delegated entirely to orbax via ``CheckpointManager
-    Options.best_fn`` — orbax persists per-step ``metrics`` on disk so
+    tracking is delegated to orbax via ``CheckpointManagerOptions
+    .best_fn`` — orbax persists per-step ``metrics`` on disk so
     ``best_step`` survives a process restart without our own sidecar.
+
+    Retention combines two orbax preservation policies so the two
+    consumers never starve each other: ``LatestN(keep)`` keeps the
+    most recent ``keep`` steps for *resume*, and ``BestN(1)`` keeps the
+    single best-by-metric step for the ``best`` W&B alias. Driving
+    ``max_to_keep`` off ``best_fn`` alone (orbax's default when only
+    ``best_fn`` is set) would retain the best-N *by metric* and evict
+    the newest checkpoints whenever validation degrades — silently
+    breaking resume-from-latest — so the explicit composite policy is
+    required.
 
     Saves are async by default; the long-lived manager keeps an orbax
     background thread alive across calls. Callers must invoke
@@ -160,10 +173,29 @@ class Checkpointer:
             except (KeyError, TypeError, ValueError):
                 return float("-inf" if higher_is_better else "inf")
 
+        # Retain the most recent ``keep`` steps (for resume) *and* the
+        # single best step (for the ``best`` alias). ``best_fn`` alone
+        # would make orbax retain the best-N by metric and evict the
+        # newest checkpoints when validation degrades, breaking
+        # resume-from-latest; the explicit composite policy keeps both.
+        # ``reverse`` puts the better metric last so ``BestN`` keeps it:
+        # ascending sort (``reverse=False``) for higher-is-better,
+        # descending (``reverse=True``) for lower-is-better.
+        preservation_policy = ocp_cm.AnyPreservationPolicy(
+            [
+                ocp_cm.LatestN(n=self._cfg.keep),
+                ocp_cm.BestN(
+                    get_metric_fn=_best_fn,
+                    reverse=not higher_is_better,
+                    n=1,
+                    keep_checkpoints_without_metrics=False,
+                ),
+            ]
+        )
         options = ocp.CheckpointManagerOptions(
-            max_to_keep=self._cfg.keep,
             best_fn=_best_fn,
             best_mode="max" if higher_is_better else "min",
+            preservation_policy=preservation_policy,
             create=True,
             enable_async_checkpointing=True,
         )
@@ -233,26 +265,51 @@ class Checkpointer:
 
         Returns:
             The on-disk checkpoint directory path when a save happened,
-            ``None`` when validation was purely observational (no
-            extractable metric, or current mode does not save at
-            validation time).
+            ``None`` when validation was purely observational (current
+            mode does not save at this event, or ``"best"`` mode saw no
+            improvement / no extractable metric).
         """
         metric_value = self._extract_metric(val_metrics)
-        if metric_value is None:
-            return None
-        is_new_best = self._is_better(metric_value)
-        self._last_observed = {self._cfg.metric_key: metric_value}
+        mode = self._cfg.wandb_upload
+        is_new_best = metric_value is not None and self._is_better(metric_value)
+
+        # ``every`` snapshots the latest model after *every* validation,
+        # including one whose metric is missing or non-finite (e.g. a
+        # NaN-out near the end) — that run state is exactly what a
+        # post-mortem wants. ``best`` only acts on a genuine
+        # improvement, so a non-extractable metric is observational
+        # there and never saves.
+        will_save = mode == "every" or (mode == "best" and is_new_best)
+
+        prev_seen_best = self._seen_best
+        prev_has_unsaved_best = self._has_unsaved_best
+        # Attach only *this* event's metric to the save. A non-finite
+        # event saves with no metrics (in ``every`` mode) so it can
+        # never be mistaken for a best checkpoint.
+        current_metrics = (
+            {self._cfg.metric_key: metric_value}
+            if metric_value is not None
+            else None
+        )
+        if current_metrics is not None:
+            self._last_observed = current_metrics
         if is_new_best:
             self._seen_best = metric_value
             self._has_unsaved_best = True
-        mode = self._cfg.wandb_upload
 
-        will_save = mode == "every" or (mode == "best" and is_new_best)
         if not will_save:
             return None
 
-        path = self._save(state, step, self._last_observed)
+        path = self._save(state, step, current_metrics)
         if path is None:
+            # Orbax rejected the write (duplicate / backward step), so
+            # nothing landed on disk. Roll back the best trackers we
+            # advanced above; otherwise ``best_metric`` would report a
+            # value with no backing checkpoint and the stale
+            # ``_has_unsaved_best`` latch could trip a spurious later
+            # ``save_periodic`` write.
+            self._seen_best = prev_seen_best
+            self._has_unsaved_best = prev_has_unsaved_best
             return None
         self._has_unsaved_best = False
         # Orbax may have moved the best step now; re-confirm.

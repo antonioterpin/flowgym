@@ -52,7 +52,7 @@ class _FakeCheckpointer:
     def save_periodic(self, state, step):
         return self._record_save("periodic", step)
 
-    def save_final(self, state, step):
+    def save_final(self, state, step, val_metrics=None):
         return self._record_save("final", step)
 
     def on_validation(self, state, step, val_metrics):
