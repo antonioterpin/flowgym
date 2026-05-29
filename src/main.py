@@ -14,6 +14,7 @@ from synthpix.sampler import (
 
 from compare import comparison
 from eval import eval, eval_full_dataset
+from flowgym.checkpointing import CheckpointConfig
 from flowgym.common.base import NNEstimatorTrainableState
 
 # Training environment
@@ -255,12 +256,16 @@ if __name__ == "__main__":
                 "NNEstimatorTrainableState."
             )
 
+        ckpt_cfg = CheckpointConfig.from_configs(
+            estimator_config, dataset_config
+        )
         try:
             train(
                 estimator=estimator,
                 estimator_config=estimator_config,
                 trainable_state=trainable_state,
                 out_dir=out_dir,
+                checkpoint_config=ckpt_cfg,
                 create_state_fn=create_state_fn,
                 compute_estimate_fn=compute_estimate_fn,
                 env=env,
@@ -333,12 +338,16 @@ if __name__ == "__main__":
                     )
             cache_manager = CacheManager(**caching_config)
 
+        ckpt_cfg = CheckpointConfig.from_configs(
+            estimator_config, dataset_config
+        )
         try:
             train_supervised(
                 estimator=estimator,
                 estimator_config=estimator_config,
                 trainable_state=trainable_state,
                 out_dir=out_dir,
+                checkpoint_config=ckpt_cfg,
                 create_state_fn=create_state_fn,
                 compute_estimate_fn=compute_estimate_fn,
                 sampler=sampler,
