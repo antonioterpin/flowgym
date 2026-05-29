@@ -3,26 +3,34 @@
 import functools
 
 import jax
+import jax.numpy as jnp
+import optax
+import pytest
 
-# x64 must be enabled before any jax array work so the closed-form vs optax
-# comparisons below run in double precision; the imports therefore follow this
-# call and are exempt from E402.
-jax.config.update("jax_enable_x64", True)
-
-import jax.numpy as jnp  # noqa: E402
-import optax  # noqa: E402
-import pytest  # noqa: E402
-
-from flowgym.flow.consensus.objectives import (  # noqa: E402
+from flowgym.flow.consensus.objectives import (
     flows_objective,
     weights_and_anchors,
 )
-from flowgym.flow.consensus.solvers import (  # noqa: E402
+from flowgym.flow.consensus.solvers import (
     closed_form_flows_huber,
     closed_form_flows_l1,
     closed_form_flows_l2,
     optax_solve,
 )
+
+
+@pytest.fixture(autouse=True)
+def _enable_x64():
+    """Run the closed-form vs optax comparisons in double precision.
+
+    The ``jax.enable_x64`` context manager scopes float64 to this
+    module's tests and restores the prior setting on exit. Enabling x64
+    globally (a module-scope ``jax.config.update``) would leak into every
+    subsequently collected test in the session and break those that
+    assume the default float32.
+    """
+    with jax.enable_x64():
+        yield
 
 
 def _make_problem(seed: int = 0):
