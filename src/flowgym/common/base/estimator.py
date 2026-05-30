@@ -500,13 +500,16 @@ class Estimator(abc.ABC):
         """
         self._eval_summary_metrics = dict(summary)
 
-    def validation_score(self, val_metrics: Metrics) -> float:
-        """Score a validation pass for best-checkpoint selection.
+    def checkpoint_metric(self) -> tuple[str, bool]:
+        """Validation metric used to select the best checkpoint.
 
-        Higher is better. Default ranks by ``-mean_error``.
+        Returns the ``(metric_key, higher_is_better)`` pair that
+        ``train_supervised`` feeds into the default ``CheckpointConfig``.
+        Defaults to ranking by lowest ``mean_error``. Override to checkpoint
+        on a different metric (e.g. a classification estimator may prefer a
+        higher F1).
         """
-        mean_error = float(val_metrics.get("mean_error", float("nan")))
-        return -mean_error
+        return ("mean_error", False)
 
     def prepare_experience_for_replay(
         self,

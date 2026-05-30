@@ -19,7 +19,10 @@ from flowgym.common.base import (
     NNEstimatorTrainableState,
 )
 from flowgym.flow.postprocess.data_validation import learned_oracle_threshold
-from flowgym.flow.postprocess.oracle_model import OracleMaskCNN
+from flowgym.flow.postprocess.oracle_model import (
+    OracleMaskCNN,
+    build_oracle_model_input,
+)
 from flowgym.types import (
     CachePayload,
     PRNGKey,
@@ -285,61 +288,20 @@ class LearnedOracleThresholdEstimator(Estimator):
         previous_image: jnp.ndarray | None = None,
         current_image: jnp.ndarray | None = None,
     ) -> jnp.ndarray:
-        """Build model input by appending normalized estimator-index channel."""
-        if flow_field.ndim != 4 or flow_field.shape[-1] != 2:
-            raise ValueError(
-                "Expected flow field shape (B, H, W, 2), got "
-                f"{flow_field.shape}."
-            )
-        b, h, w, _ = flow_field.shape
-        if estimator_indices is None:
-            estimator_indices_f = jnp.zeros((b,), dtype=jnp.float32)
-        else:
-            estimator_indices_arr = jnp.asarray(estimator_indices)
-            if (
-                estimator_indices_arr.ndim != 1
-                or estimator_indices_arr.shape[0] != b
-            ):
-                raise ValueError(
-                    "estimator_indices must have shape (B,), got "
-                    f"{estimator_indices_arr.shape}."
-                )
-            estimator_indices_f = estimator_indices_arr.astype(jnp.float32)
-        norm_denom = jnp.maximum(jnp.max(estimator_indices_f), 1.0)
-        estimator_index_channel = jnp.broadcast_to(
-            (estimator_indices_f / norm_denom)[:, None, None, None],
-            (b, h, w, 1),
+        """Build model input by appending normalized estimator-index channel.
+
+        Training feeds the full index range ``0..K-1`` per batch, so the
+        shared builder's ``estimator_count=None`` path normalizes by
+        ``max(index) == K-1`` — matching the inference postprocess step.
+        """
+        return build_oracle_model_input(
+            flow_for_model=flow_field,
+            estimator_indices=estimator_indices,
+            estimator_count=None,
+            input_channels=5 if self.include_image_pair else 3,
+            previous_image=previous_image,
+            current_image=current_image,
         )
-        channels = [flow_field.astype(jnp.float32), estimator_index_channel]
-        if self.include_image_pair:
-            if previous_image is None or current_image is None:
-                raise ValueError(
-                    "`previous_image` and `current_image` are required when "
-                    "`include_image_pair=True`."
-                )
-            prev = jnp.asarray(previous_image)
-            curr = jnp.asarray(current_image)
-            if prev.ndim == 4 and prev.shape[-1] == 1:
-                prev = jnp.squeeze(prev, axis=-1)
-            if curr.ndim == 4 and curr.shape[-1] == 1:
-                curr = jnp.squeeze(curr, axis=-1)
-            if prev.shape != (b, h, w):
-                raise ValueError(
-                    "previous_image must have shape "
-                    f"(B, H, W)=({b}, {h}, {w}), got {prev.shape}."
-                )
-            if curr.shape != (b, h, w):
-                raise ValueError(
-                    "current_image must have shape "
-                    f"(B, H, W)=({b}, {h}, {w}), got {curr.shape}."
-                )
-            channels.extend(
-                [
-                    prev.astype(jnp.float32)[..., None],
-                    curr.astype(jnp.float32)[..., None],
-                ]
-            )
-        return jnp.concatenate(channels, axis=-1)
 
     def _expand_image_pair_for_flow(
         self,
@@ -597,11 +559,9 @@ class LearnedOracleThresholdEstimator(Estimator):
         )
         return processed
 
-    def validation_score(self, val_metrics: dict[str, Any]) -> float:
-        """Score validation passes by mask F1 when available."""
-        if "mask_f1" in val_metrics:
-            return float(val_metrics["mask_f1"])
-        return super().validation_score(val_metrics)
+    def checkpoint_metric(self) -> tuple[str, bool]:
+        """Select the best checkpoint by mask F1 (higher is better)."""
+        return ("mask_f1", True)
 
     def supports_jit(self) -> bool:
         """Jittable iff all configured sub-estimators are jittable."""

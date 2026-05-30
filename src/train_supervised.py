@@ -106,15 +106,15 @@ def train_supervised(
 
     logger.info("Training step function compiled successfully.")
 
-    # Default the best-checkpoint metric to the estimator-defined
-    # validation_score (higher is better): -mean_error for most estimators,
-    # mask_f1 for the learned oracle. We inject it into val_metrics before
-    # each Checkpointer.on_validation call below. An explicit checkpoint_config
-    # (e.g. from YAML) takes precedence and is honored as-is.
+    # Build the default best-checkpoint policy from the estimator's declared
+    # metric (e.g. mean_error/lower for most estimators, mask_f1/higher for the
+    # learned oracle). An explicit checkpoint_config (e.g. from YAML) takes
+    # precedence and is honored as-is.
+    metric_key, higher_is_better = estimator.checkpoint_metric()
     cfg = checkpoint_config or CheckpointConfig(
         save_only_best=save_only_best,
-        metric_key="validation_score",
-        higher_is_better=True,
+        metric_key=metric_key,
+        higher_is_better=higher_is_better,
     )
 
     # Initialize the replay buffer
@@ -180,7 +180,6 @@ def train_supervised(
 
                 # Build validation message with all scalar metrics
                 mean_error = float(val_metrics.get("mean_error", float("nan")))
-                current_score = float(estimator.validation_score(val_metrics))
                 init_val_msg = (
                     f"Initial validation (before training): "
                     f"mean_error={mean_error:.5f}"
@@ -201,11 +200,8 @@ def train_supervised(
                 logger.info(init_val_msg)
                 # Route the baseline through on_validation so it establishes
                 # the best-metric reference (and uploads when wandb_upload is
-                # enabled). Expose the estimator-defined validation_score so the
-                # default config can rank by it.
-                metrics_for_ckpt = dict(val_metrics)
-                metrics_for_ckpt["validation_score"] = current_score
-                checkpointer.on_validation(trainable_state, 0, metrics_for_ckpt)
+                # enabled).
+                checkpointer.on_validation(trainable_state, 0, val_metrics)
             except Exception as e:
                 logger.error(f"Initial validation failed: {e}")
 
@@ -414,14 +410,8 @@ def train_supervised(
                         elif isinstance(v, np.ndarray) and v.ndim == 0:
                             val_msg += f", {k}={float(v):.5f}"
                     logger.info(val_msg)
-                    # Expose the estimator-defined best-checkpoint score so the
-                    # default config ranks by it (see initial validation above).
-                    metrics_for_ckpt = dict(val_metrics)
-                    metrics_for_ckpt["validation_score"] = float(
-                        estimator.validation_score(val_metrics)
-                    )
                     saved_path = checkpointer.on_validation(
-                        trainable_state, batch_idx, metrics_for_ckpt
+                        trainable_state, batch_idx, val_metrics
                     )
                     if saved_path is not None:
                         logger.info(

@@ -13,7 +13,10 @@ from flowgym.common.base import (
     NNEstimatorTrainableState,
 )
 from flowgym.common.median import median
-from flowgym.flow.postprocess.oracle_model import OracleMaskCNN
+from flowgym.flow.postprocess.oracle_model import (
+    OracleMaskCNN,
+    build_oracle_model_input,
+)
 from flowgym.make import load_model
 from flowgym.utils import DEBUG
 
@@ -113,84 +116,6 @@ def _infer_oracle_input_channels(params: Any) -> int:
             f"{in_channels}."
         )
     return in_channels
-
-
-def _build_oracle_model_input(
-    flow_for_model: jnp.ndarray,
-    estimator_indices: jnp.ndarray | None = None,
-    estimator_count: int | None = None,
-    input_channels: int = 3,
-    previous_image: jnp.ndarray | None = None,
-    current_image: jnp.ndarray | None = None,
-) -> jnp.ndarray:
-    """Build model input for learned oracle (2ch/3ch/5ch variants)."""
-    if flow_for_model.ndim != 4 or flow_for_model.shape[-1] != 2:
-        raise ValueError(
-            "Expected flow input shape (B, H, W, 2), got "
-            f"{flow_for_model.shape}."
-        )
-    if input_channels == 2:
-        return flow_for_model.astype(jnp.float32)
-    if input_channels not in (3, 5):
-        raise ValueError(
-            f"input_channels must be 2, 3, or 5, got {input_channels}."
-        )
-
-    b, h, w, _ = flow_for_model.shape
-    if estimator_indices is None:
-        estimator_indices_f = jnp.zeros((b,), dtype=jnp.float32)
-    else:
-        estimator_indices_arr = jnp.asarray(estimator_indices)
-        if (
-            estimator_indices_arr.ndim != 1
-            or estimator_indices_arr.shape[0] != b
-        ):
-            raise ValueError(
-                "estimator_indices must have shape (B,), got "
-                f"{estimator_indices_arr.shape}."
-            )
-        estimator_indices_f = estimator_indices_arr.astype(jnp.float32)
-    if estimator_count is not None:
-        norm_denom = float(max(estimator_count - 1, 1))
-    else:
-        # For K-flow input the indices span [0..K-1], so max(index) == K-1 and
-        # this matches training. Single-flow callers (constant index) must pass
-        # estimator_count; that case is guarded where the indices are built.
-        norm_denom = jnp.maximum(jnp.max(estimator_indices_f), 1.0)
-    estimator_index_channel = jnp.broadcast_to(
-        (estimator_indices_f / norm_denom)[:, None, None, None],
-        (b, h, w, 1),
-    )
-    channels = [flow_for_model.astype(jnp.float32), estimator_index_channel]
-    if input_channels == 5:
-        if previous_image is None or current_image is None:
-            raise ValueError(
-                "`previous_image` and `current_image` are required when "
-                "input_channels is 5."
-            )
-        prev = jnp.asarray(previous_image)
-        curr = jnp.asarray(current_image)
-        if prev.ndim == 4 and prev.shape[-1] == 1:
-            prev = jnp.squeeze(prev, axis=-1)
-        if curr.ndim == 4 and curr.shape[-1] == 1:
-            curr = jnp.squeeze(curr, axis=-1)
-        if prev.shape != (b, h, w):
-            raise ValueError(
-                "previous_image must have shape "
-                f"(B, H, W)=({b}, {h}, {w}), got {prev.shape}."
-            )
-        if curr.shape != (b, h, w):
-            raise ValueError(
-                "current_image must have shape "
-                f"(B, H, W)=({b}, {h}, {w}), got {curr.shape}."
-            )
-        channels.extend(
-            [
-                prev.astype(jnp.float32)[..., None],
-                curr.astype(jnp.float32)[..., None],
-            ]
-        )
-    return jnp.concatenate(channels, axis=-1)
 
 
 def constant_threshold_filter_validate_params(
@@ -670,7 +595,7 @@ def learned_oracle_threshold(
                 (flow_in.shape[0],), estimator_index, dtype=jnp.float32
             )
         # A single-flow scalar estimator_index is a constant repeated over the
-        # batch, so the max(index) fallback in _build_oracle_model_input would
+        # batch, so the max(index) fallback in build_oracle_model_input would
         # map index i to i/i = 1.0 — out-of-distribution vs training's
         # idx/(K-1). Require an explicit estimator_count in that case. We read
         # the host-side scalar (not the traced flat indices) so the check stays
@@ -714,7 +639,7 @@ def learned_oracle_threshold(
             "Expected flow field shape (B, H, W, 2) or (B, K, H, W, 2), got "
             f"{flow_in.shape}."
         )
-    model_input = _build_oracle_model_input(
+    model_input = build_oracle_model_input(
         flow_for_model=flow_for_model,
         estimator_indices=flat_estimator_indices,
         estimator_count=estimator_count,
