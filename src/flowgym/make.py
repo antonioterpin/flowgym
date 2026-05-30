@@ -1,4 +1,4 @@
-"""Module for compiling, saving, and loading flow field estimators."""
+"""Module for compiling, saving, and loading flow field estimator models."""
 
 from __future__ import annotations
 
@@ -22,7 +22,9 @@ from flax.core import FrozenDict, freeze
 from goggles import get_logger
 from goggles.history.types import History
 
-# Estimators
+# Models
+from flowgym._synthpix_compat import install_restore_state_shim
+from flowgym.checkpoint_source import resolve_checkpoint_source
 from flowgym.common.base import Estimator
 from flowgym.common.base.trainable_state import (
     EstimatorTrainableState,
@@ -38,6 +40,11 @@ from flowgym.types import (
 from flowgym.utils import DEBUG, MissingDependency
 
 logger = get_logger(__name__)
+
+# Patch synthpix's restore_state once at import time: it substitutes a
+# NaN-shape ShapeDtypeStruct placeholder that orbax 0.11+ chokes on.
+# See ``flowgym._synthpix_compat`` for the full rationale.
+install_restore_state_shim()
 
 
 def make_manager(ckpt_dir: Path, keep: int = 3) -> ocp.CheckpointManager:
@@ -60,10 +67,7 @@ def make_manager(ckpt_dir: Path, keep: int = 3) -> ocp.CheckpointManager:
 
 @overload
 def compile_model(
-    model: Estimator,
-    estimates: None,
-    jit: bool = True,
-    history_size: int = 1,
+    model: Estimator, estimates: None, jit: bool = True, history_size: int = 1
 ) -> tuple[
     None,
     CompiledComputeEstimateFn,
@@ -94,7 +98,7 @@ def compile_model(
     """Compile the model for JAX.
 
     Args:
-        model: The flow field model instance.
+        model: The flow field estimator model.
         estimates: Example estimates for shape inference.
         jit: Whether to use JIT compilation.
         history_size: The size of the history for the model.
@@ -135,6 +139,56 @@ def compile_model(
     return create_state_fn, compute_estimate_fn
 
 
+def build_save_args(
+    state: NNEstimatorTrainableState,
+    step: int,
+    model: Estimator | None = None,
+    sampler: Any | None = None,
+) -> ocp.args.Composite:
+    """Build the Composite save args for one checkpoint step.
+
+    Bundles the trainable state, the optimizer config (if recoverable
+    from the model), and any sampler-side checkpoint args into a single
+    Composite so orbax saves the trainer state atomically.
+
+    Args:
+        state: Trainable state to serialize.
+        step: Training step (also recorded inside the state payload).
+        model: Estimator instance, used to extract the optimizer config
+            via ``model.optimizer_config`` / ``model.opt_config`` if
+            present.
+        sampler: Synthpix sampler whose grain state should be
+            checkpointed alongside the model. Pass ``None`` to skip.
+
+    Returns:
+        A Composite ready to hand to ``CheckpointManager.save(args=...)``.
+    """
+    item = {
+        "step": step,
+        "params": state.params,
+        "opt_state": state.opt_state,
+        "extras": state.extras,
+    }
+    save_args: dict[str, ocp.args.CheckpointArgs] = {
+        "state": ocp.args.StandardSave(item)  # pyright: ignore[reportCallIssue]
+    }
+    if model is not None:
+        opt_cfg = getattr(
+            model, "optimizer_config", getattr(model, "opt_config", None)
+        )
+        if opt_cfg is not None:
+            save_args["opt_config"] = ocp.args.JsonSave(opt_cfg)  # pyright: ignore[reportCallIssue]
+    if sampler is not None:
+        try:
+            sampler_args = synthpix.checkpoint_args(sampler)
+            save_args.update(
+                sampler_args.items()  # pyright: ignore[reportAttributeAccessIssue]
+            )
+        except Exception as e:
+            logger.warning(f"Failed to prepare sampler checkpoint args: {e}")
+    return ocp.args.Composite(**save_args)
+
+
 def save_model(
     state: NNEstimatorTrainableState,
     out_dir: str | Path,
@@ -144,9 +198,12 @@ def save_model(
     sampler: Any | None = None,
     keep: int = 3,
 ) -> str:
-    """Save a training checkpoint using Orbax.
+    """Save a single checkpoint via a short-lived ``CheckpointManager``.
 
-    Checkpoint saved to out_dir/checkpoints/<model_name>/<step>.
+    Intended for one-off saves outside the training loop (CLI tooling,
+    tests). Inside a training loop, prefer ``flowgym.checkpointing.
+    Checkpointer`` — it keeps a single long-lived manager across saves,
+    which is ~200ms/save cheaper and unlocks orbax's async pipeline.
 
     Args:
         state: The trainable state to save (PyTree).
@@ -167,7 +224,6 @@ def save_model(
     out_dir = Path(out_dir)
     out_dir = out_dir.resolve()
 
-    # Decide on a step number
     if step is None:
         if hasattr(state, "step"):
             step = int(state.step)
@@ -175,50 +231,15 @@ def save_model(
             raise ValueError("step not provided and state has no 'step' attr")
     step = int(step)
 
-    # Nesting: out_dir/checkpoints/<model_name>/<step>
     parts = [out_dir, "checkpoints"]
     if model_name is not None:
         parts.append(model_name)
-
     ckpt_root = Path(*parts)
     ckpt_root.mkdir(parents=True, exist_ok=True)
 
-    # We use the 'ocp.args' API
-    item = {
-        "step": step,
-        "params": state.params,
-        "opt_state": state.opt_state,
-        "extras": state.extras,
-    }
-
-    # Define the save arguments
-    save_args: dict[str, ocp.args.CheckpointArgs] = {
-        "state": ocp.args.StandardSave(item)  # pyright: ignore[reportCallIssue]
-    }
-
-    # Extract and save optimizer config separately (as it contains strings)
-    if model is not None:
-        opt_cfg = getattr(
-            model,
-            "optimizer_config",
-            getattr(model, "opt_config", None),
-        )
-        if opt_cfg is not None:
-            save_args["opt_config"] = ocp.args.JsonSave(opt_cfg)  # pyright: ignore[reportCallIssue]
-
-    if sampler is not None:
-        try:
-            sampler_args = synthpix.checkpoint_args(sampler)
-            # Flatten Composite args to root level for atomic saving
-            # of (state, sampler, grain) side-by-side.
-            save_args.update(
-                cast(dict[str, ocp.args.CheckpointArgs], sampler_args).items()
-            )
-        except Exception as e:
-            logger.warning(f"Failed to prepare sampler checkpoint args: {e}")
-
+    args = build_save_args(state, step, model=model, sampler=sampler)
     with make_manager(ckpt_root, keep=keep) as mngr:
-        mngr.save(step=step, args=ocp.args.Composite(**save_args))
+        mngr.save(step=step, args=args)
         mngr.wait_until_finished()
 
     return str(ckpt_root / str(step))
@@ -455,17 +476,20 @@ def make_estimator(
         estimator_config: Configuration dictionary for the estimator.
         image_shape: Shape of the input images (B, H, W).
         estimate_shape: Shape of the estimate. Defaults to (B, H, W, 2).
-        load_from: Path to load the trained estimator state.
+        load_from: Path to load the trained model state. May also be a
+            ``wandb://[entity/]project/name[:alias][/subpath]`` URI;
+            the artifact is downloaded and the resolved local path is
+            used. See :mod:`flowgym.checkpoint_source` for the grammar.
         rng: Random number generator key or seed.
 
     Returns:
-        EstimatorTrainableState: The trainable state of the estimator.
-        callable: Function to create the estimator state.
-        callable: Function to compute the estimator estimate.
-        Estimator: The estimator instance.
+        EstimatorTrainableState: The trainable state of the model.
+        callable: Function to create the model state.
+        callable: Function to compute the model estimate.
+        Estimator: The model instance.
 
     Raises:
-        ValueError: If estimator not found or estimator loading fails.
+        ValueError: If estimator not found or model loading fails.
     """
     # Import here to avoid circular dependency
     from flowgym import ALL_ESTIMATORS as ESTIMATORS  # noqa: PLC0415
@@ -475,14 +499,14 @@ def make_estimator(
         raise ValueError(
             f"Estimator {estimator_config['estimator']} not found."
         )
-    estimator_class = ESTIMATORS.get(estimator_config["estimator"])
-    if estimator_class is None:
+    model_class = ESTIMATORS.get(estimator_config["estimator"])
+    if model_class is None:
         raise ValueError(
             f"Estimator {estimator_config['estimator']} not found."
         )
-    elif isinstance(estimator_class, MissingDependency):
-        estimator_class()  # Raises MissingDependency error
-        # Type narrowing: estimator_class is not MissingDependency here
+    elif isinstance(model_class, MissingDependency):
+        model_class()  # Raises MissingDependency error
+        # Type narrowing: model_class is not MissingDependency here
         raise ValueError("Unreachable")  # pragma: no cover
 
     if rng is None:
@@ -490,8 +514,8 @@ def make_estimator(
     elif isinstance(rng, int):
         rng = jax.random.PRNGKey(rng)
 
-    # Create the estimator instance
-    estimator = cast(type[Estimator], estimator_class).from_config(
+    # Create the model instance
+    model = cast(type[Estimator], model_class).from_config(
         estimator_config["config"]
         | {
             "estimate_shape": estimate_shape,
@@ -499,28 +523,47 @@ def make_estimator(
             "rng": rng,
         }
     )
-    logger.info("Estimator created successfully.")
+    logger.info("Model created successfully.")
 
     # Load or create the trainable state
     if load_from:
+        # ``load_from`` may be a plain path or a ``wandb://`` URI; the
+        # resolver downloads the artifact (when applicable) and hands
+        # back a local filesystem path the downstream loaders consume
+        # unchanged.
+        resolved_load_from = resolve_checkpoint_source(load_from)
         if estimator_config["estimator"] == "raft_torch":
             if torch is None:
-                raise ValueError("torch required for raft_torch estimator")
-            checkpoint = torch.load(load_from, map_location="cuda")
-            estimator_any = estimator  # type: Any
-            estimator_any.raft.load_state_dict(
+                raise ValueError("torch required for raft_torch model")
+            # ``torch.load`` needs the checkpoint *file*. A ``wandb://``
+            # URI without a ``/subpath`` resolves to the artifact
+            # directory, which would raise ``IsADirectoryError`` here;
+            # point the user at the subpath grammar instead.
+            if resolved_load_from.is_dir():
+                raise ValueError(
+                    f"raft_torch load_from {load_from!r} resolved to a "
+                    f"directory ({resolved_load_from}); torch checkpoints "
+                    "require a file. Append the in-artifact checkpoint "
+                    "path after an explicit ':alias', e.g. "
+                    "'wandb://entity/project/name:alias/model.pt'."
+                )
+            checkpoint = torch.load(resolved_load_from, map_location="cuda")
+            model_any = model  # type: Any
+            model_any.raft.load_state_dict(
                 checkpoint["model_state_dict"], strict=False
             )
             trained_state = None
         else:
             mode = estimator_config.get("load_mode", "params_only")
-            template_state = estimator.create_trainable_state(
+            template_state = model.create_trainable_state(
                 jnp.zeros(image_shape, dtype=jnp.float32), key=rng
             )
             if isinstance(template_state, NNEstimatorTrainableState):
-                trained_state = load_model(load_from, template_state, mode=mode)
+                trained_state = load_model(
+                    resolved_load_from, template_state, mode=mode
+                )
             else:
-                raise ValueError("Estimator is not a neural network estimator.")
+                raise ValueError("Model is not a neural network estimator.")
         logger.info("Trainable state loaded successfully.")
     # Create a dummy input to initialize the trainable state
     elif image_shape is None:
@@ -530,7 +573,7 @@ def make_estimator(
         trained_state = None
     else:
         sample_images = jnp.zeros(image_shape, dtype=jnp.float32)
-        trained_state = estimator.create_trainable_state(sample_images, key=rng)
+        trained_state = model.create_trainable_state(sample_images, key=rng)
         logger.info("Trainable state created successfully.")
 
     if estimate_shape is None:
@@ -548,7 +591,7 @@ def make_estimator(
     else:
         dummy_estimates = jnp.zeros(estimate_shape, dtype=jnp.float32)
     use_jit = estimator_config["config"].get("jit", False) and not DEBUG
-    if use_jit and not estimator.supports_jit():
+    if use_jit and not model.supports_jit():
         logger.warning(
             "Disabling JIT for estimator "
             f"{estimator_config['estimator']}: "
@@ -557,14 +600,14 @@ def make_estimator(
         use_jit = False
 
     create_state_fn, compute_estimate_fn = compile_model(
-        estimator,
+        model,
         dummy_estimates,
         use_jit,
         history_size=estimator_config["config"].get("history_size", 1),
     )
-    logger.info("Estimator compiled successfully.")
+    logger.info("Model compiled successfully.")
 
-    return trained_state, create_state_fn, compute_estimate_fn, estimator
+    return trained_state, create_state_fn, compute_estimate_fn, model
 
 
 def select_gt(estimate_type: str, batch: SynthpixBatch) -> jnp.ndarray:

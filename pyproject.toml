@@ -46,7 +46,7 @@ exclude = ["tests*", "docs*"]
 # Dependency groups
 [dependency-groups]
 dev = [
-    "synthpix>=0.2.0",
+    "synthpix @ git+https://github.com/antonioterpin/synthpix.git@8cfbd7d",
     "pre-commit==4.0.1",
     "snowballstemmer",
     "pytest==7.4.4",
@@ -62,7 +62,7 @@ dev = [
 ]
 
 synthpix-cuda12 = [
-    "synthpix[cuda12]>=0.2.0",
+    "synthpix[cuda12] @ git+https://github.com/antonioterpin/synthpix.git@8cfbd7d",
 ]
 
 dev-cuda12 = [
