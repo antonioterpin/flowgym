@@ -669,14 +669,18 @@ def learned_oracle_threshold(
             flat_estimator_indices = jnp.full(
                 (flow_in.shape[0],), estimator_index, dtype=jnp.float32
             )
-        # Single-flow indices are a constant repeated over the batch, so the
-        # max(index) fallback in _build_oracle_model_input would map index i to
-        # i/i = 1.0 — out-of-distribution vs training's idx/(K-1). Require an
-        # explicit estimator_count whenever the index channel is non-zero.
+        # A single-flow scalar estimator_index is a constant repeated over the
+        # batch, so the max(index) fallback in _build_oracle_model_input would
+        # map index i to i/i = 1.0 — out-of-distribution vs training's
+        # idx/(K-1). Require an explicit estimator_count in that case. We read
+        # the host-side scalar (not the traced flat indices) so the check stays
+        # valid when this step runs inside a jitted estimator. (The K-flow path,
+        # where estimator_indices spans 0..K-1 and max == K-1, normalizes
+        # correctly without estimator_count.)
         if (
             estimator_count is None
-            and flat_estimator_indices is not None
-            and float(jnp.max(flat_estimator_indices)) > 0.0
+            and estimator_index is not None
+            and float(estimator_index) > 0.0
         ):
             raise ValueError(
                 "estimator_count is required for single-flow input with a "

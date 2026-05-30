@@ -556,8 +556,8 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
                 )
                 self.running_min_relative_error = running_min_relative_error
             if key.endswith("_rejected_percentage"):
-                if isinstance(v, (np.ndarray, jnp.ndarray)):
-                    rejected_values = np.asarray(v).reshape(-1)
+                if isinstance(value, (np.ndarray, jnp.ndarray)):
+                    rejected_values = np.asarray(value).reshape(-1)
                     finite = np.isfinite(rejected_values)
                     if np.any(finite):
                         rejected_sum = getattr(
