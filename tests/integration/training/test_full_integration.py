@@ -398,8 +398,13 @@ def test_train_rl_replay_buffer_used(tmp_path, mock_env):
     def compute_estimate_fn(img, state, ts):
         return state, {"dummy": jnp.array(0.0)}
 
-    # Track ReplayBuffer initialization
-    with patch("train.ReplayBuffer", wraps=ReplayBuffer) as mock_buffer:
+    # Track ReplayBuffer initialization. Stub the Checkpointer: this test
+    # exercises ReplayBuffer wiring, not checkpointing, and the mocked
+    # env/sampler can't be serialized by a real orbax save.
+    with (
+        patch("train.ReplayBuffer", wraps=ReplayBuffer) as mock_buffer,
+        patch("train.Checkpointer", side_effect=_FakeCheckpointer),
+    ):
         train(
             estimator=model,
             estimator_config={"config": {"jit": False}},
@@ -453,8 +458,14 @@ def test_train_rl_replay_buffer_samples(tmp_path, mock_env):
         train_step_calls.append((args, kwargs))
         return original_train_step(*args, **kwargs)
 
-    with patch.object(
-        model, "create_train_step", return_value=tracking_train_step
+    # Stub the Checkpointer: this test exercises replay sampling, not
+    # checkpointing, and the mocked env/sampler can't be serialized by a
+    # real orbax save.
+    with (
+        patch.object(
+            model, "create_train_step", return_value=tracking_train_step
+        ),
+        patch("train.Checkpointer", side_effect=_FakeCheckpointer),
     ):
         train(
             estimator=model,

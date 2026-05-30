@@ -62,6 +62,9 @@ class _FakeManager:
     def latest_step(self):
         return self._steps[-1] if self._steps else None
 
+    def all_steps(self):
+        return list(self._steps)
+
     def wait_until_finished(self):
         self.wait_calls += 1
 
@@ -473,21 +476,41 @@ def test_save_final_falls_back_to_last_observed(tmp_path):
         assert fake.save_args[-1]["metrics"] == {"mean_error": 0.3}
 
 
-def test_orbax_rejects_duplicate_step_returns_none(tmp_path):
-    """A backward ``save`` that reaches orbax reports None and warns.
+def test_orbax_rejects_backward_unsaved_step_returns_none(tmp_path):
+    """A genuinely backward ``save_final`` reports None and warns.
 
-    Uses ``save_final`` for the second call so the in-loop same-step
-    guard on ``save_periodic`` doesn't short-circuit before orbax.
+    A step behind ``latest`` that was never written is not on disk, so
+    it reaches orbax and exercises the duplicate/backward rejection.
     """
     cfg = CheckpointConfig()
     for ckpt, fake, logger_mock in _make(tmp_path, cfg=cfg):
-        assert ckpt.save_periodic(MagicMock(), step=10) is not None
-        # ``save_final`` does not guard same-step so the call reaches
-        # the fake and exercises orbax's duplicate-step rejection.
+        assert ckpt.save_periodic(MagicMock(), step=20) is not None
+        # step 10 < latest 20 and was never saved -> reaches orbax.
         assert ckpt.save_final(MagicMock(), step=10) is None
-        assert len(fake.save_args) == 2
-        assert fake.save_args[1]["ok"] is False
+        assert fake.save_args[-1]["ok"] is False
         logger_mock.warning.assert_called()
+
+
+def test_save_final_reuses_already_persisted_step(tmp_path):
+    """Regression for the Codex P2 on PR #51.
+
+    When training ends on a ``save_every`` boundary that ``save_periodic``
+    just wrote, ``save_final`` must not re-write the step (no duplicate
+    orbax write, no spurious warning) but must still return its path and
+    upload the ``final`` alias so the end-of-run artifact is always
+    tagged, regardless of ``num_episodes`` / ``save_every`` alignment.
+    """
+    cfg = CheckpointConfig(wandb_upload="every")
+    for ckpt, fake, logger_mock in _make(tmp_path, cfg=cfg):
+        assert ckpt.save_periodic(MagicMock(), step=10) is not None
+        n_saves = len(fake.save_args)
+        out = ckpt.save_final(MagicMock(), step=10)
+        assert out is not None
+        # No second orbax write and no duplicate-step warning.
+        assert len(fake.save_args) == n_saves
+        logger_mock.warning.assert_not_called()
+        # The final alias was still uploaded for the existing checkpoint.
+        assert "final" in logger_mock.artifact.call_args.args[0]["aliases"]
 
 
 def test_save_periodic_same_step_after_on_validation_silently_skips(tmp_path):
