@@ -186,6 +186,9 @@ cython_debug/
 
 # Models
 *.pkl
+results/**/checkpoints/
+results/**/checkpoints/**
+**/checkpoints/LearnedOracleThresholdEstimator/
 
 # Shell scripts
 *.sh
@@ -206,3 +209,6 @@ cython_debug/
 # Experiment outputs
 experiments/*/runs/
 experiments/*/_generated/
+
+# Per-run experiment temp configs (regenerated on each run)
+experiments/**/temp_*.yaml

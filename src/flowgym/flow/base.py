@@ -12,7 +12,11 @@ from flowgym.common.base import (
     Estimator,
     EstimatorTrainableState,
 )
-from flowgym.flow.postprocess import apply_postprocessing, validate_params
+from flowgym.flow.postprocess import (
+    apply_postprocessing,
+    is_outlier_rejection_step,
+    validate_params,
+)
 from flowgym.utils import DEBUG
 
 logger = get_logger(__name__)
@@ -109,18 +113,72 @@ class FlowFieldEstimator(Estimator):
                 # If no postprocessing steps are defined, return the flow as is.
                 return flow_field, out_extras, metrics
             valid = jnp.ones_like(flow_field[..., 0], dtype=jnp.bool_)
-            for step in self.postprocessing_steps:
+            combined_rejected_mask: jnp.ndarray | None = None
+            for idx, step in enumerate(self.postprocessing_steps):
+                step_name = step.keywords.get("name", f"step_{idx}")
                 flow_field, valid, state = step(
-                    flow=flow_field, valid=valid, state=state
+                    flow=flow_field,
+                    valid=valid,
+                    state=state,
+                    trainable_state=trainable_state,
+                    previous_image=state["images"][:, -1, ...],
+                    current_image=image,
                 )
+                if valid is not None:
+                    # NOTE: validation steps return a boolean mask where
+                    # True marks valid/inlier pixels, False marks
+                    # rejected/outlier.
+                    outlier_frac = 1.0 - jnp.mean(
+                        valid.astype(jnp.float32), axis=(1, 2)
+                    )
+                    metric_prefix = (
+                        f"postprocess_{step_name}_{idx}_outlier_percentage"
+                    )
+                    metrics[metric_prefix] = outlier_frac * 100.0
+
+                    if is_outlier_rejection_step(step_name):
+                        metrics[
+                            f"postprocess_{step_name}_{idx}_rejected_percentage"
+                        ] = outlier_frac * 100.0
+                        if combined_rejected_mask is None:
+                            combined_rejected_mask = jnp.logical_not(
+                                valid.astype(jnp.bool_)
+                            )
+                        else:
+                            combined_rejected_mask = jnp.logical_or(
+                                combined_rejected_mask,
+                                jnp.logical_not(valid.astype(jnp.bool_)),
+                            )
+
                 if DEBUG:
                     logger.debug(
                         f"Flow field shape after filtering: {flow_field.shape}"
                     )
-                    n_outliers = jnp.mean(jnp.sum(valid, axis=(1, 2)))
-                    logger.debug(
-                        f"Average number of outliers per field: {n_outliers}"
-                    )
+                    if valid is not None:
+                        # ``valid`` is True for inliers, so outliers are its
+                        # complement.
+                        n_outliers = jnp.mean(jnp.sum(~valid, axis=(1, 2)))
+                        outlier_pct = jnp.mean(
+                            (
+                                1.0
+                                - jnp.mean(
+                                    valid.astype(jnp.float32), axis=(1, 2)
+                                )
+                            )
+                            * 100.0
+                        )
+                        logger.debug(
+                            f"Average number of outliers per field: "
+                            f"{n_outliers}"
+                        )
+                        logger.debug(
+                            f"Average outlier percentage after "
+                            f"{step_name}: {outlier_pct:.4f}%"
+                        )
+            if combined_rejected_mask is not None:
+                metrics["postprocess_combined_rejected_mask"] = (
+                    combined_rejected_mask
+                )
             return flow_field, out_extras, metrics
 
         return call

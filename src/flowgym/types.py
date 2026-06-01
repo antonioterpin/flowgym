@@ -15,7 +15,9 @@ from flowgym.common.base.trainable_state import (
 )
 
 PRNGKey: TypeAlias = jnp.ndarray
-ExperimentParams: TypeAlias = dict[str, jnp.ndarray | float | int | bool | str]
+ExperimentParams: TypeAlias = dict[
+    str, jnp.ndarray | float | int | bool | str | dict
+]
 Observation: TypeAlias = tuple[jnp.ndarray, jnp.ndarray]
 
 _ARRAY_FIELD_NAMES = ("epe", "relative_epe", "epe_all", "epe_mask", "estimates")

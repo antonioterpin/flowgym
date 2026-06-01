@@ -6,10 +6,12 @@ import hashlib
 import json
 from enum import Enum
 from functools import partial
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import jax
 import jax.numpy as jnp
+from goggles import get_logger
 from goggles.history.types import History
 
 if TYPE_CHECKING:
@@ -18,6 +20,8 @@ if TYPE_CHECKING:
 from flowgym.common.base.trainable_state import EstimatorTrainableState
 from flowgym.flow.base import FlowFieldEstimator
 from flowgym.flow.dis import process
+
+logger = get_logger(__name__)
 
 
 class PresetType(Enum):
@@ -193,7 +197,71 @@ class DISJAXFlowFieldEstimator(FlowFieldEstimator):
         self.use_spatial_propagation = bool(use_spatial_propagation)
         self.use_temporal_propagation = bool(use_temporal_propagation)
 
+        postprocessing_steps = kwargs.get("postprocessing_steps")
+        if isinstance(postprocessing_steps, list):
+            kwargs["postprocessing_steps"] = (
+                self._prepare_learned_oracle_postprocessing(
+                    postprocessing_steps
+                )
+            )
+
         super().__init__(**kwargs)
+
+    def _prepare_learned_oracle_postprocessing(
+        self,
+        steps: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Preload learned-oracle checkpoints to keep runtime jittable."""
+        from flowgym.flow.postprocess.data_validation import (  # noqa: PLC0415
+            preload_learned_oracle_state,
+        )
+
+        prepared_steps: list[dict[str, Any]] = []
+        for step in steps:
+            if not isinstance(step, dict):
+                prepared_steps.append(step)
+                continue
+            if step.get("name") != "learned_oracle_threshold":
+                prepared_steps.append(step)
+                continue
+            if step.get("oracle_trainable_state") is not None:
+                prepared_steps.append(step)
+                continue
+
+            load_from = step.get("load_from")
+            if not isinstance(load_from, str):
+                prepared_steps.append(step)
+                continue
+
+            checkpoint_path = Path(load_from)
+            if not checkpoint_path.exists():
+                prepared_steps.append(step)
+                continue
+
+            try:
+                oracle_state = preload_learned_oracle_state(
+                    load_from=load_from,
+                    features=step.get("features"),
+                    include_image_pair=bool(
+                        step.get("include_image_pair", False)
+                    ),
+                )
+            except Exception as exc:
+                # Keep original config as fallback (non-jittable runtime load),
+                # but surface why so a genuine load failure isn't silently
+                # downgraded to a slow path.
+                logger.warning(
+                    f"Failed to preload learned-oracle state from {load_from}; "
+                    f"falling back to runtime (non-jittable) load: {exc}"
+                )
+                prepared_steps.append(step)
+                continue
+
+            preloaded_step = dict(step)
+            preloaded_step["oracle_trainable_state"] = oracle_state
+            preloaded_step.pop("load_from", None)
+            prepared_steps.append(preloaded_step)
+        return prepared_steps
 
     def _estimate(
         self,
@@ -283,6 +351,16 @@ class DISJAXFlowFieldEstimator(FlowFieldEstimator):
             "use_temporal_propagation": self.use_temporal_propagation,
             "output_full_res": self.output_full_res,
         }
+
+    def supports_jit(self) -> bool:
+        """Disable JIT only if learned-oracle state is not preloaded."""
+        for step in self.postprocessing_steps:
+            if (
+                step.keywords.get("name") == "learned_oracle_threshold"
+                and step.keywords.get("oracle_trainable_state") is None
+            ):
+                return False
+        return True
 
     def get_cache_id_suffix(
         self,

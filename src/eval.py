@@ -80,27 +80,30 @@ def eval_flow(
 
     t = time.time() - t
 
-    # Post process the metrics
-    metrics = dict(estimator.process_metrics(metrics))
-
     # Extract the flow field from the estimation state
     flow_field = estimation_state["estimates"][:, -1]
+    per_pixel_epe = jnp.linalg.norm(flow_field - flow_field_gt, axis=-1)
 
-    # Log flow estimate and ground truth
     # If metrics already has errors (from cache), use them.
     if "errors" not in metrics:
-        errors = jnp.linalg.norm(flow_field - flow_field_gt, axis=-1)
-        metrics["errors"] = np.array(jnp.mean(errors, axis=(1, 2)))
-        # Also compute relative errors if not present
+        metrics["errors"] = np.array(jnp.mean(per_pixel_epe, axis=(1, 2)))
         if "relative_errors" not in metrics:
             relative_errors = (
-                jnp.linalg.norm(flow_field - flow_field_gt, axis=-1) ** 2
+                per_pixel_epe**2
                 / jnp.maximum(jnp.linalg.norm(flow_field_gt, axis=-1), 0.01)
                 ** 2
             )
             metrics["relative_errors"] = np.array(
                 jnp.mean(relative_errors, axis=(1, 2))
             )
+
+    metrics = dict(
+        estimator.process_metrics(
+            metrics,
+            flow_field=flow_field,
+            flow_field_gt=flow_field_gt,
+        )
+    )
 
     metrics["time"] = t
     return metrics
@@ -598,6 +601,16 @@ def eval_full_dataset(
             logger.info(
                 f"Min Relative EPE over {batches_processed} batches: "
                 f"{min_relative_errors:.5f}"
+            )
+            estimator.record_eval_summary(
+                {
+                    "mean_epe": float(mean_errors),
+                    "max_epe": float(max_errors),
+                    "min_epe": float(min_errors),
+                    "mean_relative_error": float(mean_relative_errors),
+                    "max_relative_error": float(max_relative_errors),
+                    "min_relative_error": float(min_relative_errors),
+                }
             )
         else:
             logger.info(

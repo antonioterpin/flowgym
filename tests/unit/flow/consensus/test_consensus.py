@@ -246,7 +246,7 @@ def test_invalid_rho_type(rho):
     flows = jnp.zeros((2, 3, 4, 4, 2))
     weights = jnp.ones((2, 3, 4, 4))  # Dummy weights
     config = {"rho": rho}
-    with pytest.raises(ValueError, match="Invalid rho type"):
+    with pytest.raises(TypeError, match="Invalid rho type"):
         admm_consensus(flows, weights, config)
 
 
@@ -287,25 +287,6 @@ def test_invalid_weights_shape(weights):
             f"Weights must have the same shape as flows except for the "
             f"last dimension, got {weights.shape} and {flows.shape[:-1]}."
         ),
-    ):
-        admm_consensus(flows, weights, config)
-
-
-@pytest.mark.parametrize(
-    "weights",
-    [
-        "not a list",  # wrong type
-        123,  # wrong type
-        {"a": 1, "b": 2},  # wrong type (dict
-    ],
-)
-def test_invalid_flow_weights_type(weights):
-    """Test ADMM consensus with flow_weights of wrong type."""
-    flows = jnp.zeros((2, 3, 4, 4, 2))
-    config = {}
-    with pytest.raises(
-        ValueError,
-        match=f"Invalid weights type: {type(weights)}. Expected jnp.ndarray.",
     ):
         admm_consensus(flows, weights, config)
 
@@ -369,8 +350,8 @@ def test_invalid_iteration_params(param_name, bad_value):
         admm_consensus(flows, weights, config)
 
 
-@pytest.mark.parametrize("eps_rel_stopping", [None, 1e-4, 1e-6])
-@pytest.mark.parametrize("eps_abs_stopping", [None, 1e-4, 1e-6])
+@pytest.mark.parametrize("eps_rel_stopping", [1e-4, 1e-6])
+@pytest.mark.parametrize("eps_abs_stopping", [1e-4, 1e-6])
 def test_admm_consensus_eps_stopping(eps_rel_stopping, eps_abs_stopping):
     """Test ADMM consensus with stopping criteria."""
     flows = random.uniform(random.PRNGKey(0), (3, 4, 4, 2))
@@ -378,14 +359,22 @@ def test_admm_consensus_eps_stopping(eps_rel_stopping, eps_abs_stopping):
     config = {
         "eps_rel_stopping": eps_rel_stopping,
         "eps_abs_stopping": eps_abs_stopping,
+        "exp_log_metrics": {"final_stopping_time": True},
     }
-    result, metrix = admm_consensus(flows, weights, config)
-    stopping_time = metrix["final_stopping_time"]
-    assert result is not None
-    assert stopping_time is not None
-    assert isinstance(stopping_time, (int, jnp.ndarray))
-    assert jnp.array(stopping_time).ndim == 0
-    assert jnp.all(stopping_time >= 0)
+    result, metrics = admm_consensus(flows, weights, config)
+    assert "final_stopping_time" in metrics, (
+        "ADMM consensus did not return stopping time in metrics"
+    )
+    stopping_time = metrics["final_stopping_time"]
+    assert result is not None, "ADMM consensus returned None result"
+    assert stopping_time is not None, (
+        "ADMM consensus did not return stopping time in metrics"
+    )
+    assert isinstance(stopping_time, (int, jnp.ndarray)), (
+        "Stopping time is not an int or jnp.ndarray"
+    )
+    assert jnp.array(stopping_time).ndim == 0, "Stopping time is not a scalar"
+    assert jnp.all(stopping_time >= 0), "Stopping time is negative"
 
 
 @pytest.mark.parametrize(

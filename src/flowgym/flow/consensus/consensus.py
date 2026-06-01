@@ -3,6 +3,7 @@
 import csv
 import os
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any, cast
 
 import jax
@@ -21,9 +22,9 @@ from flowgym.flow.consensus.consensus_algorithms import (
 from flowgym.flow.consensus.objectives import make_weights
 from flowgym.make import make_estimator
 from flowgym.types import ExperimentParams, PRNGKey
-from flowgym.utils import load_configuration
+from flowgym.utils import append_metrics_to_csv, load_configuration
 
-logger = get_logger(__name__)
+logger = get_logger(__name__, with_metrics=True)
 
 
 class ConsensusFlowEstimator(FlowFieldEstimator):
@@ -67,11 +68,16 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
             rng = jax.random.PRNGKey(rng)
 
         # The estimators should take as input the tuple (image, state)
-        self.estimator_fns = tuple(
-            self._create_estimators(
-                estimators_list_config["estimators"], rng=rng
-            )
+        estimator_fns, inner_estimators_support_jit = self._create_estimators(
+            estimators_list_config["estimators"], rng=rng
         )
+        self.estimator_fns = tuple(estimator_fns)
+        self._inner_estimators_support_jit = inner_estimators_support_jit
+        if not self._inner_estimators_support_jit:
+            logger.warning(
+                "ConsensusFlowEstimator contains non-jittable inner "
+                "estimators; using Python-loop execution for sub-estimators."
+            )
 
         # Check if the number of estimators is valid
         if len(self.estimator_fns) == 0:
@@ -104,7 +110,7 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
 
     def _create_estimators(
         self, configs: list[dict], rng: PRNGKey | None = None
-    ) -> list[Callable]:
+    ) -> tuple[list[Callable], bool]:
         """Create the list of estimators based on the configurations.
 
         Each estimator should specify a name and the required parameters.
@@ -116,20 +122,27 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
             rng: Random number generator key.
 
         Returns:
-            List of estimator callables.
+            List of estimator callables and whether all estimators support JIT.
         """
         estimators: list[Callable] = []
+        supports_jit = True
         for cfg in configs:
             if rng is not None:
                 rng, subkey = jax.random.split(rng)
             else:
                 subkey = None
-            (trainable_state, _, compute_estimate_fn, _) = make_estimator(
+            (
+                trainable_state,
+                _,
+                compute_estimate_fn,
+                estimator_model,
+            ) = make_estimator(
                 estimator_config=cfg,
                 load_from=cfg.get("load_from"),
                 rng=subkey,
             )
             trainable_state = cast(EstimatorTrainableState, trainable_state)
+            supports_jit = supports_jit and estimator_model.supports_jit()
 
             def estimator_fn(
                 input, estimator=compute_estimate_fn, ts=trainable_state
@@ -139,7 +152,68 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
                 return state, metrics
 
             estimators.append(estimator_fn)
-        return estimators
+        return estimators, supports_jit
+
+    def supports_jit(self) -> bool:
+        """Consensus is jittable only if all inner estimators are jittable."""
+        return self._inner_estimators_support_jit
+
+    def _build_weight_mask_from_estimator_metrics(
+        self,
+        metrics_per_estimator: list[dict[str, jnp.ndarray]],
+        flows_shape: tuple[int, ...],
+    ) -> tuple[jnp.ndarray | None, jnp.ndarray | None]:
+        """Build consensus keep/reject masks from estimator outlier metrics.
+
+        The expected estimator metric is ``postprocess_combined_rejected_mask``
+        with shape ``(B, H, W)`` and boolean semantics where True means
+        rejected/outlier.
+
+        Args:
+            metrics_per_estimator: Metrics emitted by each sub-estimator.
+            flows_shape: Shape of the batched flow tensor ``(B, N, H, W, 2)``.
+
+        Returns:
+            Tuple ``(keep_mask, rejected_mask)`` with shape ``(B, N, H, W)``
+            each, or ``(None, None)`` when no rejection mask is available.
+        """
+        if len(flows_shape) != 5:
+            raise ValueError(
+                f"flows_shape must be (B, N, H, W, 2), got {flows_shape}."
+            )
+        B, N, H, W, _ = flows_shape
+        if N != self.num_estimators:
+            raise ValueError(
+                f"Expected {self.num_estimators} estimators, got {N}."
+            )
+
+        rejected_masks: list[jnp.ndarray] = []
+        has_any_rejection_mask = False
+        for idx in range(self.num_estimators):
+            estimator_metrics = metrics_per_estimator[idx]
+            rejected = estimator_metrics.get(
+                "postprocess_combined_rejected_mask"
+            )
+            if rejected is None:
+                rejected_masks.append(jnp.zeros((B, H, W), dtype=jnp.bool_))
+                continue
+
+            rejected = rejected.astype(jnp.bool_)
+            if rejected.shape != (B, H, W):
+                raise ValueError(
+                    "postprocess_combined_rejected_mask must have shape "
+                    f"(B, H, W)=({B}, {H}, {W}), got {rejected.shape} "
+                    f"for estimator {idx}."
+                )
+            has_any_rejection_mask = True
+            rejected_masks.append(rejected)
+
+        if not has_any_rejection_mask:
+            return None, None
+
+        rejected_mask = jnp.stack(rejected_masks, axis=1)  # (B, N, H, W)
+        keep_mask = jnp.logical_not(rejected_mask)
+        return keep_mask, rejected_mask
 
     def _estimate(
         self,
@@ -169,38 +243,64 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
         prev = state["images"][:, -1, ...]
         curr = images
         metrics = {}
+        experiment_params = self.experiment_params.copy()
+        consensus_config = self.consensus_config.copy()
 
         # Check if the state has a history of estimates
         if not self.use_temporal_propagation:
             # Use the last estimate from the history
-            state["estimates"][:, -1, ...] = jnp.zeros_like(
-                state["estimates"][:, -1, ...]
+            state["estimates"] = (
+                state["estimates"]
+                .at[:, -1, ...]
+                .set(jnp.zeros_like(state["estimates"][:, -1, ...]))
             )
 
         # Prepare the input state for estimators
-        input_state = state
-        input_state["keys"] = state["keys"][:, jnp.newaxis, :]
-
-        # Compute the flow fields using all available algorithms
-        def single_estimator(idx: int):
-            """Compute the flow field batch for a single estimator.
-
-            Args:
-                idx: Index of the estimator.
-
-            Returns:
-                state, metrics: The computed flow field for the estimator.
-            """
-            # Select the estimator based on the index
-            new_state, metrics = lax.switch(
-                idx, self.estimator_fns, (curr, input_state)
+        input_state = dict(state)
+        if "keys" in state:
+            # Inner estimators expect keys with shape (B, 1, 2).
+            keys = state["keys"]
+            input_state["keys"] = (
+                keys if keys.ndim == 3 else keys[:, jnp.newaxis, :]
             )
 
-            return new_state, metrics
+        metrics_per_estimator: list[dict[str, jnp.ndarray]]
+        if self._inner_estimators_support_jit:
+            # Compute the flow fields using all available algorithms.
+            def single_estimator(idx: int):
+                """Compute the flow field batch for a single estimator.
 
-        states, metrices = lax.map(
-            single_estimator, jnp.arange(self.num_estimators)
-        )
+                Args:
+                    idx: Index of the estimator.
+
+                Returns:
+                    Tuple of the estimator state and metrics for that estimator.
+                """
+                # Select the estimator based on the index
+                new_state, est_metrics = lax.switch(
+                    idx, self.estimator_fns, (curr, input_state)
+                )
+                return new_state, est_metrics
+
+            states, metrices = lax.map(
+                single_estimator, jnp.arange(self.num_estimators)
+            )
+            metrics_per_estimator = [
+                {k: v[idx] for k, v in metrices.items()}
+                for idx in range(self.num_estimators)
+            ]
+        else:
+            # Non-jittable estimators (e.g., OpenCV baselines) must run in
+            # eager Python to avoid tracing NumPy conversions.
+            state_list = []
+            metrics_per_estimator = []
+            for estimator_fn in self.estimator_fns:
+                new_state, est_metrics = estimator_fn((curr, input_state))
+                state_list.append(new_state)
+                metrics_per_estimator.append(est_metrics)
+            states = jax.tree_util.tree_map(
+                lambda *xs: jnp.stack(xs, axis=0), *state_list
+            )
 
         # Extract the flow fields from the states
         flows = states["estimates"][
@@ -227,19 +327,66 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
         else:
             mask = None
 
-        weights = make_weights(
-            flows, prev, curr, self.consensus_config, mask=mask
+        # Non-oracle rejection mask coming from sub-estimator postprocessing.
+        subestimator_keep_mask, subestimator_rejected_mask = (
+            self._build_weight_mask_from_estimator_metrics(
+                metrics_per_estimator, flows.shape
+            )
         )
+        if subestimator_keep_mask is not None:
+            assert subestimator_rejected_mask is not None
+            rejected_frac = jnp.mean(
+                subestimator_rejected_mask.astype(jnp.float32), axis=(2, 3)
+            )  # (B, N)
+            for idx in range(self.num_estimators):
+                metrics[f"estimator_{idx}_postprocess_rejected_percentage"] = (
+                    rejected_frac[:, idx] * 100.0
+                )
 
-        # Apply the consensus function to combine the flow estimates
+        # Combine all masks into one keep-mask used by weight computation.
+        if mask is not None:
+            oracle_keep_mask = mask > 0
+            if subestimator_keep_mask is not None:
+                mask = jnp.logical_and(oracle_keep_mask, subestimator_keep_mask)
+            else:
+                mask = oracle_keep_mask
+        else:
+            mask = subestimator_keep_mask
+
+        weights = make_weights(
+            flows, prev, curr, consensus_config, mask=mask
+        )  # Shape (B, num_estimators, H, W)
+
+        if len(self.experiment_params) != 0:
+            # Only forward experiment parameters explicitly supported by
+            # consensus algorithms to avoid passing unrelated metadata.
+            forwarded_experiment_keys = {
+                "log_metrics",
+                "log_path",
+                "baseline_performance",
+                "oracle_select_weights",
+            }
+            for key, value in experiment_params.items():
+                if key in forwarded_experiment_keys:
+                    consensus_config["exp_" + key] = value
+
+        # Apply the consensus function to combine the flow estimates.
+        # Use the local consensus_config, which carries the forwarded
+        # experiment parameters (exp_log_metrics, exp_log_path,
+        # exp_baseline_performance, exp_oracle_select_weights); the instance
+        # attribute self.consensus_config does not.
         def map_fn(args):
             flows_i, weights_i = args
-            return self.consensus_fn(flows_i, weights_i, self.consensus_config)
+            return self.consensus_fn(flows_i, weights_i, consensus_config)
 
         new_flow, consensus_metrics = jax.lax.map(map_fn, (flows, weights))
 
-        for idx, met in enumerate(metrices):
+        for idx, met in enumerate(metrics_per_estimator):
             for key, value in met.items():
+                if key == "postprocess_combined_rejected_mask":
+                    # Internal helper for consensus weighting; avoid logging the
+                    # full (B, H, W) mask in global metrics.
+                    continue
                 metrics[f"estimator_{idx}_{key}"] = value
         for key, value in consensus_metrics.items():
             metrics[f"consensus_{key}"] = value
@@ -259,21 +406,31 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
 
         return new_flow, {}, metrics
 
-    def process_metrics(self, metrics: dict) -> Metrics:
-        """Process and format metrics dictionary.
+    def process_metrics(
+        self,
+        metrics: dict,
+        *,
+        flow_field: jnp.ndarray | None = None,
+        flow_field_gt: jnp.ndarray | None = None,
+    ) -> Metrics:
+        """Process and format metrics collected during evaluation.
+
+        Converts raw numpy/jax arrays into numpy arrays and updates running
+        statistics used by this estimator.
 
         Args:
-            metrics: Raw metrics dictionary.
-
-        Note:
-            Assumption: only the last batch has invalid images.
+            metrics: Raw metrics dictionary produced by ``_estimate``.
+            flow_field: Final flow field estimate (unused by this override,
+                kept for signature compatibility).
+            flow_field_gt: Ground-truth flow field (unused by this override).
 
         Returns:
             Processed metrics object.
 
         Raises:
-            ValueError: If batch size cannot be inferred from metrics.
+            ValueError: If the batch size cannot be inferred from the metrics.
         """
+        del flow_field, flow_field_gt
         # Try to extract the batch size B from any array in metrics
         B = None
         for v in metrics.values():
@@ -360,7 +517,142 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
                 running_min_epe = getattr(self, "running_min_epe", 0.0)
                 running_min_epe = min(running_min_epe, jnp.min(filtered_value))
                 self.running_min_epe = running_min_epe
+
+            if key == "relative_error":
+                # Summarize over valid images only, matching the epe block and
+                # the valid-only `total_valid_images` denominator (using the
+                # unfiltered `value` here biases the running mean).
+                processed_metrics["mean_relative_error"] = np.array(
+                    jnp.mean(filtered_value)
+                )
+                processed_metrics[key] = np.array(value)
+
+                # Update running mean relative error
+                running_mean_relative_error = getattr(
+                    self, "running_mean_relative_error", 0.0
+                )
+                running_mean_relative_error = (
+                    running_mean_relative_error
+                    * (self.total_valid_images - filtered_value.shape[0])
+                    + jnp.sum(filtered_value)
+                ) / (self.total_valid_images)
+                self.running_mean_relative_error = running_mean_relative_error
+
+                # Update running max relative error
+                running_max_relative_error = getattr(
+                    self, "running_max_relative_error", 0.0
+                )
+                running_max_relative_error = max(
+                    running_max_relative_error, jnp.max(filtered_value)
+                )
+                self.running_max_relative_error = running_max_relative_error
+
+                # Update running min relative error
+                running_min_relative_error = getattr(
+                    self, "running_min_relative_error", jnp.inf
+                )
+                running_min_relative_error = min(
+                    running_min_relative_error, jnp.min(filtered_value)
+                )
+                self.running_min_relative_error = running_min_relative_error
+            # Only the canonical combined per-estimator key
+            # ``estimator_{i}_postprocess_rejected_percentage`` (set in
+            # ``_estimate``) feeds the per-estimator aggregate. Finer-grained
+            # per-step keys ``estimator_{i}_postprocess_{name}_{j}_
+            # rejected_percentage`` also end in ``_rejected_percentage`` but
+            # must not be blended into the same bucket.
+            if key.endswith("_postprocess_rejected_percentage"):
+                if isinstance(value, (np.ndarray, jnp.ndarray)):
+                    rejected_values = np.asarray(value).reshape(-1)
+                    finite = np.isfinite(rejected_values)
+                    if np.any(finite):
+                        rejected_sum = getattr(
+                            self, "running_rejected_percentage_sum", {}
+                        )
+                        rejected_count = getattr(
+                            self, "running_rejected_percentage_count", {}
+                        )
+                        rejected_sum[key] = rejected_sum.get(key, 0.0) + float(
+                            np.sum(rejected_values[finite])
+                        )
+                        rejected_count[key] = rejected_count.get(key, 0) + int(
+                            np.sum(finite)
+                        )
+                        self.running_rejected_percentage_sum = rejected_sum
+                        self.running_rejected_percentage_count = rejected_count
+            if key in [
+                "consensus_final_primal_residuals",
+                "consensus_final_dual_residuals",
+                "consensus_final_eps_pri",
+                "consensus_final_eps_dual",
+                "consensus_final_stopping_time",
+            ]:
+                processed_metrics[key] = np.array(value)
+
+        log_metrics = self.experiment_params.get("log_metrics", {})
+        csv_metrics = {}
+        if not isinstance(log_metrics, dict):
+            raise TypeError(f"log_metrics must be a dict, got {log_metrics}.")
+        for metric_name, log_metric in log_metrics.items():
+            if log_metric and metric_name in metrics:
+                csv_metrics[metric_name] = metrics[metric_name]
+
+        if len(csv_metrics) > 0:
+            i = getattr(self, "current_batch_index", 0)
+            # Route per-batch residual CSVs next to ``log_path`` if provided,
+            # otherwise fall back to CWD. ``log_path`` is set per-run by the
+            # experiment driver, so this avoids parallel-run collisions on
+            # the shared filename in the working directory.
+            log_path = self.experiment_params.get("log_path", None)
+            if isinstance(log_path, str):
+                residuals_dir = Path(log_path).parent
+                residuals_dir.mkdir(parents=True, exist_ok=True)
+                residuals_filename = str(residuals_dir / "admm_residuals.csv")
+            else:
+                residuals_filename = "admm_residuals.csv"
+            append_metrics_to_csv(
+                csv_metrics, filename=residuals_filename, batch_idx=i
+            )
+
+        # Preserve the eval-level per-batch EPE arrays computed in eval.py.
+        # process_metrics returns a fresh dict, so without this the consensus
+        # estimator would drop "errors"/"relative_errors" and eval_full_dataset
+        # (which gates on `"errors" in metrics`) would never accumulate them.
+        for eval_key in ("errors", "relative_errors"):
+            if eval_key in metrics:
+                processed_metrics[eval_key] = metrics[eval_key]
+
         return processed_metrics
+
+    def _get_estimator_rejected_percentages(self) -> dict[str, float]:
+        """Get mean rejected percentages aggregated per estimator."""
+        rejected_sum = getattr(self, "running_rejected_percentage_sum", {})
+        rejected_count = getattr(self, "running_rejected_percentage_count", {})
+        if not rejected_sum or not rejected_count:
+            return {}
+
+        estimator_values: dict[int, list[float]] = {}
+        for key, total in rejected_sum.items():
+            count = rejected_count.get(key, 0)
+            if count <= 0:
+                continue
+
+            parts = key.split("_", 2)
+            if len(parts) < 3 or parts[0] != "estimator":
+                continue
+
+            try:
+                estimator_idx = int(parts[1])
+            except ValueError:
+                continue
+
+            estimator_values.setdefault(estimator_idx, []).append(total / count)
+
+        return {
+            f"estimator_{idx}_mean_rejected_percentage": float(np.mean(values))
+            for idx, values in sorted(estimator_values.items())
+            if len(values) > 0
+        }
 
     def finalize_metrics(self) -> Metrics:
         """Finalize metrics at the end of evaluation.
@@ -373,12 +665,20 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
             ValueError: If log_path doesn't end with .csv.
         """
         finalized_metrics: dict = {}
+        eval_summary = getattr(self, "_eval_summary_metrics", {})
+        if not isinstance(eval_summary, dict):
+            eval_summary = {}
         if hasattr(self, "running_mean_coverage"):
             finalized_metrics["mean_oracle_mask_coverage"] = np.array(
                 self.running_mean_coverage
             )
         if hasattr(self, "running_mean_epe"):
             finalized_metrics["mean_epe"] = np.array(self.running_mean_epe)
+        elif "mean_epe" in eval_summary:
+            finalized_metrics["mean_epe"] = np.array(eval_summary["mean_epe"])
+        estimator_rejected = self._get_estimator_rejected_percentages()
+        for metric_name, metric_value in estimator_rejected.items():
+            finalized_metrics[metric_name] = np.array(metric_value)
 
         log_path = self.experiment_params.get("log_path", None)
         if not isinstance(log_path, (type(None), str)):
@@ -392,17 +692,166 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
                 )
             # Define the row data (use getattr to avoid AttributeError)
             row_data = {
+                "comparison_profile": self.experiment_params.get(
+                    "comparison_profile", None
+                ),
+                "comparison_tau": self.experiment_params.get(
+                    "comparison_tau", None
+                ),
+                "comparison_checkpoint": self.experiment_params.get(
+                    "comparison_checkpoint", None
+                ),
                 "num_estimators": getattr(self, "num_estimators", None),
                 "epe_limit": self.experiment_params.get("epe_limit", None),
-                "mean_epe": getattr(self, "running_mean_epe", None),
-                "max_epe": getattr(self, "running_max_epe", None),
-                "min_epe": getattr(self, "running_min_epe", None),
+                "mean_epe": getattr(
+                    self,
+                    "running_mean_epe",
+                    eval_summary.get("mean_epe", None),
+                ),
+                "max_epe": getattr(
+                    self,
+                    "running_max_epe",
+                    eval_summary.get("max_epe", None),
+                ),
+                "min_epe": getattr(
+                    self,
+                    "running_min_epe",
+                    eval_summary.get("min_epe", None),
+                ),
                 "mean_coverage": getattr(self, "running_mean_coverage", None),
                 "max_coverage": getattr(self, "running_max_coverage", None),
+                "min_coverage": getattr(self, "running_min_coverage", None),
+                "mean_relative_error": getattr(
+                    self,
+                    "running_mean_relative_error",
+                    eval_summary.get("mean_relative_error", None),
+                ),
+                "max_relative_error": getattr(
+                    self,
+                    "running_max_relative_error",
+                    eval_summary.get("max_relative_error", None),
+                ),
+                "min_relative_error": getattr(
+                    self,
+                    "running_min_relative_error",
+                    eval_summary.get("min_relative_error", None),
+                ),
             }
+            row_data.update(estimator_rejected)
 
-            # Ensure directory exists
-            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            if "baseline_performance" in self.experiment_params:
+                baseline = self.experiment_params["baseline_performance"]
+                if not isinstance(baseline, dict):
+                    raise TypeError(
+                        f"baseline_performance must be a dict, got {baseline}."
+                    )
+
+                baseline_mean = baseline.get("mean_epe", None)
+                row_mean = row_data.get("mean_epe", None)
+                if isinstance(baseline_mean, jnp.ndarray) and (
+                    baseline_mean.ndim in {0, 1}
+                ):
+                    baseline_mean = float(baseline_mean)
+                if isinstance(row_mean, jnp.ndarray) and (
+                    row_mean.ndim in {0, 1}
+                ):
+                    row_mean = float(row_mean)
+                if isinstance(baseline_mean, float) and isinstance(
+                    row_mean, float
+                ):
+                    row_data["relative_mean_epe"] = (
+                        row_mean - baseline_mean
+                    ) / baseline_mean
+
+                baseline_max = baseline.get("max_epe", None)
+                row_max = row_data.get("max_epe", None)
+                if isinstance(baseline_max, jnp.ndarray) and (
+                    baseline_max.ndim in {0, 1}
+                ):
+                    baseline_max = float(baseline_max)
+                if isinstance(row_max, jnp.ndarray) and (
+                    row_max.ndim in {0, 1}
+                ):
+                    row_max = float(row_max)
+                if isinstance(baseline_max, float) and isinstance(
+                    row_max, float
+                ):
+                    row_data["relative_max_epe"] = (
+                        row_max - baseline_max
+                    ) / baseline_max
+
+                baseline_min = baseline.get("min_epe", None)
+                row_min = row_data.get("min_epe", None)
+                if isinstance(baseline_min, jnp.ndarray) and (
+                    baseline_min.ndim in {0, 1}
+                ):
+                    baseline_min = float(baseline_min)
+                if isinstance(row_min, jnp.ndarray) and (
+                    row_min.ndim in {0, 1}
+                ):
+                    row_min = float(row_min)
+                if isinstance(baseline_min, float) and isinstance(
+                    row_min, float
+                ):
+                    row_data["relative_min_epe"] = (
+                        row_min - baseline_min
+                    ) / baseline_min
+
+                baseline_min_rel = baseline.get("min_relative_epe", None)
+                row_min_rel = row_data.get("min_relative_error", None)
+                if isinstance(baseline_min_rel, jnp.ndarray) and (
+                    baseline_min_rel.ndim in {0, 1}
+                ):
+                    baseline_min_rel = float(baseline_min_rel)
+                if isinstance(row_min_rel, jnp.ndarray) and (
+                    row_min_rel.ndim in {0, 1}
+                ):
+                    row_min_rel = float(row_min_rel)
+                if isinstance(baseline_min_rel, float) and isinstance(
+                    row_min_rel, float
+                ):
+                    row_data["relative_min_relative_epe"] = (
+                        row_min_rel - baseline_min_rel
+                    ) / baseline_min_rel
+
+                baseline_mean_rel = baseline.get("mean_relative_epe", None)
+                row_mean_rel = row_data.get("mean_relative_error", None)
+                if isinstance(baseline_mean_rel, jnp.ndarray) and (
+                    baseline_mean_rel.ndim in {0, 1}
+                ):
+                    baseline_mean_rel = float(baseline_mean_rel)
+                if isinstance(row_mean_rel, jnp.ndarray) and (
+                    row_mean_rel.ndim in {0, 1}
+                ):
+                    row_mean_rel = float(row_mean_rel)
+                if isinstance(baseline_mean_rel, float) and isinstance(
+                    row_mean_rel, float
+                ):
+                    row_data["relative_mean_relative_epe"] = (
+                        row_mean_rel - baseline_mean_rel
+                    ) / baseline_mean_rel
+
+                baseline_max_rel = baseline.get("max_relative_epe", None)
+                row_max_rel = row_data.get("max_relative_error", None)
+                if isinstance(baseline_max_rel, jnp.ndarray) and (
+                    baseline_max_rel.ndim in {0, 1}
+                ):
+                    baseline_max_rel = float(baseline_max_rel)
+                if isinstance(row_max_rel, jnp.ndarray) and (
+                    row_max_rel.ndim in {0, 1}
+                ):
+                    row_max_rel = float(row_max_rel)
+                if isinstance(baseline_max_rel, float) and isinstance(
+                    row_max_rel, float
+                ):
+                    row_data["relative_max_relative_epe"] = (
+                        row_max_rel - baseline_max_rel
+                    ) / baseline_max_rel
+
+            # Ensure directory exists (handle top-level files safely)
+            dir_name = os.path.dirname(log_path)
+            assert dir_name, f"Invalid log_path with no directory: {log_path}"
+            os.makedirs(dir_name, exist_ok=True)
 
             # Check if the CSV already exists
             file_exists = os.path.exists(log_path)

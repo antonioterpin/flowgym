@@ -40,7 +40,8 @@ class MockEvalEstimator(Estimator):
     def is_oracle(self):
         return False
 
-    def process_metrics(self, metrics):
+    def process_metrics(self, metrics, *, flow_field=None, flow_field_gt=None):
+        del flow_field, flow_field_gt
         self._processed_metrics.append(metrics)
         return metrics
 

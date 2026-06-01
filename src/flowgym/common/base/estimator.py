@@ -459,15 +459,28 @@ class Estimator(abc.ABC):
         """
         raise NotImplementedError
 
-    def process_metrics(self, metrics: dict[str, jnp.ndarray]) -> Metrics:
+    def process_metrics(
+        self,
+        metrics: dict[str, jnp.ndarray],
+        *,
+        flow_field: jnp.ndarray | None = None,
+        flow_field_gt: jnp.ndarray | None = None,
+    ) -> Metrics:
         """Process metrics after estimation.
 
         Args:
             metrics: The raw metrics from the estimation step.
+            flow_field: Final flow field estimate, shape (B, H, W, 2).
+                Provided by the evaluation loop; ``None`` in training
+                and comparison contexts.
+            flow_field_gt: Ground-truth flow field, shape (B, H, W, 2).
+                Provided by the evaluation loop; ``None`` in training
+                and comparison contexts.
 
         Returns:
             Processed metrics.
         """
+        del flow_field, flow_field_gt
         # Convert JAX arrays to numpy arrays
         return {k: np.asarray(v) for k, v in metrics.items()}
 
@@ -478,6 +491,25 @@ class Estimator(abc.ABC):
             Finalized metrics.
         """
         return {}
+
+    def record_eval_summary(self, summary: dict[str, float]) -> None:
+        """Persist aggregated evaluation summary on the estimator.
+
+        Stored as ``self._eval_summary_metrics`` for ``finalize_metrics``
+        consumers that emit per-run summary rows.
+        """
+        self._eval_summary_metrics = dict(summary)
+
+    def checkpoint_metric(self) -> tuple[str, bool]:
+        """Validation metric used to select the best checkpoint.
+
+        Returns the ``(metric_key, higher_is_better)`` pair that
+        ``train_supervised`` feeds into the default ``CheckpointConfig``.
+        Defaults to ranking by lowest ``mean_error``. Override to checkpoint
+        on a different metric (e.g. a classification estimator may prefer a
+        higher F1).
+        """
+        return ("mean_error", False)
 
     def prepare_experience_for_replay(
         self,
@@ -498,6 +530,27 @@ class Estimator(abc.ABC):
         Returns:
             The prepared experience (may be the same or enriched).
         """
+        return experience
+
+    def prepare_experience_for_training(
+        self,
+        experience: SupervisedExperience,
+        trainable_state: NNEstimatorTrainableState,
+    ) -> SupervisedExperience:
+        """Prepare a supervised experience before a training step.
+
+        This hook runs on the host before invoking the (potentially jitted)
+        train step. Subclasses can override it to compute non-jittable data
+        once per batch and pass it through ``experience.cache_payload``.
+
+        Args:
+            experience: The experience to prepare.
+            trainable_state: Current trainable state of the model.
+
+        Returns:
+            The prepared experience (may be the same or enriched).
+        """
+        del trainable_state
         return experience
 
     def enrich(
@@ -585,6 +638,24 @@ class Estimator(abc.ABC):
             True if the estimator has access to oracle information, else False.
         """
         return self._oracle
+
+    def supports_jit(self) -> bool:
+        """Return whether this estimator can be safely JIT-compiled.
+
+        Estimators implemented with NumPy/OpenCV/PyTorch code paths should
+        override this and return ``False`` so callers can disable JIT and
+        avoid tracing errors.
+        """
+        return True
+
+    def supports_train_step_jit(self) -> bool:
+        """Return whether supervised train step can be safely JIT-compiled.
+
+        Defaults to :meth:`supports_jit`, but subclasses may override this
+        when model forward/eval paths are non-jittable while training can be
+        kept jittable by precomputing host-side data.
+        """
+        return self.supports_jit()
 
     @classmethod
     def get_init_param_names(cls) -> set[str]:

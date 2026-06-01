@@ -1,5 +1,7 @@
 """Postprocessing module for flow estimation."""
 
+from typing import Any
+
 import jax.image as jimg
 import jax.numpy as jnp
 from goggles.history.types import History
@@ -25,9 +27,12 @@ from .data_validation import (
     adaptive_local_filter_validate_params,
     constant_threshold_filter,
     constant_threshold_filter_validate_params,
+    learned_oracle_threshold,
+    learned_oracle_threshold_validate_params,
     universal_median_test,
     universal_median_test_validate_params,
 )
+from .oracle_threshold import LearnedOracleThresholdEstimator
 
 
 def quantize_validate_params(
@@ -66,6 +71,7 @@ def quantize(
     dtype: jnp.dtype = jnp.uint8,
     valid: jnp.ndarray | None = None,
     state: History | None = None,
+    **kwargs: Any,
 ) -> tuple[jnp.ndarray, jnp.ndarray | None, History | None]:
     """Quantize flow values to a specified number of bits.
 
@@ -76,6 +82,8 @@ def quantize(
         dtype: Data type for the quantized output.
         valid: Optional mask of shape (B, H, W) where 1 means valid.
         state: Current state of the estimator.
+        **kwargs: Additional step kwargs forwarded by the postprocess
+            pipeline (e.g. trainable_state, previous_image, current_image).
 
     Returns:
         Quantized flow values.
@@ -116,6 +124,7 @@ def resize_flow(
     target_width: int,
     valid: jnp.ndarray | None = None,
     state: History | None = None,
+    **kwargs: Any,
 ) -> tuple[jnp.ndarray, jnp.ndarray | None, History | None]:
     """Resize flow to a target shape.
 
@@ -125,6 +134,8 @@ def resize_flow(
         target_width: Target width.
         valid: Optional mask of shape (B, H, W) where 1 means valid.
         state: Current state of the estimator.
+        **kwargs: Additional step kwargs forwarded by the postprocess
+            pipeline (e.g. trainable_state, previous_image, current_image).
 
     Returns:
         Resized flow values.
@@ -169,6 +180,7 @@ def temporal_smoothing_ema(
     alpha: float,
     state: History,
     valid: jnp.ndarray | None = None,
+    **kwargs: Any,
 ) -> tuple[jnp.ndarray, jnp.ndarray | None, History | None]:
     """Apply exponential moving average smoothing to the flow.
 
@@ -177,6 +189,8 @@ def temporal_smoothing_ema(
         alpha: Smoothing factor, should be in the range [0, 1].
         state: Current state of the estimator.
         valid: Optional mask of shape (B, H, W) where 1 means valid.
+        **kwargs: Additional step kwargs forwarded by the postprocess
+            pipeline (e.g. trainable_state, previous_image, current_image).
 
     Returns:
         Smoothed flow values.
@@ -239,7 +253,14 @@ def apply_postprocessing(
     return globals()[name](flow, valid=valid, state=state, **kwargs)
 
 
+def is_outlier_rejection_step(name: str) -> bool:
+    """Return whether the named postprocessing step rejects outliers."""
+    fn = globals().get(name)
+    return bool(getattr(fn, "is_outlier_rejection", False))
+
+
 __all__ = [
+    "LearnedOracleThresholdEstimator",
     "adaptive_global_filter",
     "adaptive_global_filter_validate_params",
     "adaptive_local_filter",
@@ -251,8 +272,11 @@ __all__ = [
     "constant_threshold_filter_validate_params",
     "gaussian_smoothing",
     "gaussian_smoothing_validate_params",
+    "is_outlier_rejection_step",
     "laplace_interpolation",
     "laplace_interpolation_validate_params",
+    "learned_oracle_threshold",
+    "learned_oracle_threshold_validate_params",
     "median_smoothing",
     "median_smoothing_validate_params",
     "quantize",

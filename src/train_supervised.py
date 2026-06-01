@@ -96,11 +96,26 @@ def train_supervised(
     )
 
     if estimator_config["config"].get("jit", False) and not DEBUG:
-        train_step_fn = jax.jit(train_step_fn)
+        if estimator.supports_train_step_jit():
+            train_step_fn = jax.jit(train_step_fn)
+        else:
+            logger.warning(
+                "Disabling JIT for supervised train step: "
+                "estimator reports non-jittable train-step execution path."
+            )
 
     logger.info("Training step function compiled successfully.")
 
-    cfg = checkpoint_config or CheckpointConfig(save_only_best=save_only_best)
+    # Build the default best-checkpoint policy from the estimator's declared
+    # metric (e.g. mean_error/lower for most estimators, mask_f1/higher for the
+    # learned oracle). An explicit checkpoint_config (e.g. from YAML) takes
+    # precedence and is honored as-is.
+    metric_key, higher_is_better = estimator.checkpoint_metric()
+    cfg = checkpoint_config or CheckpointConfig(
+        save_only_best=save_only_best,
+        metric_key=metric_key,
+        higher_is_better=higher_is_better,
+    )
 
     # Initialize the replay buffer
     replay_buffer = None
@@ -183,9 +198,9 @@ def train_supervised(
                     elif isinstance(v, np.ndarray) and v.ndim == 0:
                         init_val_msg += f", {k}={float(v):.5f}"
                 logger.info(init_val_msg)
-                # Route the baseline through on_validation so it
-                # establishes the best-metric reference (and uploads
-                # when wandb_upload is enabled).
+                # Route the baseline through on_validation so it establishes
+                # the best-metric reference (and uploads when wandb_upload is
+                # enabled).
                 checkpointer.on_validation(trainable_state, 0, val_metrics)
             except Exception as e:
                 logger.error(f"Initial validation failed: {e}")
@@ -239,6 +254,9 @@ def train_supervised(
                     obs=(images1, images2),
                     ground_truth=ground_truth,
                     cache_payload=cache_payload,
+                )
+                experience = estimator.prepare_experience_for_training(
+                    experience, trainable_state
                 )
                 # Do one training step
                 t = time.time()
@@ -306,6 +324,11 @@ def train_supervised(
                                 prefetch=prefetch_replay_size,
                             )
                             for replay_exp in replay_iter:
+                                replay_exp_prepared = (
+                                    estimator.prepare_experience_for_training(
+                                        replay_exp, trainable_state
+                                    )
+                                )
                                 t_replay = time.time()
                                 (
                                     replay_loss,
@@ -313,7 +336,7 @@ def train_supervised(
                                     _,
                                 ) = train_step_fn(
                                     trainable_state=trainable_state,
-                                    experience=replay_exp,
+                                    experience=replay_exp_prepared,
                                 )
                                 t_replay = time.time() - t_replay
                                 logger.info(

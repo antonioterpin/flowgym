@@ -41,7 +41,9 @@ class FarnebackEstimator(FlowFieldEstimator):
             raise ValueError(f"pyr_scale {pyr_scale} must be in [0, 1].")
         self.pyr_scale = pyr_scale
 
-        if levels < 0:
+        if not isinstance(levels, int):
+            raise TypeError(f"levels {levels} must be a positive integer.")
+        if levels <= 0:
             raise ValueError(f"levels {levels} must be a positive integer.")
         self.levels = levels
 
@@ -64,6 +66,10 @@ class FarnebackEstimator(FlowFieldEstimator):
         self.poly_sigma = poly_sigma
 
         super().__init__(**kwargs)
+
+    def supports_jit(self) -> bool:
+        """Farneback relies on OpenCV/NumPy and cannot run under JAX tracing."""
+        return False
 
     def _estimate(
         self, image: jnp.ndarray, state: History, _, __
