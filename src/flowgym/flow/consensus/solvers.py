@@ -14,11 +14,6 @@ from flowgym.flow.consensus.types import (
     FlowSolver,
     FlowSolverFactory,
 )
-from flowgym.flow.utils import (
-    compute_divergence,
-    compute_laplacian,
-    compute_vector_gradients,
-)
 
 
 def closed_form_flows_l2(
@@ -155,138 +150,6 @@ def closed_form_flows_huber(
     return updated
 
 
-def closed_form_consensus(
-    flows: jnp.ndarray,
-    consensus_flow: jnp.ndarray,
-    consensus_dual: jnp.ndarray,
-    weights_fn: Callable[[], dict[str, float]],
-    rho: float,
-    unused: object,
-) -> jnp.ndarray:
-    """Closed form z-update for the consensus variable.
-
-    Args:
-        flows: Current flow estimates from different agents.
-        consensus_flow: Current consensus flow estimate.
-        consensus_dual: Current dual variable for consensus.
-        weights_fn: Function to get weights for the consensus variable.
-        rho: Parameter associated with the augmented Lagrangian.
-        unused: Placeholder for compatibility.
-
-    Returns:
-        Updated consensus flow estimate as a jax numpy array.
-    """
-    # Average the flows adjusted by the dual variables
-    N = flows.shape[0]
-    H = flows.shape[1]
-    W = flows.shape[2]
-    C = flows.shape[3]
-    assert C == 2, "Flow must have 2 channels (u,v)."
-
-    updated_consensus = jnp.mean(
-        flows + consensus_dual, axis=0
-    )  # shape (H, W, 2)
-
-    # Extract weights from lambdas_fn
-    weights_dics = weights_fn()
-    for key in ["smoothness", "laplacian", "divergence"]:
-        if key not in weights_dics:
-            weights_dics[key] = 0.0
-
-    lambda_s = weights_dics["smoothness"]
-    lambda_acc = weights_dics["laplacian"]
-    lambda_div = weights_dics["divergence"]
-
-    # We treat the consensus flow as a flattened vector z_flat ∈ R^{2 * H * W}
-    #   z_flat = [u.flatten(), v.flatten()]
-    # and build S, A, D as Jacobians of the corresponding linear operators
-    # implemented by your helpers.
-
-    z0_flat = jnp.zeros((2 * H * W,), dtype=updated_consensus.dtype)
-
-    def _to_flow(z_flat: jnp.ndarray) -> jnp.ndarray:
-        """Convert flattened vector to flow shape.
-
-        Args:
-            z_flat: Flattened flow vector of shape (2 * H * W,).
-
-        Returns:
-            Flow array with shape (1, H, W, 2).
-        """
-        return z_flat.reshape(1, H, W, 2)
-
-    # ----- S: smoothness operator (gradients of both channels) -----
-    def s_apply(z_flat: jnp.ndarray) -> jnp.ndarray:
-        """Apply gradient-based smoothness operator.
-
-        Args:
-            z_flat: Flattened flow vector of shape (2 * H * W,).
-
-        Returns:
-            Concatenated gradient vector as a 1-D array.
-        """
-        flow = _to_flow(z_flat)  # (1, H, W, 2)
-
-        # Use vector gradients to be consistent with your divergence helper
-        dfx, dfy = compute_vector_gradients(flow)  # (1, H-2, W-2, 2) each
-
-        # Stack dx and dy for both channels into one long vector
-        out = jnp.concatenate(
-            [dfx.reshape(-1), dfy.reshape(-1)],
-            axis=0,
-        )  # shape (m_s,)
-        return out
-
-    # Jacobian of S_apply at zero: S has shape (m_s, 2 * H * W)
-    S = jax.jacfwd(s_apply)(z0_flat)
-
-    # ----- A: Laplacian operator (acceleration / curvature) -----
-    def a_apply(z_flat: jnp.ndarray) -> jnp.ndarray:
-        """Apply Laplacian operator to a flattened flow vector.
-
-        Args:
-            z_flat: Flattened flow vector of shape (2 * H * W,).
-
-        Returns:
-            Laplacian applied and flattened as a 1-D array.
-        """
-        flow = _to_flow(z_flat)  # (1, H, W, 2)
-        lap = compute_laplacian(flow)  # (1, H-2, W-2, 2)
-        return lap.reshape(-1)  # shape (m_a,)
-
-    A = jax.jacfwd(a_apply)(z0_flat)  # shape (m_a, 2 * H * W)
-
-    # ----- D: divergence operator -----
-    def d_apply(z_flat: jnp.ndarray) -> jnp.ndarray:
-        """Apply divergence operator to a flattened flow vector.
-
-        Args:
-            z_flat: Flattened flow vector of shape (2 * H * W,).
-
-        Returns:
-            Divergence of the flow as a flattened 1-D array.
-        """
-        flow = _to_flow(z_flat)  # (1, H, W, 2)
-        div = compute_divergence(flow)  # (1, H-2, W-2)
-        return div.reshape(-1)  # shape (m_d,)
-
-    D = jax.jacfwd(d_apply)(z0_flat)  # shape (m_d, 2 * H * W)
-
-    # Build Q as a weighted combination
-    Q = 2 * lambda_s * S.T @ S
-    Q += 2 * lambda_acc * A.T @ A
-    Q += 2 * lambda_div * D.T @ D
-
-    # Closed form solution: z = (N * rho * I + Q)^(-1) * (N * rho * x_avg)
-    updated_consensus = jnp.linalg.solve(
-        (N * rho + 1e-8) * jnp.eye(Q.shape[0]) + Q,
-        (N * rho * updated_consensus.flatten()),
-    )  # small epsilon on the diagonal to keep the system non-singular
-    updated_consensus = updated_consensus.reshape(consensus_flow.shape)
-
-    return updated_consensus
-
-
 def optax_solve(
     params: jax.Array,
     objective_fn: Callable[[jax.Array], jax.Array],
@@ -419,8 +282,5 @@ SOLVER_CONSENSUS_FACTORY: dict[str, ConsensusSolverFactory] = {
         functools.partial(
             optax_consensus, optimiser=optax.adam(learning_rate=lr)
         ),
-    ),
-    "closed_form": cast(
-        ConsensusSolverFactory, lambda lr: closed_form_consensus
     ),
 }

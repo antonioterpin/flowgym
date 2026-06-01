@@ -5,6 +5,7 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
+from goggles import get_logger
 from goggles.history.types import History
 from jax import lax
 
@@ -19,6 +20,8 @@ from flowgym.flow.postprocess.oracle_model import (
 )
 from flowgym.make import load_model
 from flowgym.utils import DEBUG
+
+logger = get_logger(__name__)
 
 _DEFAULT_ORACLE_FEATURES = (16, 32)
 _LEARNED_ORACLE_OPTIMIZER_CONFIG = {
@@ -101,7 +104,14 @@ def _infer_oracle_input_channels(params: Any) -> int:
     """
     try:
         conv0_kernel = jnp.asarray(params["Conv_0"]["kernel"])
-    except Exception:
+    except Exception as exc:
+        # Lightweight/custom states (e.g. test stubs) may not expose a
+        # ``Conv_0`` kernel; assume the 3-channel (flow+index) layout. Logged
+        # at debug since this is an expected fallback, not necessarily a fault.
+        logger.debug(
+            "Could not infer oracle input channels from Conv_0/kernel; "
+            f"assuming 3 (flow+index): {exc}"
+        )
         return 3
     if conv0_kernel.ndim != 4:
         raise ValueError(
@@ -648,6 +658,16 @@ def learned_oracle_threshold(
         current_image=flat_curr_image,
     )
 
+    # ``apply_fn`` may follow one of several conventions and we cannot tell
+    # which without calling it, so we try them in order, narrowing only on the
+    # binding-mismatch errors they raise (TypeError/KeyError/AttributeError):
+    #   1. Flax bound module, with kwargs: apply_fn({"params": p}, x, **k)
+    #   2. Flax bound module, no kwargs:   apply_fn({"params": p}, x)
+    #   3. flat params-as-arg, kwargs:     apply_fn(x, p, **k)
+    #   4. flat params-as-arg, no kwargs:  apply_fn(x, p)
+    # The final form is not guarded, so a genuine error there surfaces. Caveat:
+    # a real TypeError/KeyError raised *inside* an earlier matching form is
+    # masked and falls through to the next — keep apply_fn shapes simple here.
     try:
         output = model_trainable_state.apply_fn(
             {"params": model_trainable_state.params}, model_input, **kwargs

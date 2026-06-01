@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 import jax
 import jax.numpy as jnp
+from goggles import get_logger
 from goggles.history.types import History
 
 if TYPE_CHECKING:
@@ -19,6 +20,8 @@ if TYPE_CHECKING:
 from flowgym.common.base.trainable_state import EstimatorTrainableState
 from flowgym.flow.base import FlowFieldEstimator
 from flowgym.flow.dis import process
+
+logger = get_logger(__name__)
 
 
 class PresetType(Enum):
@@ -243,8 +246,14 @@ class DISJAXFlowFieldEstimator(FlowFieldEstimator):
                         step.get("include_image_pair", False)
                     ),
                 )
-            except Exception:
-                # Keep original config as fallback (non-jittable runtime load).
+            except Exception as exc:
+                # Keep original config as fallback (non-jittable runtime load),
+                # but surface why so a genuine load failure isn't silently
+                # downgraded to a slow path.
+                logger.warning(
+                    f"Failed to preload learned-oracle state from {load_from}; "
+                    f"falling back to runtime (non-jittable) load: {exc}"
+                )
                 prepared_steps.append(step)
                 continue
 

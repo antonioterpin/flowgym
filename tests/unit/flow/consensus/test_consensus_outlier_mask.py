@@ -1,6 +1,7 @@
 """Tests for consensus weight masking based on rejected outlier pixels."""
 
 import jax.numpy as jnp
+import numpy as np
 import pytest
 
 from flowgym.flow.consensus.consensus import ConsensusFlowEstimator
@@ -67,3 +68,34 @@ def test_build_weight_mask_raises_on_shape_mismatch():
             metrics_per_estimator,
             (2, 2, 5, 5, 2),
         )
+
+
+def test_estimator_rejected_percentage_excludes_per_step_keys():
+    """Only the combined per-estimator rejection key feeds the aggregate.
+
+    ``process_metrics`` aggregates the canonical
+    ``estimator_{i}_postprocess_rejected_percentage`` key (set in
+    ``_estimate`` from the combined reject mask) and must ignore finer-grained
+    per-step keys ``estimator_{i}_postprocess_{name}_{j}_rejected_percentage``,
+    which also end in ``_rejected_percentage`` but must not be blended into the
+    same per-estimator bucket.
+    """
+    model = _new_consensus_with_n_estimators(1)
+    model.experiment_params = {}
+
+    metrics = {
+        # Combined per-estimator rejection: mean over the batch is 15.0.
+        "estimator_0_postprocess_rejected_percentage": np.array([10.0, 20.0]),
+        # Per-step rejection from an inner validation step: must be ignored
+        # (blending it in would skew the mean toward 52.5).
+        "estimator_0_postprocess_universal_median_test_0_rejected_percentage": (
+            np.array([90.0, 90.0])
+        ),
+    }
+
+    model.process_metrics(dict(metrics))
+    aggregated = model._get_estimator_rejected_percentages()
+
+    assert aggregated == {
+        "estimator_0_mean_rejected_percentage": pytest.approx(15.0)
+    }

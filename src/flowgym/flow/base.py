@@ -154,17 +154,27 @@ class FlowFieldEstimator(Estimator):
                     logger.debug(
                         f"Flow field shape after filtering: {flow_field.shape}"
                     )
-                    n_outliers = jnp.mean(jnp.sum(valid, axis=(1, 2)))
-                    outlier_pct = jnp.mean(
-                        jnp.mean(valid.astype(jnp.float32), axis=(1, 2)) * 100.0
-                    )
-                    logger.debug(
-                        f"Average number of outliers per field: {n_outliers}"
-                    )
-                    logger.debug(
-                        f"Average outlier percentage after "
-                        f"{step_name}: {outlier_pct:.4f}%"
-                    )
+                    if valid is not None:
+                        # ``valid`` is True for inliers, so outliers are its
+                        # complement.
+                        n_outliers = jnp.mean(jnp.sum(~valid, axis=(1, 2)))
+                        outlier_pct = jnp.mean(
+                            (
+                                1.0
+                                - jnp.mean(
+                                    valid.astype(jnp.float32), axis=(1, 2)
+                                )
+                            )
+                            * 100.0
+                        )
+                        logger.debug(
+                            f"Average number of outliers per field: "
+                            f"{n_outliers}"
+                        )
+                        logger.debug(
+                            f"Average outlier percentage after "
+                            f"{step_name}: {outlier_pct:.4f}%"
+                        )
             if combined_rejected_mask is not None:
                 metrics["postprocess_combined_rejected_mask"] = (
                     combined_rejected_mask

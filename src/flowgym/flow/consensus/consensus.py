@@ -555,7 +555,13 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
                     running_min_relative_error, jnp.min(filtered_value)
                 )
                 self.running_min_relative_error = running_min_relative_error
-            if key.endswith("_rejected_percentage"):
+            # Only the canonical combined per-estimator key
+            # ``estimator_{i}_postprocess_rejected_percentage`` (set in
+            # ``_estimate``) feeds the per-estimator aggregate. Finer-grained
+            # per-step keys ``estimator_{i}_postprocess_{name}_{j}_
+            # rejected_percentage`` also end in ``_rejected_percentage`` but
+            # must not be blended into the same bucket.
+            if key.endswith("_postprocess_rejected_percentage"):
                 if isinstance(value, (np.ndarray, jnp.ndarray)):
                     rejected_values = np.asarray(value).reshape(-1)
                     finite = np.isfinite(rejected_values)
