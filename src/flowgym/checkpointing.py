@@ -384,8 +384,9 @@ class Checkpointer:
                 observed validation metrics.
 
         Returns:
-            The on-disk checkpoint path, or ``None`` when orbax rejected
-            the save (duplicate step / backward step).
+            The on-disk checkpoint path (the freshly written step, or an
+            already-persisted one at the same step), or ``None`` when
+            orbax rejected a genuinely backward save.
         """
         metrics: Mapping[str, float] | None
         if val_metrics is not None:
@@ -400,7 +401,17 @@ class Checkpointer:
                 metrics = self._last_observed or None
         else:
             metrics = self._last_observed or None
-        path = self._save(state, step, metrics)
+        # The final step may already be on disk when training ends on a
+        # ``save_every`` boundary that ``save_periodic`` just wrote.
+        # Orbax would reject the duplicate write (``_save`` -> ``None``),
+        # dropping the ``final`` alias upload and emitting a spurious
+        # warning. Reuse the existing checkpoint instead so the final
+        # artifact is always tagged regardless of ``num_episodes`` /
+        # ``save_every`` alignment.
+        if step in self._mngr.all_steps():
+            path: str | None = str(self._ckpt_root / str(step))
+        else:
+            path = self._save(state, step, metrics)
         if path is None:
             return None
         if self._cfg.wandb_upload != "never":
