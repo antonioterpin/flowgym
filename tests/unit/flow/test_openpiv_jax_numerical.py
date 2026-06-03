@@ -239,6 +239,12 @@ def test_replace_outliers_matches_openpiv_isolated():
     mean of the eight neighbouring vectors, so they must agree numerically on
     *both* the u and v channels. This guards against the channel-mixing bug
     where a single ND convolution leaks values between components.
+
+    Parity is limited to isolated *interior* outliers on purpose: the JAX
+    kernel divides by a fixed ``(2 * kernel_size + 1)**2 - 1`` while the
+    reference ``openpiv.lib.replace_nans`` divides by the number of valid,
+    in-bounds neighbours, so outliers at the field border or in clusters
+    (NaN neighbours within an iteration) intentionally diverge.
     """
     rng = np.random.RandomState(1)
     height = width = 12

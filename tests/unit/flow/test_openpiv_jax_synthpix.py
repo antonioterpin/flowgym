@@ -39,7 +39,9 @@ PARAM_GRID = [
 ]
 
 # Per-window agreement tolerance. Dominated by float32 round-off in openpiv's
-# normalize_intensity, amplified by sharp correlation peaks on small windows.
+# normalize_intensity, amplified by sharp correlation peaks on small windows;
+# the worst case is driven by the 16 px windows in PARAM_GRID (the >=24 px
+# configurations agree to ~5e-3 px, see test_standard_window_is_tight).
 MAX_ATOL = 2e-2
 # The bulk of windows agree far more tightly than the worst case.
 MEDIAN_ATOL = 1e-3
