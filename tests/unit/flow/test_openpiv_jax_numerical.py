@@ -8,11 +8,25 @@ implementation it mirrors, so the two stay numerically aligned:
 - ``extended_search_area_piv`` (full pipeline) vs
   ``pyprocess.extended_search_area_piv``
 - ``replace_outliers`` vs ``openpiv.filters.replace_outliers``
+- ``find_all_second_peaks`` vs ``pyprocess.find_all_second_peaks``
+- ``sig2noise_ratio`` vs ``pyprocess.vectorized_sig2noise_ratio``
 
 The per-component tests (FFT correlation, peak finding, normalization,
 sliding windows, coordinate grids) live in ``test_openpiv_jax``; this
-module covers the sub-pixel stage, the end-to-end displacement field, and
-outlier replacement.
+module covers the sub-pixel stage, the end-to-end displacement field,
+outlier replacement, and the signal-to-noise ratio.
+
+Sig2noise parity note: the JAX :func:`sig2noise_ratio` mirrors
+``vectorized_sig2noise_ratio`` with one deliberate divergence. The
+reference computes a validity ``flag`` per window (weak or border first
+peak, and for ``peak2peak`` a weak or border second peak) but never
+applies it — ``peak2peak[flag is True] = 0`` indexes with the Python
+expression ``flag is True`` (always ``False``), which numpy treats as an
+empty boolean mask, so the assignment is a no-op in openpiv 0.25.4. The
+JAX port applies the flag as evidently intended (the loop-based
+``pyprocess.sig2noise_ratio`` does zero out failed windows). Parity is
+therefore pinned in two parts: unflagged windows must match the
+vectorized reference exactly, flagged windows must be zero.
 """
 
 import jax.numpy as jnp
@@ -25,7 +39,9 @@ from flowgym.flow.open_piv.process import (
     extended_search_area_piv,
     fft_correlate_images,
     find_all_first_peaks,
+    find_all_second_peaks,
     get_field_shape,
+    sig2noise_ratio,
     sliding_window_array,
     subpixel_displacement,
 )
@@ -336,3 +352,272 @@ def test_replace_outliers_vmap_over_batch():
     # Valid positions in the other samples are unchanged too.
     valid = ~flags
     np.testing.assert_allclose(out[valid], field[valid], atol=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# find_all_second_peaks / sig2noise_ratio helpers
+# ---------------------------------------------------------------------------
+def _pipeline_correlation(window_size=32, overlap=16, seed=0):
+    """Correlation maps as produced by the JAX PIV pipeline, flattened.
+
+    Returns a ``(n_windows, window_size, window_size)`` float32 array so the
+    same maps can be fed verbatim to both implementations.
+    """
+    frame_a, frame_b = _shifted_pair(96, 96, shift_y=2, shift_x=-3, seed=seed)
+    aa = sliding_window_array(
+        jnp.asarray(frame_a)[None],
+        (window_size, window_size),
+        (overlap, overlap),
+    )
+    bb = sliding_window_array(
+        jnp.asarray(frame_b)[None],
+        (window_size, window_size),
+        (overlap, overlap),
+    )
+    return fft_correlate_images(aa, bb)[0]
+
+
+def _reference_flags(corr, sig2noise_method, width):
+    """Recompute the validity flag the reference intends (but never applies).
+
+    This mirrors the flag construction inside
+    ``pyprocess.vectorized_sig2noise_ratio`` using the reference's own peak
+    finders, so the parity tests can compare flag-free windows exactly and
+    assert zeroing on the flagged ones.
+    """
+    ind1, peaks1 = pyprocess.find_all_first_peaks(corr)
+    p1i, p1j = ind1[:, 1], ind1[:, 2]
+    flag = (
+        (peaks1 < 1e-3)
+        | (p1i == 0)
+        | (p1i == corr.shape[1] - 1)
+        | (p1j == 0)
+        | (p1j == corr.shape[2] - 1)
+    )
+    if sig2noise_method == "peak2peak":
+        ind2, peaks2 = pyprocess.find_all_second_peaks(corr, width=width)
+        p2i, p2j = ind2[:, 1], ind2[:, 2]
+        flag = (
+            flag
+            | (peaks2 < 1e-3)
+            | (p2i == 0)
+            | (p2i == corr.shape[1] - 1)
+            | (p2j == 0)
+            | (p2j == corr.shape[2] - 1)
+        )
+    return np.asarray(flag, dtype=bool)
+
+
+# ---------------------------------------------------------------------------
+# find_all_second_peaks
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("width", [1, 2, 3])
+def test_find_all_second_peaks_matches_reference(width):
+    """Second-peak indices and heights match the reference exactly."""
+    corr = np.asarray(_pipeline_correlation(seed=1))
+
+    ind_ref, peaks_ref = pyprocess.find_all_second_peaks(corr, width=width)
+    p2i, p2j, peaks2 = find_all_second_peaks(jnp.asarray(corr), width=width)
+
+    np.testing.assert_array_equal(np.asarray(p2i), ind_ref[:, 1])
+    np.testing.assert_array_equal(np.asarray(p2j), ind_ref[:, 2])
+    np.testing.assert_allclose(
+        np.asarray(peaks2), np.asarray(peaks_ref), rtol=1e-6
+    )
+
+
+@pytest.mark.parametrize("width", [1, 2])
+def test_find_all_second_peaks_random_maps(width):
+    """Reference parity also holds on unstructured random maps."""
+    rng = np.random.RandomState(7)
+    corr = rng.rand(40, 24, 24).astype(np.float32)
+
+    ind_ref, peaks_ref = pyprocess.find_all_second_peaks(corr, width=width)
+    p2i, p2j, peaks2 = find_all_second_peaks(jnp.asarray(corr), width=width)
+
+    np.testing.assert_array_equal(np.asarray(p2i), ind_ref[:, 1])
+    np.testing.assert_array_equal(np.asarray(p2j), ind_ref[:, 2])
+    np.testing.assert_allclose(
+        np.asarray(peaks2), np.asarray(peaks_ref), rtol=1e-6
+    )
+
+
+def test_find_all_second_peaks_border_peak_box_is_clipped():
+    """A first peak at the map border clips the exclusion box, as in openpiv."""
+    corr = np.full((1, 16, 16), 0.1, dtype=np.float32)
+    corr[0, 0, 0] = 1.0  # first peak in the corner
+    corr[0, 8, 8] = 0.5  # second peak well outside the box
+
+    ind_ref, peaks_ref = pyprocess.find_all_second_peaks(corr, width=2)
+    p2i, p2j, peaks2 = find_all_second_peaks(jnp.asarray(corr), width=2)
+
+    np.testing.assert_array_equal(np.asarray(p2i), ind_ref[:, 1])
+    np.testing.assert_array_equal(np.asarray(p2j), ind_ref[:, 2])
+    np.testing.assert_allclose(np.asarray(peaks2), np.asarray(peaks_ref))
+
+
+# ---------------------------------------------------------------------------
+# sig2noise_ratio
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("sig2noise_method", ["peak2peak", "peak2mean"])
+@pytest.mark.parametrize("width", [1, 2, 3])
+@pytest.mark.parametrize("window_size, overlap", [(32, 16), (16, 8), (64, 32)])
+def test_sig2noise_matches_reference_on_same_corr(
+    sig2noise_method, width, window_size, overlap
+):
+    """JAX s2n equals the vectorized reference on identical correlation maps.
+
+    Both implementations consume the exact same maps, so unflagged windows
+    must agree to float32 round-off; flagged windows must be zero on the JAX
+    side (the reference leaves them untouched due to its no-op flag bug).
+    """
+    corr = np.asarray(
+        _pipeline_correlation(window_size=window_size, overlap=overlap)
+    )
+
+    s2n_ref = pyprocess.vectorized_sig2noise_ratio(
+        corr, sig2noise_method=sig2noise_method, width=width
+    )
+    s2n_jax = np.asarray(
+        sig2noise_ratio(
+            jnp.asarray(corr), sig2noise_method=sig2noise_method, width=width
+        )
+    )
+    flags = _reference_flags(corr, sig2noise_method, width)
+
+    assert s2n_jax.shape == np.asarray(s2n_ref).shape
+    # The test must keep teeth: most windows are healthy on this data.
+    assert (~flags).mean() > 0.5
+    np.testing.assert_allclose(
+        s2n_jax[~flags], np.asarray(s2n_ref)[~flags], rtol=1e-5
+    )
+    np.testing.assert_array_equal(s2n_jax[flags], 0.0)
+
+
+def test_sig2noise_weak_first_peak_is_zeroed():
+    """A near-flat map (peak < 1e-3) yields zero, as both references intend."""
+    corr = np.full((3, 16, 16), 1e-5, dtype=np.float32)
+    corr[:, 8, 8] = 5e-4  # below the 1e-3 signal threshold
+
+    for method in ("peak2peak", "peak2mean"):
+        s2n = np.asarray(
+            sig2noise_ratio(jnp.asarray(corr), sig2noise_method=method)
+        )
+        np.testing.assert_array_equal(s2n, 0.0)
+        # The loop-based reference applies the same rule.
+        s2n_loop = pyprocess.sig2noise_ratio(
+            corr.astype(np.float64), sig2noise_method=method
+        )
+        np.testing.assert_array_equal(np.asarray(s2n_loop), 0.0)
+
+
+def test_sig2noise_border_first_peak_is_zeroed():
+    """A first peak on the map border is flagged and zeroed."""
+    corr = np.full((1, 16, 16), 0.1, dtype=np.float32)
+    corr[0, 0, 5] = 1.0
+
+    for method in ("peak2peak", "peak2mean"):
+        s2n = np.asarray(
+            sig2noise_ratio(jnp.asarray(corr), sig2noise_method=method)
+        )
+        np.testing.assert_array_equal(s2n, 0.0)
+        s2n_loop = pyprocess.sig2noise_ratio(
+            corr.astype(np.float64), sig2noise_method=method
+        )
+        np.testing.assert_array_equal(np.asarray(s2n_loop), 0.0)
+
+
+def test_sig2noise_border_second_peak_is_zeroed():
+    """peak2peak flags a second peak on the border (intended reference rule).
+
+    The vectorized reference builds exactly this flag and then drops it on
+    the floor (``flag is True`` no-op); the JAX port applies it.
+    """
+    corr = np.full((1, 16, 16), 0.1, dtype=np.float32)
+    corr[0, 8, 8] = 1.0  # healthy first peak
+    corr[0, 0, 3] = 0.9  # second peak on the border
+
+    s2n = np.asarray(
+        sig2noise_ratio(jnp.asarray(corr), sig2noise_method="peak2peak")
+    )
+    np.testing.assert_array_equal(s2n, 0.0)
+
+
+# ---------------------------------------------------------------------------
+# extended_search_area_piv with sig2noise
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("sig2noise_method", ["peak2peak", "peak2mean"])
+@pytest.mark.parametrize(
+    "window_size, search_area_size, overlap",
+    [(32, 32, 16), (16, 32, 8)],
+)
+def test_pipeline_sig2noise_matches_reference(
+    sig2noise_method, window_size, search_area_size, overlap
+):
+    """End-to-end s2n matches the openpiv pipeline on unflagged windows."""
+    height = width = 96
+    frame_a, frame_b = _shifted_pair(
+        height, width, shift_y=2, shift_x=3, seed=5
+    )
+
+    _u_ref, _v_ref, s2n_ref = pyprocess.extended_search_area_piv(
+        frame_a.copy(),
+        frame_b.copy(),
+        window_size=window_size,
+        overlap=overlap,
+        search_area_size=search_area_size,
+        correlation_method="circular",
+        subpixel_method="gaussian",
+        sig2noise_method=sig2noise_method,
+        normalized_correlation=True,
+        use_vectorized=True,
+    )
+
+    flow, s2n = extended_search_area_piv(
+        jnp.asarray(frame_a)[None],
+        jnp.asarray(frame_b)[None],
+        window_size=window_size,
+        overlap=overlap,
+        search_area_size=search_area_size,
+        sig2noise_method=sig2noise_method,
+    )
+    s2n = np.asarray(s2n)[0]
+
+    n_rows, n_cols = get_field_shape(
+        (height, width),
+        (search_area_size, search_area_size),
+        (overlap, overlap),
+    )
+    assert flow.shape == (1, n_rows, n_cols, 2)
+    assert s2n.shape == (n_rows, n_cols)
+    assert np.asarray(s2n_ref).shape == (n_rows, n_cols)
+
+    # Recompute the reference's intended flags on its own correlation maps to
+    # exclude windows the reference fails to zero (no-op flag bug).
+    aa = pyprocess.sliding_window_array(
+        frame_a.astype(np.float32),
+        (search_area_size, search_area_size),
+        (overlap, overlap),
+    )
+    bb = pyprocess.sliding_window_array(
+        frame_b.astype(np.float32),
+        (search_area_size, search_area_size),
+        (overlap, overlap),
+    )
+    if search_area_size > window_size:
+        aa = pyprocess.normalize_intensity(aa)
+        bb = pyprocess.normalize_intensity(bb)
+        mask = np.zeros((search_area_size, search_area_size), dtype=aa.dtype)
+        pad = (search_area_size - window_size) // 2
+        mask[pad : search_area_size - pad, pad : search_area_size - pad] = 1
+        aa = aa * np.broadcast_to(mask, aa.shape)
+    corr_ref = pyprocess.fft_correlate_images(aa, bb)
+    flags = _reference_flags(corr_ref, sig2noise_method, width=2).reshape(
+        n_rows, n_cols
+    )
+
+    assert (~flags).mean() > 0.5
+    np.testing.assert_allclose(
+        s2n[~flags], np.asarray(s2n_ref)[~flags], rtol=1e-3
+    )
+    np.testing.assert_array_equal(s2n[flags], 0.0)

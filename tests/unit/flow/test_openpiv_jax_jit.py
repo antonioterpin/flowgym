@@ -23,6 +23,7 @@ from flowgym.flow.open_piv.process import (
     get_field_shape,
     get_rect_coordinates,
     normalize_intensity,
+    sig2noise_ratio,
     sliding_window_array,
     subpixel_displacement,
     upsample_flow,
@@ -212,3 +213,49 @@ def test_extended_search_area_piv_jit_no_recompile(image_pair):
         img1b, img2b, window_size=32, search_area_size=32, overlap=16
     )
     _assert_same(ref, out)
+
+
+@pytest.mark.parametrize("sig2noise_method", ["peak2peak", "peak2mean"])
+def test_sig2noise_ratio_jit(windows, sig2noise_method):
+    """sig2noise_ratio traces under jit and matches its eager output."""
+    corr = fft_correlate_images(windows, windows)
+    jitted = jax.jit(
+        sig2noise_ratio, static_argnames=("sig2noise_method", "width")
+    )
+    _assert_same(
+        sig2noise_ratio(corr, sig2noise_method=sig2noise_method, width=2),
+        jitted(corr, sig2noise_method=sig2noise_method, width=2),
+    )
+
+
+def test_extended_search_area_piv_sig2noise_jit(image_pair):
+    """The pipeline with sig2noise traces with static method and geometry."""
+    img1, img2 = image_pair
+    jitted = jax.jit(
+        extended_search_area_piv,
+        static_argnames=(
+            "window_size",
+            "search_area_size",
+            "overlap",
+            "sig2noise_method",
+            "width",
+        ),
+    )
+    flow_e, s2n_e = extended_search_area_piv(
+        img1,
+        img2,
+        window_size=32,
+        search_area_size=32,
+        overlap=16,
+        sig2noise_method="peak2peak",
+    )
+    flow_c, s2n_c = jitted(
+        img1,
+        img2,
+        window_size=32,
+        search_area_size=32,
+        overlap=16,
+        sig2noise_method="peak2peak",
+    )
+    _assert_same(flow_e, flow_c)
+    _assert_same(s2n_e, s2n_c)
