@@ -1,4 +1,4 @@
-"""Module that implements DeepFlow for use in the Estimator framework."""
+"""Module that implements OpenPIV for use in the Estimator framework."""
 
 from typing import Any, ClassVar
 
@@ -42,8 +42,19 @@ def replace_invalid_single(
             "Kernel channels must match field channels."
         )
 
+    # Convolve every channel independently with its own 2D kernel. Passing the
+    # full (H, W, C) field with a (k, k, C) kernel to a single ND convolution
+    # would convolve across the channel axis as well, leaking values between
+    # the u and v components; vmapping over the trailing axis keeps them
+    # separate so each channel is a pure local mean of its own neighbours.
     def body_fun(_, field):
-        average_neighbors = jax_convolve(field, kernel, mode="same")
+        average_neighbors = vmap(
+            lambda channel, kernel_2d: jax_convolve(
+                channel, kernel_2d, mode="same"
+            ),
+            in_axes=-1,
+            out_axes=-1,
+        )(field, kernel)
         field = jnp.where(flags[..., None], average_neighbors, field)
         return field
 

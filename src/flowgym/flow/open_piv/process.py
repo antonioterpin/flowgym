@@ -70,21 +70,28 @@ def extended_search_area_piv(
             *search_area_size_tuple,
         ), f"Sliding window wrong dimensions: {bb.shape}"
 
-    # Extended search area masking
-    # TODO: do this optionally, only if search_area_size > window_size
-    mask = jnp.zeros(search_area_size_tuple, dtype=aa.dtype)
-    pady = (search_area_size_tuple[0] - window_size_tuple[0]) // 2
-    padx = (search_area_size_tuple[1] - window_size_tuple[1]) // 2
-    mask = mask.at[
-        pady : search_area_size_tuple[0] - pady,
-        padx : search_area_size_tuple[1] - padx,
-    ].set(1)
-    mask = mask[None, None, :, :]
-    aa = aa * mask
-    aa = normalize_intensity(aa)
-    bb = normalize_intensity(bb)
+    # Extended search area masking. This must mirror the reference openpiv
+    # pipeline (pyprocess.extended_search_area_piv) exactly, otherwise the
+    # correlation maps differ and the argmax peak can land on a different
+    # pixel in competitive windows. The reference only normalizes-then-masks
+    # when the search area is strictly larger than the interrogation window,
+    # and normalizes BEFORE masking so the zeroed border does not pollute the
+    # per-window mean/std. fft_correlate_images then normalizes once more, so
+    # the extended-search branch is normalized twice exactly as in openpiv.
+    if search_area_size > window_size:
+        aa = normalize_intensity(aa)
+        bb = normalize_intensity(bb)
+        mask = jnp.zeros(search_area_size_tuple, dtype=aa.dtype)
+        pady = (search_area_size_tuple[0] - window_size_tuple[0]) // 2
+        padx = (search_area_size_tuple[1] - window_size_tuple[1]) // 2
+        mask = mask.at[
+            pady : search_area_size_tuple[0] - pady,
+            padx : search_area_size_tuple[1] - padx,
+        ].set(1)
+        aa = aa * mask[None, None, :, :]
 
-    # Compute correlation
+    # Compute correlation (normalizes the windows internally, matching the
+    # reference's normalized_correlation=True path).
     corr = fft_correlate_images(aa, bb)
 
     # Find peaks and compute displacements
@@ -198,6 +205,7 @@ def subpixel_displacement(
     peaks_i: jnp.ndarray,
     peaks_j: jnp.ndarray,
     mask_width: int = 1,
+    eps: float = 1e-7,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Compute subpixel displacements from correlation maps.
 
@@ -206,6 +214,11 @@ def subpixel_displacement(
         peaks_i: Peak indices in the i direction.
         peaks_j: Peak indices in the j direction.
         mask_width: Width of the mask for invalid peaks.
+        eps: Small constant added to the correlation map before the gaussian
+            fit, matching openpiv's vectorized_correlation_to_displacements.
+            It both prevents log(0) and keeps every stencil value strictly
+            positive, so the gaussian branch is always taken exactly as in
+            the reference (no parabolic fallback on clipped zeros).
 
     Returns:
         Subpixel displacements (disp_vx, disp_vy).
@@ -229,6 +242,11 @@ def subpixel_displacement(
 
     K, H, W = corr.shape
     idx = jnp.arange(K)
+
+    # Match the reference: stabilize the correlation map so the gaussian fit
+    # never sees a non-positive stencil value. argmax is invariant to a
+    # uniform shift, so the supplied peak indices remain valid.
+    corr = corr + eps
 
     # 1) Identify out-of-bounds ("invalid") peaks
     invalid = (
