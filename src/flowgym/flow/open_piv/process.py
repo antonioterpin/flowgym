@@ -1,5 +1,7 @@
 """Module for OpenPIV processing in JAX."""
 
+from typing import overload
+
 import jax
 import jax.numpy as jnp
 from jax import lax
@@ -8,13 +10,39 @@ from flowgym.flow.process import img_resize
 from flowgym.utils import DEBUG
 
 
+@overload
 def extended_search_area_piv(
     img1: jnp.ndarray,
     img2: jnp.ndarray,
     window_size: int,
     search_area_size: int,
     overlap: int,
-) -> jnp.ndarray:
+    sig2noise_method: None = None,
+    width: int = 2,
+) -> jnp.ndarray: ...
+
+
+@overload
+def extended_search_area_piv(
+    img1: jnp.ndarray,
+    img2: jnp.ndarray,
+    window_size: int,
+    search_area_size: int,
+    overlap: int,
+    sig2noise_method: str,
+    width: int = 2,
+) -> tuple[jnp.ndarray, jnp.ndarray]: ...
+
+
+def extended_search_area_piv(
+    img1: jnp.ndarray,
+    img2: jnp.ndarray,
+    window_size: int,
+    search_area_size: int,
+    overlap: int,
+    sig2noise_method: str | None = None,
+    width: int = 2,
+) -> jnp.ndarray | tuple[jnp.ndarray, jnp.ndarray]:
     """Batched PIV cross-correlation algorithm.
 
     JAX implementation of the openpiv extended search area PIV algorithm.
@@ -26,9 +54,17 @@ def extended_search_area_piv(
         window_size: Size of the interrogation window.
         search_area_size: Size of the search area.
         overlap: Overlap between interrogation windows.
+        sig2noise_method: Optional signal-to-noise method ("peak2peak" or
+            "peak2mean"). When set, the per-window signal-to-noise ratio is
+            returned alongside the displacement field, mirroring the third
+            output of the openpiv reference pipeline.
+        width: Half-size of the exclusion box around the first correlation
+            peak; only used when ``sig2noise_method == "peak2peak"``.
 
     Returns:
-        Displacement field of shape (batch_size, n_rows, n_cols, 2).
+        Displacement field of shape (batch_size, n_rows, n_cols, 2). If
+        ``sig2noise_method`` is set, a tuple of the displacement field and
+        the signal-to-noise ratios of shape (batch_size, n_rows, n_cols).
     """
     # Validate inputs
     if DEBUG:
@@ -103,7 +139,12 @@ def extended_search_area_piv(
     disp_vy = disp_vy.reshape(img1.shape[0], n_rows, n_cols)
 
     # final displacement field of shape (batch, n_rows, n_cols, 2)
-    return jnp.stack((disp_vx, disp_vy), axis=-1)
+    flow = jnp.stack((disp_vx, disp_vy), axis=-1)
+
+    if sig2noise_method is not None:
+        s2n = sig2noise_ratio(corr, sig2noise_method, width)
+        return flow, s2n.reshape(img1.shape[0], n_rows, n_cols)
+    return flow
 
 
 def get_field_shape(
@@ -198,6 +239,126 @@ def find_all_first_peaks(corr: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
     peaks_i = ind // corr_width
     peaks_j = ind % corr_width
     return peaks_i, peaks_j
+
+
+def find_all_second_peaks(
+    corr: jnp.ndarray, width: int = 2
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Find the second-highest peak outside a box around the first peak.
+
+    Mirrors ``openpiv.pyprocess.find_all_second_peaks``: a square region of
+    half-size ``width`` centred on the first peak (clipped at the map
+    borders, exactly like the reference's clamped slices) is excluded, and
+    the highest remaining value is the second peak.
+
+    Args:
+        corr: Batched correlation maps (..., height, width).
+        width: Half-size of the exclusion box around the first peak.
+
+    Returns:
+        Tuple ``(peaks_i, peaks_j, peaks_value)`` of the row indices, column
+        indices and heights of the second peaks, each of shape
+        ``corr.shape[:-2]``.
+    """
+    if DEBUG:
+        assert corr.ndim >= 2, (
+            f"Correlation must be (..., height, width), instead {corr.shape}"
+        )
+        assert width > 0, "Width must be positive."
+
+    H, W = corr.shape[-2:]
+    flat = corr.reshape(*corr.shape[:-2], -1)
+    ind1 = jnp.argmax(flat, axis=-1)
+    peaks1_i, peaks1_j = ind1 // W, ind1 % W
+
+    # Exclude the (2 * width + 1)^2 box around the first peak. The reference
+    # clamps the box slices at the map borders, which is exactly what the
+    # |index - peak| <= width mask reproduces.
+    rows = jnp.arange(H)
+    cols = jnp.arange(W)
+    box = (jnp.abs(rows[:, None] - peaks1_i[..., None, None]) <= width) & (
+        jnp.abs(cols[None, :] - peaks1_j[..., None, None]) <= width
+    )
+    masked = jnp.where(box, -jnp.inf, corr)
+
+    flat2 = masked.reshape(*corr.shape[:-2], -1)
+    ind2 = jnp.argmax(flat2, axis=-1)
+    peaks2 = jnp.max(flat2, axis=-1)
+    return ind2 // W, ind2 % W, peaks2
+
+
+def sig2noise_ratio(
+    corr: jnp.ndarray,
+    sig2noise_method: str = "peak2peak",
+    width: int = 2,
+) -> jnp.ndarray:
+    """Compute the signal-to-noise ratio of batched correlation maps.
+
+    JAX port of ``openpiv.pyprocess.vectorized_sig2noise_ratio``. The ratio
+    is the first-peak height over the second-peak height ("peak2peak") or
+    over the absolute mean of the correlation map ("peak2mean"), and is a
+    per-window measure of the matching quality.
+
+    Windows with a weak first peak (< 1e-3), a first peak on the map border
+    and — for "peak2peak" — a weak or border second peak are flagged and
+    their ratio is set to 0. Note that the reference builds this exact flag
+    but never applies it (``flag is True`` indexes with a constant ``False``
+    and selects nothing in openpiv 0.25.4); this port applies it as
+    intended, matching the loop-based ``pyprocess.sig2noise_ratio``
+    semantics on the shared rules.
+
+    Args:
+        corr: Batched correlation maps (..., height, width).
+        sig2noise_method: Either "peak2peak" or "peak2mean".
+        width: Half-size of the exclusion box around the first peak; only
+            used when ``sig2noise_method == "peak2peak"``.
+
+    Returns:
+        Signal-to-noise ratios of shape ``corr.shape[:-2]``, with flagged
+        windows set to 0.
+
+    Raises:
+        ValueError: If ``sig2noise_method`` is not supported.
+    """
+    if sig2noise_method not in ("peak2peak", "peak2mean"):
+        raise ValueError(f"sig2noise_method not supported: {sig2noise_method}")
+    if DEBUG:
+        assert corr.ndim >= 2, (
+            f"Correlation must be (..., height, width), instead {corr.shape}"
+        )
+
+    H, W = corr.shape[-2:]
+    flat = corr.reshape(*corr.shape[:-2], -1)
+    ind1 = jnp.argmax(flat, axis=-1)
+    peaks1_i, peaks1_j = ind1 // W, ind1 % W
+    peaks1 = jnp.max(flat, axis=-1)
+
+    flag = (
+        (peaks1 < 1e-3)
+        | (peaks1_i == 0)
+        | (peaks1_i == H - 1)
+        | (peaks1_j == 0)
+        | (peaks1_j == W - 1)
+    )
+
+    if sig2noise_method == "peak2peak":
+        peaks2_i, peaks2_j, peaks2 = find_all_second_peaks(corr, width)
+        flag = (
+            flag
+            | (peaks2 < 1e-3)
+            | (peaks2_i == 0)
+            | (peaks2_i == H - 1)
+            | (peaks2_j == 0)
+            | (peaks2_j == W - 1)
+        )
+        noise = peaks2
+    else:
+        noise = jnp.abs(jnp.nanmean(corr, axis=(-2, -1)))
+
+    # Reference: np.divide(..., out=zeros, where=noise > 0). The guarded
+    # denominator keeps the division NaN-free under jit.
+    ratio = jnp.where(noise > 0, peaks1 / jnp.where(noise > 0, noise, 1.0), 0.0)
+    return jnp.where(flag, 0.0, ratio)
 
 
 def subpixel_displacement(

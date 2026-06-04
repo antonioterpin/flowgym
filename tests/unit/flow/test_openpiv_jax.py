@@ -11,11 +11,13 @@ import pytest
 from openpiv import pyprocess
 
 from flowgym.flow.open_piv.process import (
+    extended_search_area_piv,
     fft_correlate_images,
     find_all_first_peaks,
     get_field_shape,
     get_rect_coordinates,
     normalize_intensity,
+    sig2noise_ratio,
     sliding_window_array,
     subpixel_displacement,
     upsample_flow,
@@ -303,3 +305,46 @@ def test_find_all_first_peaks(random_images):
 
         np.testing.assert_allclose(pi, peaks_i_gt, rtol=1e-6)
         np.testing.assert_allclose(pj, peaks_j_gt, rtol=1e-6)
+
+
+def test_sig2noise_batched_leading_dims(random_images):
+    """sig2noise_ratio vectorizes over arbitrary leading dimensions."""
+    img1, img2 = random_images
+    aa = sliding_window_array(
+        jnp.asarray(img1, dtype=jnp.float32), (32, 32), (16, 16)
+    )
+    bb = sliding_window_array(
+        jnp.asarray(img2, dtype=jnp.float32), (32, 32), (16, 16)
+    )
+    corr = fft_correlate_images(aa, bb)  # (batch, n_windows, H, W)
+
+    for method in ("peak2peak", "peak2mean"):
+        out = np.asarray(sig2noise_ratio(corr, sig2noise_method=method))
+        flat = np.asarray(
+            sig2noise_ratio(
+                corr.reshape(-1, *corr.shape[-2:]), sig2noise_method=method
+            )
+        )
+        assert out.shape == corr.shape[:-2]
+        np.testing.assert_allclose(out.reshape(-1), flat, rtol=1e-6)
+
+
+def test_sig2noise_invalid_method_raises():
+    """An unknown method raises ValueError, mirroring the reference."""
+    corr = jnp.ones((1, 8, 8))
+    with pytest.raises(ValueError, match="sig2noise_method"):
+        sig2noise_ratio(corr, sig2noise_method="peak2median")
+
+
+def test_extended_search_area_piv_flow_only_return(random_images):
+    """Omitting sig2noise_method preserves the original single-array API."""
+    img1, img2 = random_images
+    flow = extended_search_area_piv(
+        jnp.asarray(img1, dtype=jnp.float32),
+        jnp.asarray(img2, dtype=jnp.float32),
+        window_size=32,
+        overlap=16,
+        search_area_size=32,
+    )
+    assert isinstance(flow, jnp.ndarray)
+    assert flow.shape[-1] == 2
