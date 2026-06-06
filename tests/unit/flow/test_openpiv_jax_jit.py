@@ -24,6 +24,7 @@ from flowgym.flow.open_piv.process import (
     get_rect_coordinates,
     normalize_intensity,
     sig2noise_ratio,
+    sig2noise_val,
     sliding_window_array,
     subpixel_displacement,
     upsample_flow,
@@ -225,6 +226,16 @@ def test_sig2noise_ratio_jit(windows, sig2noise_method):
     _assert_same(
         sig2noise_ratio(corr, sig2noise_method=sig2noise_method, width=2),
         jitted(corr, sig2noise_method=sig2noise_method, width=2),
+    )
+
+
+def test_sig2noise_val_jit(windows):
+    """sig2noise_val traces under jit and matches its eager output."""
+    s2n = sig2noise_ratio(fft_correlate_images(windows, windows))
+    jitted = jax.jit(sig2noise_val, static_argnames="threshold")
+    np.testing.assert_array_equal(
+        np.asarray(sig2noise_val(s2n, threshold=1.0)),
+        np.asarray(jitted(s2n, threshold=1.0)),
     )
 
 

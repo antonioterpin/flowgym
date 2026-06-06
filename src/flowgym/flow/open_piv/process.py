@@ -361,6 +361,27 @@ def sig2noise_ratio(
     return jnp.where(flag, 0.0, ratio)
 
 
+def sig2noise_val(s2n: jnp.ndarray, threshold: float = 1.0) -> jnp.ndarray:
+    """Flag vectors whose signal-to-noise ratio is below a threshold.
+
+    JAX port of ``openpiv.validation.sig2noise_val``: vectors whose
+    signal-to-noise ratio (e.g. from :func:`sig2noise_ratio`) is below
+    ``threshold`` are marked as outliers. This completes the standard
+    signal-to-noise outlier-rejection path.
+
+    NaN entries in ``s2n`` yield ``False`` (not flagged), since ``nan <
+    threshold`` is ``False``, matching the reference.
+
+    Args:
+        s2n: Signal-to-noise ratios of any shape.
+        threshold: Vectors with ``s2n < threshold`` are flagged.
+
+    Returns:
+        Boolean array of the same shape as ``s2n``; ``True`` marks outliers.
+    """
+    return s2n < threshold
+
+
 def subpixel_displacement(
     corr: jnp.ndarray,
     peaks_i: jnp.ndarray,
