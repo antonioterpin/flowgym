@@ -15,16 +15,20 @@ def _as_pair(value: int | tuple[int, int]) -> tuple[int, int]:
 
     Mirrors openpiv's scalar-to-tuple reshaping so square windows can be
     given as a single int while rectangular windows use an explicit pair.
+    A tuple/list is taken as the pair; any other value is treated as a
+    scalar and duplicated, so integer-like scalars such as ``numpy.int32``
+    work too.
 
     Args:
-        value: Either a single int (square) or an (height, width) pair.
+        value: Either an integer-like scalar (square) or a ``(height,
+            width)`` pair.
 
     Returns:
         The value as a ``(height, width)`` tuple of ints.
     """
-    if isinstance(value, int):
-        return (value, value)
-    return (int(value[0]), int(value[1]))
+    if isinstance(value, (tuple, list)):
+        return (int(value[0]), int(value[1]))
+    return (int(value), int(value))
 
 
 @overload

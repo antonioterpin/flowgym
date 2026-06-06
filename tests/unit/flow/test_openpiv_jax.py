@@ -374,6 +374,30 @@ def test_square_int_equals_square_tuple(random_images):
     np.testing.assert_array_equal(flow_int[mask], flow_tuple[mask])
 
 
+def test_numpy_integer_window_sizes(random_images):
+    """numpy-integer window sizes behave like the Python-int form."""
+    img1, img2 = random_images
+    a = jnp.asarray(img1, dtype=jnp.float32)
+    b = jnp.asarray(img2, dtype=jnp.float32)
+    flow_py = np.asarray(
+        extended_search_area_piv(
+            a, b, window_size=32, overlap=16, search_area_size=32
+        )
+    )
+    flow_np = np.asarray(
+        extended_search_area_piv(
+            a,
+            b,
+            window_size=np.int32(32),
+            overlap=np.int64(16),
+            search_area_size=np.int32(32),
+        )
+    )
+    np.testing.assert_array_equal(np.isnan(flow_py), np.isnan(flow_np))
+    mask = ~np.isnan(flow_py)
+    np.testing.assert_array_equal(flow_py[mask], flow_np[mask])
+
+
 def test_correlation_method_default_is_circular(random_images):
     """The default correlation method matches an explicit 'circular' request."""
     img1, img2 = random_images
