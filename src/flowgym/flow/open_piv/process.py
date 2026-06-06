@@ -73,6 +73,14 @@ def extended_search_area_piv(
             :func:`fft_correlate_images`, either ``"circular"`` or
             ``"linear"``.
 
+    Note:
+        ``sig2noise_method``, ``subpixel_method`` and ``correlation_method``
+        are Python strings that select code paths, so under ``jax.jit`` they
+        must be marked static (e.g. ``jax.jit(extended_search_area_piv,
+        static_argnames=("window_size", "search_area_size", "overlap",
+        "sig2noise_method", "subpixel_method", "correlation_method"))``)
+        alongside the window-geometry arguments.
+
     Returns:
         Displacement field of shape (batch_size, n_rows, n_cols, 2). If
         ``sig2noise_method`` is set, a tuple of the displacement field and
@@ -224,7 +232,8 @@ def fft_correlate_images(
     """
     if correlation_method not in ("circular", "linear"):
         raise ValueError(
-            f"correlation method {correlation_method} is not implemented"
+            f"Unknown correlation_method {correlation_method!r}; expected "
+            "one of 'circular', 'linear'."
         )
 
     aa = normalize_intensity(aa)

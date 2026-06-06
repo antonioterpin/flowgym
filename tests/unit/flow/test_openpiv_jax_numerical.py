@@ -302,9 +302,9 @@ def test_fft_correlate_linear_matches_reference(window_size, overlap):
 
 
 def test_fft_correlate_invalid_method_raises():
-    """An unknown correlation method raises ValueError, like the reference."""
+    """An unknown correlation method raises a clear ValueError."""
     win = jnp.ones((2, 16, 16))
-    with pytest.raises(ValueError, match="not implemented"):
+    with pytest.raises(ValueError, match="Unknown correlation_method"):
         fft_correlate_images(win, win, correlation_method="quadratic")
 
 
