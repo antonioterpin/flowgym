@@ -413,7 +413,10 @@ def subpixel_displacement(
         ValueError: If ``subpixel_method`` is not implemented.
     """
     if subpixel_method not in ("gaussian", "parabolic", "centroid"):
-        raise ValueError(f"Method not implemented {subpixel_method}")
+        raise ValueError(
+            f"Unknown subpixel_method {subpixel_method!r}; expected one of "
+            "'gaussian', 'parabolic', 'centroid'."
+        )
     if DEBUG:
         assert corr.ndim == 3, (
             "Correlation must be (batch_size * n_windows, height, width), "

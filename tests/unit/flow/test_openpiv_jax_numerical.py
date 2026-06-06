@@ -129,11 +129,11 @@ def test_subpixel_displacement_matches_vectorized_reference(
 
 
 def test_subpixel_displacement_invalid_method_raises():
-    """An unknown subpixel method raises ValueError, mirroring the reference."""
+    """An unknown subpixel method raises a clear ValueError."""
     corr = jnp.ones((1, 8, 8))
     peaks_i = jnp.array([4])
     peaks_j = jnp.array([4])
-    with pytest.raises(ValueError, match="Method not implemented"):
+    with pytest.raises(ValueError, match="Unknown subpixel_method"):
         subpixel_displacement(corr, peaks_i, peaks_j, subpixel_method="quartic")
 
 
