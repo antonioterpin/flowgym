@@ -365,13 +365,34 @@ def universal_median_test(
     state: History | None = None,
     **kwargs: Any,
 ) -> tuple[jnp.ndarray, jnp.ndarray | None, History | None]:
-    """Universal outlier detection by median test.
+    """Universal outlier detection by the normalized median test.
 
-    See https://link.springer.com/article/10.1007/s00348-005-0016-6
+    Implements the normalized median test of Westerweel & Scarano,
+    "Universal outlier detection for PIV data", Experiments in Fluids 39(6),
+    2005 (https://link.springer.com/article/10.1007/s00348-005-0016-6). For
+    each vector the residual of every component is normalized by the local
+    median residual and the two normalized residuals are combined with the
+    L2 norm exactly as in eq. 2 of the paper:
+
+        r0* = sqrt( r0*_u^2 + r0*_v^2 ) > r_threshold   => outlier
+
+    where r0*_c = |U0_c - median(neighbours_c)| / (median(|U_c - median|) + eps)
+    and the neighbour statistics exclude the centre vector itself.
+
+    Divergences from ``openpiv.validation.local_norm_median_val`` (which
+    cites the same paper) are intentional and worth noting:
+
+    - the comparison median here excludes the centre vector (the classic
+      median-test convention and what the paper specifies), whereas openpiv
+      includes the centre in its ``um``; and
+    - borders are zero-padded (``conv_general_dilated_patches`` with
+      ``padding="SAME"``), whereas openpiv pads with NaN and uses
+      ``nanmedian`` so border windows use fewer real neighbours.
 
     Args:
         flow_field: Input array of shape (B, H, W, 2).
-        r_threshold: Threshold for the ratio of median to mean.
+        r_threshold: Threshold on the L2-combined normalized residual; a
+            vector is an outlier when the combined residual exceeds it.
         epsilon: Small value to avoid division by zero.
         radius: Radius for the local neighborhood
             (patch = (2*radius+1, 2*radius+1)).
@@ -420,9 +441,14 @@ def universal_median_test(
 
     valid = valid if valid is not None else jnp.ones((B, H, W), dtype=bool)
 
+    # Combine the per-component normalized residuals with the L2 norm, as in
+    # eq. 2 of Westerweel & Scarano (2005). A per-component OR would flag
+    # different vectors near the threshold.
+    r0_combined = jnp.sqrt(jnp.sum(jnp.square(r0), axis=-1))
+
     return (
         flow_field,
-        valid & ~jnp.any(r0 > r_threshold, axis=-1),
+        valid & ~(r0_combined > r_threshold),
         state,
     )
 

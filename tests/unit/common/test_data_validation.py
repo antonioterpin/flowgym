@@ -285,7 +285,21 @@ def _naive_median_test(
     r_threshold: float = 2.0,
     epsilon: float = 1e-1,
     radius: int = 1,
+    combine: str = "l2",
 ) -> np.ndarray:
+    """Reference normalized median test, transcribed from the paper.
+
+    Independent per-pixel implementation of eq. 2 of Westerweel & Scarano
+    (2005): the centre is excluded from the neighbour statistics, the
+    per-component normalized residuals ``r0`` are formed, and the vector is
+    flagged when the combined residual exceeds ``r_threshold``.
+
+    ``combine`` selects how the two component residuals are combined:
+    ``"l2"`` (the paper's eq. 2, ``sqrt(r0_u**2 + r0_v**2)``) or ``"or"``
+    (per-component thresholding, the pre-fix behaviour). It exists only so a
+    single reference can express both forms and the discriminating test can
+    pin the implementation to the L2 one.
+    """
     B, H, W, C = flow_field.shape
     wsize = 2 * radius + 1
     mask = np.ones((wsize, wsize), dtype=bool)
@@ -307,7 +321,10 @@ def _naive_median_test(
                 median = np.median(neigh, axis=0)
                 rm = np.median(np.abs(neigh - median), axis=0)
                 r0 = np.abs(patch[radius, radius, :] - median) / (rm + epsilon)
-                outlier[b, y, x] = np.any(r0 > r_threshold)
+                if combine == "l2":
+                    outlier[b, y, x] = np.sqrt(np.sum(r0**2)) > r_threshold
+                else:
+                    outlier[b, y, x] = bool(np.any(r0 > r_threshold))
 
     return outlier
 
@@ -341,6 +358,46 @@ def test_universal_vs_naive(batch, height, width, radius, r_threshold):
 
     # Move JAX result to host memory for comparison
     np.testing.assert_array_equal(np.asarray(actual), expected_valid)
+
+
+def test_universal_median_uses_l2_combination_not_per_component():
+    """The test combines component residuals with the L2 norm (eq. 2).
+
+    Regression guard for the per-component-OR bug: the implementation must
+    match the L2 reference and, on a field where the two combinations
+    disagree, must *not* match the per-component-OR reference. A vector whose
+    u and v normalized residuals each sit just below the threshold but whose
+    L2 combination exceeds it has to be flagged.
+    """
+    # Search for a field where the L2 and OR references genuinely disagree,
+    # so the assertion has teeth rather than passing vacuously.
+    r_threshold, radius = 2.0, 1
+    for seed in range(50):
+        ff = np.asarray(jrandom.normal(jrandom.PRNGKey(seed), (1, 9, 9, 2)))
+        out_l2 = _naive_median_test(
+            ff, r_threshold=r_threshold, radius=radius, combine="l2"
+        )
+        out_or = _naive_median_test(
+            ff, r_threshold=r_threshold, radius=radius, combine="or"
+        )
+        if np.any(out_l2 != out_or):
+            break
+    else:
+        pytest.fail("Could not construct an L2-vs-OR disagreement field.")
+
+    _, valid, _ = universal_median_test(
+        jnp.asarray(ff),
+        r_threshold=r_threshold,
+        radius=radius,
+        valid=None,
+        state=None,
+    )
+    got_outlier = ~np.asarray(valid)
+
+    # Matches the L2 (paper) reference everywhere ...
+    np.testing.assert_array_equal(got_outlier, out_l2)
+    # ... and differs from the per-component-OR behaviour where they diverge.
+    assert np.any(got_outlier != out_or)
 
 
 @pytest.mark.skipif(
