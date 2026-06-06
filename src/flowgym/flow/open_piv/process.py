@@ -10,13 +10,30 @@ from flowgym.flow.process import img_resize
 from flowgym.utils import DEBUG
 
 
+def _as_pair(value: int | tuple[int, int]) -> tuple[int, int]:
+    """Normalize an int or (height, width) pair to a 2-tuple of ints.
+
+    Mirrors openpiv's scalar-to-tuple reshaping so square windows can be
+    given as a single int while rectangular windows use an explicit pair.
+
+    Args:
+        value: Either a single int (square) or an (height, width) pair.
+
+    Returns:
+        The value as a ``(height, width)`` tuple of ints.
+    """
+    if isinstance(value, int):
+        return (value, value)
+    return (int(value[0]), int(value[1]))
+
+
 @overload
 def extended_search_area_piv(
     img1: jnp.ndarray,
     img2: jnp.ndarray,
-    window_size: int,
-    search_area_size: int,
-    overlap: int,
+    window_size: int | tuple[int, int],
+    search_area_size: int | tuple[int, int],
+    overlap: int | tuple[int, int],
     sig2noise_method: None = None,
     width: int = 2,
     subpixel_method: str = "gaussian",
@@ -28,9 +45,9 @@ def extended_search_area_piv(
 def extended_search_area_piv(
     img1: jnp.ndarray,
     img2: jnp.ndarray,
-    window_size: int,
-    search_area_size: int,
-    overlap: int,
+    window_size: int | tuple[int, int],
+    search_area_size: int | tuple[int, int],
+    overlap: int | tuple[int, int],
     sig2noise_method: str,
     width: int = 2,
     subpixel_method: str = "gaussian",
@@ -41,9 +58,9 @@ def extended_search_area_piv(
 def extended_search_area_piv(
     img1: jnp.ndarray,
     img2: jnp.ndarray,
-    window_size: int,
-    search_area_size: int,
-    overlap: int,
+    window_size: int | tuple[int, int],
+    search_area_size: int | tuple[int, int],
+    overlap: int | tuple[int, int],
     sig2noise_method: str | None = None,
     width: int = 2,
     subpixel_method: str = "gaussian",
@@ -86,6 +103,12 @@ def extended_search_area_piv(
         ``sig2noise_method`` is set, a tuple of the displacement field and
         the signal-to-noise ratios of shape (batch_size, n_rows, n_cols).
     """
+    # Accept square (int) or rectangular ((height, width)) windows, mirroring
+    # openpiv's scalar-to-tuple reshaping.
+    window_size_tuple = _as_pair(window_size)
+    overlap_tuple = _as_pair(overlap)
+    search_area_size_tuple = _as_pair(search_area_size)
+
     # Validate inputs
     if DEBUG:
         assert img1.ndim == 3, (
@@ -94,18 +117,14 @@ def extended_search_area_piv(
         assert img2.ndim == 3, (
             f"Image must be (batch_size, height, width), instead {img2.shape}"
         )
-        assert isinstance(window_size, int), "Window size must be an integer"
-        assert isinstance(overlap, int), "Overlap must be an integer"
-        assert isinstance(search_area_size, int)
-        # TODO: allow <=
-        assert search_area_size >= window_size, (
-            "Search area size must be greater than window size"
-        )
-
-    # TODO: extend to handle non-square windows
-    window_size_tuple = (window_size, window_size)
-    overlap_tuple = (overlap, overlap)
-    search_area_size_tuple = (search_area_size, search_area_size)
+        assert (
+            search_area_size_tuple[0] >= window_size_tuple[0]
+            and search_area_size_tuple[1] >= window_size_tuple[1]
+        ), "Search area size must be >= window size on both axes"
+        assert (
+            overlap_tuple[0] < search_area_size_tuple[0]
+            and overlap_tuple[1] < search_area_size_tuple[1]
+        ), "Overlap must be smaller than the search area size on both axes"
 
     # Extract windows
     aa = sliding_window_array(img1, search_area_size_tuple, overlap_tuple)
@@ -134,7 +153,10 @@ def extended_search_area_piv(
     # and normalizes BEFORE masking so the zeroed border does not pollute the
     # per-window mean/std. fft_correlate_images then normalizes once more, so
     # the extended-search branch is normalized twice exactly as in openpiv.
-    if search_area_size > window_size:
+    # Lexicographic tuple comparison, matching openpiv exactly. Under the
+    # per-axis search >= window constraint this activates whenever the search
+    # area is larger than the window on at least one axis.
+    if search_area_size_tuple > window_size_tuple:
         aa = normalize_intensity(aa)
         bb = normalize_intensity(bb)
         mask = jnp.zeros(search_area_size_tuple, dtype=aa.dtype)

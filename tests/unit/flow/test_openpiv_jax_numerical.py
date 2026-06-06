@@ -433,6 +433,66 @@ def test_pipeline_linear_correlation_matches_reference(
 
 
 # ---------------------------------------------------------------------------
+# extended_search_area_piv: rectangular (non-square) windows
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "window_size, search_area_size, overlap",
+    [
+        ((16, 32), (16, 32), (8, 16)),  # standard, non-square
+        ((32, 16), (32, 16), (16, 8)),  # transposed
+        ((16, 24), (24, 32), (8, 12)),  # extended on both axes
+        ((16, 32), (24, 32), (8, 16)),  # extended on one axis
+    ],
+)
+def test_pipeline_rectangular_windows_matches_reference(
+    window_size, search_area_size, overlap
+):
+    """End-to-end field with rectangular windows matches the reference."""
+    height = width = 96
+    frame_a, frame_b = _shifted_pair(
+        height, width, shift_y=3, shift_x=-2, seed=1
+    )
+    u_ref, v_ref, _ = pyprocess.extended_search_area_piv(
+        frame_a.copy(),
+        frame_b.copy(),
+        window_size=window_size,
+        overlap=overlap,
+        search_area_size=search_area_size,
+        correlation_method="circular",
+        subpixel_method="gaussian",
+        sig2noise_method="peak2peak",
+        normalized_correlation=True,
+        use_vectorized=True,
+    )
+    flow = np.asarray(
+        extended_search_area_piv(
+            jnp.asarray(frame_a)[None],
+            jnp.asarray(frame_b)[None],
+            window_size=window_size,
+            overlap=overlap,
+            search_area_size=search_area_size,
+        )
+    )[0]
+    u_jax, v_jax = flow[..., 0], flow[..., 1]
+
+    n_rows, n_cols = get_field_shape((height, width), search_area_size, overlap)
+    assert flow.shape == (n_rows, n_cols, 2)
+    assert np.asarray(u_ref).shape == (n_rows, n_cols)
+
+    np.testing.assert_array_equal(
+        ~np.isfinite(u_jax), ~np.isfinite(np.asarray(u_ref))
+    )
+    finite = np.isfinite(u_jax) & np.isfinite(np.asarray(u_ref))
+    assert finite.any()
+    np.testing.assert_allclose(
+        u_jax[finite], np.asarray(u_ref)[finite], atol=1e-2
+    )
+    np.testing.assert_allclose(
+        v_jax[finite], np.asarray(v_ref)[finite], atol=1e-2
+    )
+
+
+# ---------------------------------------------------------------------------
 # extended_search_area_piv (full pipeline)
 # ---------------------------------------------------------------------------
 @pytest.mark.parametrize(
