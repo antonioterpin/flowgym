@@ -63,11 +63,15 @@ def test_normalize_intensity_jit(windows):
     _assert_same(normalize_intensity(windows), jitted(windows))
 
 
-def test_fft_correlate_images_jit(windows):
-    """fft_correlate_images traces and matches its eager output."""
-    jitted = jax.jit(fft_correlate_images)
+@pytest.mark.parametrize("correlation_method", ["circular", "linear"])
+def test_fft_correlate_images_jit(windows, correlation_method):
+    """fft_correlate_images traces and matches eager for both methods."""
+    jitted = jax.jit(fft_correlate_images, static_argnames="correlation_method")
     _assert_same(
-        fft_correlate_images(windows, windows), jitted(windows, windows)
+        fft_correlate_images(
+            windows, windows, correlation_method=correlation_method
+        ),
+        jitted(windows, windows, correlation_method=correlation_method),
     )
 
 

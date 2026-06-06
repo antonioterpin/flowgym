@@ -272,6 +272,96 @@ def test_pipeline_subpixel_method_matches_reference(
 
 
 # ---------------------------------------------------------------------------
+# fft_correlate_images: linear correlation
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("window_size, overlap", [(32, 16), (24, 12), (16, 8)])
+def test_fft_correlate_linear_matches_reference(window_size, overlap):
+    """Linear (zero-padded) correlation matches the openpiv reference."""
+    frame_a, frame_b = _shifted_pair(96, 96, shift_y=3, shift_x=-2, seed=0)
+    aa = sliding_window_array(
+        jnp.asarray(frame_a)[None],
+        (window_size, window_size),
+        (overlap, overlap),
+    )[0]
+    bb = sliding_window_array(
+        jnp.asarray(frame_b)[None],
+        (window_size, window_size),
+        (overlap, overlap),
+    )[0]
+
+    got = np.asarray(fft_correlate_images(aa, bb, correlation_method="linear"))
+    ref = pyprocess.fft_correlate_images(
+        np.asarray(aa),
+        np.asarray(bb),
+        correlation_method="linear",
+        normalized_correlation=True,
+    )
+
+    assert got.shape == np.asarray(ref).shape
+    np.testing.assert_allclose(got, np.asarray(ref), atol=1e-5)
+
+
+def test_fft_correlate_invalid_method_raises():
+    """An unknown correlation method raises ValueError, like the reference."""
+    win = jnp.ones((2, 16, 16))
+    with pytest.raises(ValueError, match="not implemented"):
+        fft_correlate_images(win, win, correlation_method="quadratic")
+
+
+@pytest.mark.parametrize(
+    "window_size, search_area_size, overlap, shift_y, shift_x",
+    [
+        (32, 32, 16, 3, -2),
+        (16, 32, 8, 2, 4),
+        (24, 32, 12, -3, 1),
+    ],
+)
+def test_pipeline_linear_correlation_matches_reference(
+    window_size, search_area_size, overlap, shift_y, shift_x
+):
+    """End-to-end field with linear correlation matches the reference."""
+    height = width = 96
+    frame_a, frame_b = _shifted_pair(
+        height, width, shift_y=shift_y, shift_x=shift_x, seed=6
+    )
+    u_ref, v_ref, _ = pyprocess.extended_search_area_piv(
+        frame_a.copy(),
+        frame_b.copy(),
+        window_size=window_size,
+        overlap=overlap,
+        search_area_size=search_area_size,
+        correlation_method="linear",
+        subpixel_method="gaussian",
+        sig2noise_method="peak2peak",
+        normalized_correlation=True,
+        use_vectorized=True,
+    )
+    flow = np.asarray(
+        extended_search_area_piv(
+            jnp.asarray(frame_a)[None],
+            jnp.asarray(frame_b)[None],
+            window_size=window_size,
+            overlap=overlap,
+            search_area_size=search_area_size,
+            correlation_method="linear",
+        )
+    )[0]
+    u_jax, v_jax = flow[..., 0], flow[..., 1]
+
+    np.testing.assert_array_equal(
+        ~np.isfinite(u_jax), ~np.isfinite(np.asarray(u_ref))
+    )
+    finite = np.isfinite(u_jax) & np.isfinite(np.asarray(u_ref))
+    assert finite.any()
+    np.testing.assert_allclose(
+        u_jax[finite], np.asarray(u_ref)[finite], atol=1e-2
+    )
+    np.testing.assert_allclose(
+        v_jax[finite], np.asarray(v_ref)[finite], atol=1e-2
+    )
+
+
+# ---------------------------------------------------------------------------
 # extended_search_area_piv (full pipeline)
 # ---------------------------------------------------------------------------
 @pytest.mark.parametrize(

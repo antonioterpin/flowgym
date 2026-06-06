@@ -20,6 +20,7 @@ def extended_search_area_piv(
     sig2noise_method: None = None,
     width: int = 2,
     subpixel_method: str = "gaussian",
+    correlation_method: str = "circular",
 ) -> jnp.ndarray: ...
 
 
@@ -33,6 +34,7 @@ def extended_search_area_piv(
     sig2noise_method: str,
     width: int = 2,
     subpixel_method: str = "gaussian",
+    correlation_method: str = "circular",
 ) -> tuple[jnp.ndarray, jnp.ndarray]: ...
 
 
@@ -45,6 +47,7 @@ def extended_search_area_piv(
     sig2noise_method: str | None = None,
     width: int = 2,
     subpixel_method: str = "gaussian",
+    correlation_method: str = "circular",
 ) -> jnp.ndarray | tuple[jnp.ndarray, jnp.ndarray]:
     """Batched PIV cross-correlation algorithm.
 
@@ -66,6 +69,9 @@ def extended_search_area_piv(
         subpixel_method: Sub-pixel peak estimator passed to
             :func:`subpixel_displacement`, one of ``"gaussian"``,
             ``"parabolic"`` or ``"centroid"``.
+        correlation_method: Cross-correlation method passed to
+            :func:`fft_correlate_images`, either ``"circular"`` or
+            ``"linear"``.
 
     Returns:
         Displacement field of shape (batch_size, n_rows, n_cols, 2). If
@@ -134,7 +140,7 @@ def extended_search_area_piv(
 
     # Compute correlation (normalizes the windows internally, matching the
     # reference's normalized_correlation=True path).
-    corr = fft_correlate_images(aa, bb)
+    corr = fft_correlate_images(aa, bb, correlation_method)
 
     # Find peaks and compute displacements. subpixel_method is static, so it
     # is closed over rather than vmapped.
@@ -193,25 +199,61 @@ def get_field_shape(
     )
 
 
-def fft_correlate_images(aa: jnp.ndarray, bb: jnp.ndarray):
+def fft_correlate_images(
+    aa: jnp.ndarray, bb: jnp.ndarray, correlation_method: str = "circular"
+):
     """Perform FFT-based cross-correlation on batched windows.
+
+    Mirrors openpiv's ``fft_correlate_images`` with normalized correlation.
+    The ``"circular"`` method correlates without zero-padding (fast, but the
+    correlation wraps around for large displacements). The ``"linear"``
+    method zero-pads each window to the next power-of-two-minus-one before
+    the transform so the cross-correlation is acyclic, then crops back to the
+    window size; this avoids the wraparound at the cost of larger transforms.
 
     Args:
         aa: First image batch (..., height, width).
         bb: Second image batch (..., height, width).
+        correlation_method: Either ``"circular"`` or ``"linear"``.
 
     Returns:
         Cross-correlation result (..., height, width).
+
+    Raises:
+        ValueError: If ``correlation_method`` is not implemented.
     """
+    if correlation_method not in ("circular", "linear"):
+        raise ValueError(
+            f"correlation method {correlation_method} is not implemented"
+        )
+
     aa = normalize_intensity(aa)
     bb = normalize_intensity(bb)
 
-    s2 = aa.shape[-2:]
+    s1 = aa.shape[-2:]
+    s2 = bb.shape[-2:]
 
-    f2a = jnp.conj(jnp.fft.rfft2(aa, axes=(-2, -1)))
-    f2b = jnp.fft.rfft2(bb, axes=(-2, -1))
-    corr = jnp.fft.irfft2(f2a * f2b, axes=(-2, -1))
-    corr = jnp.fft.fftshift(corr, axes=(-2, -1))
+    if correlation_method == "linear":
+        # Zero-pad to the reference's fsize = 2**ceil(log2(s1+s2-1)) - 1 and
+        # crop the centred s1-sized region after the inverse transform. The
+        # bit_length form computes the same fsize exactly without float log2.
+        fsize = tuple(
+            (1 << (s1[d] + s2[d] - 2).bit_length()) - 1 for d in (0, 1)
+        )
+        f2a = jnp.conj(jnp.fft.rfft2(aa, s=fsize, axes=(-2, -1)))
+        f2b = jnp.fft.rfft2(bb, s=fsize, axes=(-2, -1))
+        corr = jnp.fft.irfft2(f2a * f2b, axes=(-2, -1)).real
+        corr = jnp.fft.fftshift(corr, axes=(-2, -1))
+        corr = corr[
+            ...,
+            (fsize[0] - s1[0]) // 2 : (fsize[0] + s1[0]) // 2,
+            (fsize[1] - s1[1]) // 2 : (fsize[1] + s1[1]) // 2,
+        ]
+    else:  # circular
+        f2a = jnp.conj(jnp.fft.rfft2(aa, axes=(-2, -1)))
+        f2b = jnp.fft.rfft2(bb, axes=(-2, -1))
+        corr = jnp.fft.irfft2(f2a * f2b, axes=(-2, -1))
+        corr = jnp.fft.fftshift(corr, axes=(-2, -1))
 
     corr = corr / (s2[0] * s2[1])
     corr = jnp.clip(corr, 0, 1)
