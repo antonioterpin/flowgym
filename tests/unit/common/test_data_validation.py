@@ -300,6 +300,8 @@ def _naive_median_test(
     single reference can express both forms and the discriminating test can
     pin the implementation to the L2 one.
     """
+    if combine not in ("l2", "or"):
+        raise ValueError(f"Unknown combine mode: {combine!r}")
     B, H, W, C = flow_field.shape
     wsize = 2 * radius + 1
     mask = np.ones((wsize, wsize), dtype=bool)
