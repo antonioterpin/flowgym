@@ -68,13 +68,16 @@ def _shifted_pair(height, width, shift_y, shift_x, pad=8, seed=0):
 # subpixel_displacement
 # ---------------------------------------------------------------------------
 @pytest.mark.parametrize(
+    "subpixel_method", ["gaussian", "parabolic", "centroid"]
+)
+@pytest.mark.parametrize(
     "search_area_size, overlap",
     [(24, 12), (16, 8), (32, 16)],
 )
 def test_subpixel_displacement_matches_vectorized_reference(
-    search_area_size, overlap
+    search_area_size, overlap, subpixel_method
 ):
-    """JAX sub-pixel peak fitting matches openpiv's vectorized routine."""
+    """JAX sub-pixel peak fitting matches openpiv across all methods."""
     height = width = 96
     frame_a, frame_b = _shifted_pair(height, width, shift_y=2, shift_x=4)
 
@@ -94,15 +97,18 @@ def test_subpixel_displacement_matches_vectorized_reference(
     # JAX path: subpixel_displacement is already batched over windows.
     corr_windows = corr[0]
     disp_vx, disp_vy = subpixel_displacement(
-        corr_windows, peaks_i[0], peaks_j[0]
+        corr_windows,
+        peaks_i[0],
+        peaks_j[0],
+        subpixel_method=subpixel_method,
     )
     disp_vx = np.asarray(disp_vx)
     disp_vy = np.asarray(disp_vy)
 
-    # Reference path: identical gaussian sub-pixel fit.
+    # Reference path: same sub-pixel estimator.
     corr_ref = np.asarray(corr_windows).astype(np.float32)
     u_ref, v_ref = pyprocess.vectorized_correlation_to_displacements(
-        corr_ref, subpixel_method="gaussian"
+        corr_ref, subpixel_method=subpixel_method
     )
 
     # Invalid (NaN) windows must agree exactly between implementations.
@@ -119,6 +125,69 @@ def test_subpixel_displacement_matches_vectorized_reference(
     )
     np.testing.assert_allclose(
         disp_vy[finite], np.asarray(v_ref)[finite], atol=1e-4
+    )
+
+
+def test_subpixel_displacement_invalid_method_raises():
+    """An unknown subpixel method raises ValueError, mirroring the reference."""
+    corr = jnp.ones((1, 8, 8))
+    peaks_i = jnp.array([4])
+    peaks_j = jnp.array([4])
+    with pytest.raises(ValueError, match="Method not implemented"):
+        subpixel_displacement(corr, peaks_i, peaks_j, subpixel_method="quartic")
+
+
+@pytest.mark.parametrize(
+    "subpixel_method", ["gaussian", "parabolic", "centroid"]
+)
+@pytest.mark.parametrize(
+    "window_size, search_area_size, overlap",
+    [(32, 32, 16), (16, 32, 8)],
+)
+def test_pipeline_subpixel_method_matches_reference(
+    subpixel_method, window_size, search_area_size, overlap
+):
+    """End-to-end field matches the reference pipeline for each method."""
+    height = width = 96
+    frame_a, frame_b = _shifted_pair(
+        height, width, shift_y=3, shift_x=-2, seed=4
+    )
+
+    u_ref, v_ref, _ = pyprocess.extended_search_area_piv(
+        frame_a.copy(),
+        frame_b.copy(),
+        window_size=window_size,
+        overlap=overlap,
+        search_area_size=search_area_size,
+        correlation_method="circular",
+        subpixel_method=subpixel_method,
+        sig2noise_method="peak2peak",
+        normalized_correlation=True,
+        use_vectorized=True,
+    )
+
+    flow = np.asarray(
+        extended_search_area_piv(
+            jnp.asarray(frame_a)[None],
+            jnp.asarray(frame_b)[None],
+            window_size=window_size,
+            overlap=overlap,
+            search_area_size=search_area_size,
+            subpixel_method=subpixel_method,
+        )
+    )[0]
+    u_jax, v_jax = flow[..., 0], flow[..., 1]
+
+    np.testing.assert_array_equal(
+        ~np.isfinite(u_jax), ~np.isfinite(np.asarray(u_ref))
+    )
+    finite = np.isfinite(u_jax) & np.isfinite(np.asarray(u_ref))
+    assert finite.any()
+    np.testing.assert_allclose(
+        u_jax[finite], np.asarray(u_ref)[finite], atol=1e-2
+    )
+    np.testing.assert_allclose(
+        v_jax[finite], np.asarray(v_ref)[finite], atol=1e-2
     )
 
 

@@ -19,6 +19,7 @@ def extended_search_area_piv(
     overlap: int,
     sig2noise_method: None = None,
     width: int = 2,
+    subpixel_method: str = "gaussian",
 ) -> jnp.ndarray: ...
 
 
@@ -31,6 +32,7 @@ def extended_search_area_piv(
     overlap: int,
     sig2noise_method: str,
     width: int = 2,
+    subpixel_method: str = "gaussian",
 ) -> tuple[jnp.ndarray, jnp.ndarray]: ...
 
 
@@ -42,6 +44,7 @@ def extended_search_area_piv(
     overlap: int,
     sig2noise_method: str | None = None,
     width: int = 2,
+    subpixel_method: str = "gaussian",
 ) -> jnp.ndarray | tuple[jnp.ndarray, jnp.ndarray]:
     """Batched PIV cross-correlation algorithm.
 
@@ -60,6 +63,9 @@ def extended_search_area_piv(
             output of the openpiv reference pipeline.
         width: Half-size of the exclusion box around the first correlation
             peak; only used when ``sig2noise_method == "peak2peak"``.
+        subpixel_method: Sub-pixel peak estimator passed to
+            :func:`subpixel_displacement`, one of ``"gaussian"``,
+            ``"parabolic"`` or ``"centroid"``.
 
     Returns:
         Displacement field of shape (batch_size, n_rows, n_cols, 2). If
@@ -130,9 +136,14 @@ def extended_search_area_piv(
     # reference's normalized_correlation=True path).
     corr = fft_correlate_images(aa, bb)
 
-    # Find peaks and compute displacements
+    # Find peaks and compute displacements. subpixel_method is static, so it
+    # is closed over rather than vmapped.
     peaks_i, peaks_j = find_all_first_peaks(corr)
-    disp_vx, disp_vy = jax.vmap(subpixel_displacement)(corr, peaks_i, peaks_j)
+    disp_vx, disp_vy = jax.vmap(
+        lambda c, pi, pj: subpixel_displacement(
+            c, pi, pj, subpixel_method=subpixel_method
+        )
+    )(corr, peaks_i, peaks_j)
 
     # Reshape displacements
     disp_vx = disp_vx.reshape(img1.shape[0], n_rows, n_cols)
@@ -367,23 +378,42 @@ def subpixel_displacement(
     peaks_j: jnp.ndarray,
     mask_width: int = 1,
     eps: float = 1e-7,
+    subpixel_method: str = "gaussian",
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Compute subpixel displacements from correlation maps.
+
+    Mirrors the three estimators of openpiv's
+    ``vectorized_correlation_to_displacements`` over the 3-point stencil
+    around each peak:
+
+    - ``"gaussian"``: log-parabolic fit, with a 3-point parabolic fallback on
+      any non-positive stencil value (the reference behaviour).
+    - ``"parabolic"``: plain 3-point parabolic fit.
+    - ``"centroid"``: intensity-weighted centroid of the stencil; unlike the
+      other two the fitted value is an absolute position rather than a
+      sub-pixel offset from the peak.
 
     Args:
         corr: Correlation maps (batch_size * n_windows, height, width).
         peaks_i: Peak indices in the i direction.
         peaks_j: Peak indices in the j direction.
         mask_width: Width of the mask for invalid peaks.
-        eps: Small constant added to the correlation map before the gaussian
-            fit, matching openpiv's vectorized_correlation_to_displacements.
-            It both prevents log(0) and keeps every stencil value strictly
+        eps: Small constant added to the correlation map before the fit,
+            matching openpiv's vectorized_correlation_to_displacements. It
+            both prevents log(0) and keeps every stencil value strictly
             positive, so the gaussian branch is always taken exactly as in
             the reference (no parabolic fallback on clipped zeros).
+        subpixel_method: Peak estimator, one of ``"gaussian"``,
+            ``"parabolic"`` or ``"centroid"``.
 
     Returns:
         Subpixel displacements (disp_vx, disp_vy).
+
+    Raises:
+        ValueError: If ``subpixel_method`` is not implemented.
     """
+    if subpixel_method not in ("gaussian", "parabolic", "centroid"):
+        raise ValueError(f"Method not implemented {subpixel_method}")
     if DEBUG:
         assert corr.ndim == 3, (
             "Correlation must be (batch_size * n_windows, height, width), "
@@ -447,30 +477,45 @@ def subpixel_displacement(
             f"{cd.shape} and {cu.shape}"
         )
 
-    # 4) Detect any non-positive values -> fallback to 3-point parabolic
-    inv = (c <= 0) | (cl <= 0) | (cr <= 0) | (cd <= 0) | (cu <= 0)
+    # 4) Estimate the sub-pixel peak with the requested method. The branch is
+    # on a static Python string, so only one path is traced.
+    if subpixel_method == "centroid":
+        # Intensity-weighted centroid: yields an absolute position, so the
+        # peak index is already folded in (no `+ safe_i` below).
+        fi, fj = safe_i.astype(corr.dtype), safe_j.astype(corr.dtype)
+        shift_i = ((fi - 1) * cl + fi * c + (fi + 1) * cr) / (cl + c + cr)
+        shift_j = ((fj - 1) * cd + fj * c + (fj + 1) * cu) / (cd + c + cu)
+        disp_vy = shift_i - jnp.floor(H / 2)
+        disp_vx = shift_j - jnp.floor(W / 2)
+    elif subpixel_method == "parabolic":
+        shift_i = (cl - cr) / (2 * cl - 4 * c + 2 * cr)
+        shift_j = (cd - cu) / (2 * cd - 4 * c + 2 * cu)
+        disp_vy = shift_i + safe_i - jnp.floor(H / 2)
+        disp_vx = shift_j + safe_j - jnp.floor(W / 2)
+    else:  # gaussian
+        # Detect any non-positive values -> fallback to 3-point parabolic.
+        inv = (c <= 0) | (cl <= 0) | (cr <= 0) | (cd <= 0) | (cu <= 0)
 
-    # 5) Log-parabolic interpolation
-    lcl, lcr, lc = jnp.log(cl), jnp.log(cr), jnp.log(c)
-    lcd, lcu = jnp.log(cd), jnp.log(cu)
-    nom1 = lcl - lcr
-    den1 = 2 * lcl - 4 * lc + 2 * lcr
-    nom2 = lcd - lcu
-    den2 = 2 * lcd - 4 * lc + 2 * lcu
+        # Log-parabolic interpolation.
+        lcl, lcr, lc = jnp.log(cl), jnp.log(cr), jnp.log(c)
+        lcd, lcu = jnp.log(cd), jnp.log(cu)
+        nom1 = lcl - lcr
+        den1 = 2 * lcl - 4 * lc + 2 * lcr
+        nom2 = lcd - lcu
+        den2 = 2 * lcd - 4 * lc + 2 * lcu
 
-    shift_i_log = jnp.where(den1 != 0, nom1 / den1, 0.0)
-    shift_j_log = jnp.where(den2 != 0, nom2 / den2, 0.0)
+        shift_i_log = jnp.where(den1 != 0, nom1 / den1, 0.0)
+        shift_j_log = jnp.where(den2 != 0, nom2 / den2, 0.0)
 
-    # 6) 3-point parabolic fallback
-    shift_i_fallback = (cl - cr) / (2 * cl - 4 * c + 2 * cr)
-    shift_j_fallback = (cd - cu) / (2 * cd - 4 * c + 2 * cu)
+        # 3-point parabolic fallback.
+        shift_i_fallback = (cl - cr) / (2 * cl - 4 * c + 2 * cr)
+        shift_j_fallback = (cd - cu) / (2 * cd - 4 * c + 2 * cu)
 
-    # 7) Combine & shift relative to center
-    shift_i = jnp.where(inv, shift_i_fallback, shift_i_log)
-    shift_j = jnp.where(inv, shift_j_fallback, shift_j_log)
+        shift_i = jnp.where(inv, shift_i_fallback, shift_i_log)
+        shift_j = jnp.where(inv, shift_j_fallback, shift_j_log)
 
-    disp_vy = shift_i + safe_i - jnp.floor(H / 2)
-    disp_vx = shift_j + safe_j - jnp.floor(W / 2)
+        disp_vy = shift_i + safe_i - jnp.floor(H / 2)
+        disp_vx = shift_j + safe_j - jnp.floor(W / 2)
 
     # 8) Mask out the originally invalid peaks → NaN
     disp_vx = jnp.where(invalid, jnp.nan, disp_vx)
