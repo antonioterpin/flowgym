@@ -900,3 +900,85 @@ def deform_windows(
     return jax.scipy.ndimage.map_coordinates(
         frame, [pixel_y - vt, pixel_x + ut], order=1, mode="nearest"
     )
+
+
+def multipass_deform(
+    img1: jnp.ndarray,
+    img2: jnp.ndarray,
+    window_size: int,
+    search_area_size: int,
+    overlap: int,
+    n_passes: int,
+) -> jnp.ndarray:
+    """Iterative window-deformation PIV at a fixed grid resolution.
+
+    Runs the standard window-deformation refinement: estimate the
+    displacement, deform the second image toward the first by the current
+    estimate, re-correlate to obtain the residual, and accumulate. This is
+    the main accuracy lever for non-uniform flows that a single pass
+    under-resolves. The grid resolution (window/search/overlap) is held
+    fixed across passes, matching openpiv's ``deformation_method="second
+    image"`` recipe (the second image is deformed with ``-v`` so the sample
+    grid is ``(y + v, x + u)``).
+
+    NaN windows are replaced with zero before deformation and accumulation;
+    statistical outlier replacement between passes (openpiv's
+    ``replace_outliers``) is left to the caller.
+
+    Args:
+        img1: First image batch of shape (B, H, W).
+        img2: Second image batch of shape (B, H, W).
+        window_size: Interrogation window size.
+        search_area_size: Search area size.
+        overlap: Overlap between windows.
+        n_passes: Number of passes (``1`` reduces to a single correlation).
+
+    Returns:
+        Displacement field of shape (B, n_rows, n_cols, 2).
+    """
+    if DEBUG:
+        assert img1.ndim == 3, (
+            f"Image must be (batch, height, width), instead {img1.shape}"
+        )
+        assert isinstance(n_passes, int) and n_passes >= 1, (
+            "n_passes must be a positive integer."
+        )
+
+    flow = extended_search_area_piv(
+        img1,
+        img2,
+        window_size=window_size,
+        search_area_size=search_area_size,
+        overlap=overlap,
+    )
+    if n_passes <= 1:
+        return flow
+
+    height, width = img1.shape[1], img1.shape[2]
+    search_tuple = (search_area_size, search_area_size)
+    overlap_tuple = (overlap, overlap)
+    n_rows, n_cols = get_field_shape(
+        (height, width), search_tuple, overlap_tuple
+    )
+    xs, ys = get_rect_coordinates((height, width), search_tuple, overlap_tuple)
+    x_grid = xs.reshape(n_rows, n_cols)
+    y_grid = ys.reshape(n_rows, n_cols)
+
+    def deform_batch(frame, u, v):
+        # "second image" method: deform with -v so frame_b is sampled at
+        # (y + v, x + u), the current displacement estimate.
+        return deform_windows(frame, x_grid, y_grid, u, -v)
+
+    flow = jnp.nan_to_num(flow)
+    for _ in range(n_passes - 1):
+        img2_def = jax.vmap(deform_batch)(img2, flow[..., 0], flow[..., 1])
+        residual = extended_search_area_piv(
+            img1,
+            img2_def,
+            window_size=window_size,
+            search_area_size=search_area_size,
+            overlap=overlap,
+        )
+        flow = flow + jnp.nan_to_num(residual)
+
+    return flow
