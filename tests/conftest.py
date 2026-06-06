@@ -31,6 +31,7 @@ _OPTIONAL_DEPENDENCY_MODULES = {
     "test_dis_jax.py": "cv2",
     "test_flow_estimate_dis.py": "cv2",
     "test_openpiv_jax.py": "openpiv",
+    "test_openpiv_jax_deform.py": "openpiv",
     "test_openpiv_jax_numerical.py": "openpiv",
     "test_openpiv_jax_synthpix.py": "openpiv",
     "test_train_replay_integration.py": "cv2",

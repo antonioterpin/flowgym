@@ -817,3 +817,86 @@ def upsample_flow(
     flows_x_resized = images_resize(flows_x, image_shape)
     flows_y_resized = images_resize(flows_y, image_shape)
     return jnp.stack((flows_x_resized, flows_y_resized), axis=-1)
+
+
+def deform_windows(
+    frame: jnp.ndarray,
+    x: jnp.ndarray,
+    y: jnp.ndarray,
+    u: jnp.ndarray,
+    v: jnp.ndarray,
+) -> jnp.ndarray:
+    """Deform an image by the displacement field of a previous PIV pass.
+
+    JAX port of openpiv's ``windef.deform_windows`` at linear interpolation
+    (``interpolation_order = interpolation_order2 = 1``). The coarse
+    displacement field defined on the interrogation-window centre grid is
+    upsampled to every pixel and used to resample the image onto the
+    deformed grid, which is the core operation of iterative window
+    deformation.
+
+    Two linear resamplings are performed, both matching the reference:
+
+    - the window-centre field ``(u, v)`` is bilinearly interpolated onto the
+      pixel grid; outside the window-centre grid the values are clamped to
+      the border, exactly reproducing ``RectBivariateSpline`` with degree 1
+      (which extrapolates as a constant there); and
+    - the image is resampled at ``(y - vt, x + ut)`` with the same
+      ``map_coordinates`` linear interpolation and ``"nearest"`` border mode
+      as the reference.
+
+    Only the linear case is reproduced: openpiv's default cubic field
+    interpolation (``RectBivariateSpline`` degree 3) has no exact JAX
+    equivalent.
+
+    Args:
+        frame: Single image of shape (height, width).
+        x: Window-centre x coordinates as a (n_rows, n_cols) meshgrid.
+        y: Window-centre y coordinates as a (n_rows, n_cols) meshgrid.
+        u: u displacement component on the window-centre grid (n_rows, n_cols).
+        v: v displacement component on the window-centre grid (n_rows, n_cols).
+
+    Returns:
+        The deformed image of shape (height, width).
+    """
+    if DEBUG:
+        assert frame.ndim == 2, (
+            f"Frame must be 2D (height, width), instead {frame.shape}"
+        )
+        assert x.ndim == 2 and y.ndim == 2, (
+            "x and y must be 2D window-centre meshgrids."
+        )
+        assert u.shape == x.shape and v.shape == x.shape, (
+            "u and v must match the window-centre grid shape."
+        )
+
+    frame = frame.astype(jnp.float32)
+    height, width = frame.shape
+
+    # Window-centre grid is uniformly spaced (overlap-defined), so a pixel
+    # coordinate maps to a fractional field index by an affine transform.
+    y1 = y[:, 0]
+    x1 = x[0, :]
+    dy = y1[1] - y1[0]
+    dx = x1[1] - x1[0]
+
+    side_y = jnp.arange(height, dtype=jnp.float32)
+    side_x = jnp.arange(width, dtype=jnp.float32)
+    idx_y = (side_y - y1[0]) / dy
+    idx_x = (side_x - x1[0]) / dx
+    grid_iy, grid_ix = jnp.meshgrid(idx_y, idx_x, indexing="ij")
+
+    # Bilinear field upsampling with border clamping (== RectBivariateSpline
+    # degree 1, which extrapolates as a constant outside the grid).
+    ut = jax.scipy.ndimage.map_coordinates(
+        u.astype(jnp.float32), [grid_iy, grid_ix], order=1, mode="nearest"
+    )
+    vt = jax.scipy.ndimage.map_coordinates(
+        v.astype(jnp.float32), [grid_iy, grid_ix], order=1, mode="nearest"
+    )
+
+    # Resample the image onto the deformed grid.
+    pixel_x, pixel_y = jnp.meshgrid(side_x, side_y)
+    return jax.scipy.ndimage.map_coordinates(
+        frame, [pixel_y - vt, pixel_x + ut], order=1, mode="nearest"
+    )
