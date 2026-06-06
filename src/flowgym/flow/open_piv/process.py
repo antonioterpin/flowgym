@@ -869,14 +869,19 @@ def deform_windows(
         assert u.shape == x.shape and v.shape == x.shape, (
             "u and v must match the window-centre grid shape."
         )
+        assert x.shape[0] >= 2 and x.shape[1] >= 2, (
+            "Window-centre grid needs >= 2 points on each axis to define a "
+            f"spacing; got grid shape {x.shape}."
+        )
 
     frame = frame.astype(jnp.float32)
     height, width = frame.shape
 
     # Window-centre grid is uniformly spaced (overlap-defined), so a pixel
     # coordinate maps to a fractional field index by an affine transform.
-    y1 = y[:, 0]
-    x1 = x[0, :]
+    # Cast to float32 so the index math does not promote to float64.
+    y1 = y[:, 0].astype(jnp.float32)
+    x1 = x[0, :].astype(jnp.float32)
     dy = y1[1] - y1[0]
     dx = x1[1] - x1[0]
 
