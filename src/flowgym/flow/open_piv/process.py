@@ -485,12 +485,29 @@ def subpixel_displacement(
     if subpixel_method == "centroid":
         # Intensity-weighted centroid: yields an absolute position, so the
         # peak index is already folded in (no `+ safe_i` below).
+        #
+        # The index is cast to corr.dtype (float32), so the whole centroid is
+        # computed in single precision exactly as openpiv does (its
+        # (peak-1)*cl etc. promote int*float32 -> float32). Keep it
+        # single-precision: a well-meant float64 "fix" here would silently
+        # desync from the reference.
         fi, fj = safe_i.astype(corr.dtype), safe_j.astype(corr.dtype)
+        # Divisor left unguarded to match openpiv. `corr + eps` keeps every
+        # stencil value positive only while the raw correlation is
+        # non-negative; after normalized_correlation an entry below -eps can
+        # drive cl + c + cr toward zero or flip its sign, yielding a garbage
+        # absolute position. openpiv has the identical gap (locked by the
+        # degenerate-stencil parity test).
         shift_i = ((fi - 1) * cl + fi * c + (fi + 1) * cr) / (cl + c + cr)
         shift_j = ((fj - 1) * cd + fj * c + (fj + 1) * cu) / (cd + c + cu)
         disp_vy = shift_i - jnp.floor(H / 2)
         disp_vx = shift_j - jnp.floor(W / 2)
     elif subpixel_method == "parabolic":
+        # Denominator left unguarded to preserve openpiv parity: openpiv's
+        # parabolic fit divides identically, so a degenerate (flat) stencil
+        # yields 0/0 -> NaN (or +/-Inf) in both. Adding a jnp.where guard here
+        # would desync from the reference (locked by the degenerate-stencil
+        # parity test); the `invalid` border mask is what protects production.
         shift_i = (cl - cr) / (2 * cl - 4 * c + 2 * cr)
         shift_j = (cd - cu) / (2 * cd - 4 * c + 2 * cu)
         disp_vy = shift_i + safe_i - jnp.floor(H / 2)
@@ -510,7 +527,9 @@ def subpixel_displacement(
         shift_i_log = jnp.where(den1 != 0, nom1 / den1, 0.0)
         shift_j_log = jnp.where(den2 != 0, nom2 / den2, 0.0)
 
-        # 3-point parabolic fallback.
+        # 3-point parabolic fallback, also unguarded for parity (same as the
+        # "parabolic" branch above); only selected where a stencil value is
+        # non-positive, matching the reference's fallback path.
         shift_i_fallback = (cl - cr) / (2 * cl - 4 * c + 2 * cr)
         shift_j_fallback = (cd - cu) / (2 * cd - 4 * c + 2 * cu)
 

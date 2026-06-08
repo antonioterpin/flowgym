@@ -137,6 +137,86 @@ def test_subpixel_displacement_invalid_method_raises():
         subpixel_displacement(corr, peaks_i, peaks_j, subpixel_method="quartic")
 
 
+def test_pipeline_invalid_subpixel_method_raises():
+    """The full pipeline surfaces the ValueError, not an opaque tracer error.
+
+    ``extended_search_area_piv`` routes ``subpixel_method`` through to
+    ``subpixel_displacement``; this pins that the validation still fires
+    end-to-end, so a refactor hiding the inner call behind another
+    jit/vmap wrapper cannot silently drop it.
+    """
+    frame_a = jnp.zeros((1, 32, 32))
+    frame_b = jnp.zeros((1, 32, 32))
+    with pytest.raises(ValueError, match="Unknown subpixel_method"):
+        extended_search_area_piv(
+            frame_a,
+            frame_b,
+            window_size=16,
+            overlap=8,
+            search_area_size=16,
+            subpixel_method="quartic",
+        )
+
+
+def test_subpixel_parabolic_centroid_unguarded_match_reference():
+    """Degenerate stencils reproduce openpiv's unguarded Inf/NaN exactly.
+
+    The parabolic and centroid divisors are intentionally left unguarded to
+    preserve 1-to-1 parity with openpiv (whose
+    ``vectorized_correlation_to_displacements`` divides with the identical
+    expressions). This pins that contract at the stencil level so a future
+    ``jnp.where`` "fix" that silently desyncs from the reference is caught.
+    Peaks are supplied explicitly, so the result depends only on the
+    division, not on argmax tie-breaking.
+    """
+    eps = 1e-7
+    H = W = 8
+    # window 0: flat plus-shape -> parabolic den == 0, nom == 0 -> 0/0 -> NaN
+    # window 1: cl + cr == 2*c (asymmetric) -> parabolic den == 0 -> +/-Inf
+    # window 2: centroid divisor cl + c + cr ~= 0 (post-normalization
+    #           negatives) -> finite but garbage absolute position
+    corr = np.zeros((3, H, W), dtype=np.float32)
+    corr[0, 3:6, 4] = 1.0
+    corr[0, 4, 3:6] = 1.0
+    corr[1, 3, 4], corr[1, 4, 4], corr[1, 5, 4] = 0.5, 1.0, 1.5
+    corr[1, 4, 3], corr[1, 4, 5] = 0.5, 1.5
+    corr[2, 3, 4], corr[2, 4, 4], corr[2, 5, 4] = -1.0, 1.5, -0.5
+    corr[2, 4, 3], corr[2, 4, 5] = -1.0, -0.5
+    peaks_i = jnp.array([4, 4, 4])
+    peaks_j = jnp.array([4, 4, 4])
+
+    def _reference(method):
+        # openpiv's arithmetic on the same eps-stabilised float32 stencil.
+        cc = corr + eps
+        k = np.arange(3)
+        c = cc[k, 4, 4]
+        cl, cr = cc[k, 3, 4], cc[k, 5, 4]
+        cd, cu = cc[k, 4, 3], cc[k, 4, 5]
+        with np.errstate(divide="ignore", invalid="ignore"):
+            if method == "parabolic":
+                si = (cl - cr) / (2 * cl - 4 * c + 2 * cr)
+                sj = (cd - cu) / (2 * cd - 4 * c + 2 * cu)
+                return sj + 4 - np.floor(W / 2), si + 4 - np.floor(H / 2)
+            fi = np.float32(4)
+            si = ((fi - 1) * cl + fi * c + (fi + 1) * cr) / (cl + c + cr)
+            sj = ((fi - 1) * cd + fi * c + (fi + 1) * cu) / (cd + c + cu)
+            return sj - np.floor(W / 2), si - np.floor(H / 2)
+
+    for method in ("parabolic", "centroid"):
+        vx, vy = subpixel_displacement(
+            jnp.asarray(corr), peaks_i, peaks_j, subpixel_method=method
+        )
+        vx, vy = np.asarray(vx), np.asarray(vy)
+        rx, ry = _reference(method)
+        # Non-finite (NaN/Inf) positions agree exactly with the reference ...
+        np.testing.assert_array_equal(np.isfinite(vx), np.isfinite(rx))
+        np.testing.assert_array_equal(np.isfinite(vy), np.isfinite(ry))
+        # ... and finite values match, even where the divisor collapses.
+        fx, fy = np.isfinite(vx), np.isfinite(vy)
+        np.testing.assert_allclose(vx[fx], rx[fx], rtol=1e-4, atol=1e-4)
+        np.testing.assert_allclose(vy[fy], ry[fy], rtol=1e-4, atol=1e-4)
+
+
 @pytest.mark.parametrize(
     "subpixel_method", ["gaussian", "parabolic", "centroid"]
 )
