@@ -158,8 +158,13 @@ def extended_search_area_piv(
     # per-window mean/std. fft_correlate_images then normalizes once more, so
     # the extended-search branch is normalized twice exactly as in openpiv.
     # Lexicographic tuple comparison, matching openpiv exactly. Under the
-    # per-axis search >= window constraint this activates whenever the search
-    # area is larger than the window on at least one axis.
+    # per-axis `search >= window` precondition (asserted above under DEBUG)
+    # this is equivalent to "search is larger on at least one axis": given
+    # s[0] >= w[0] and s[1] >= w[1], if s != w then either s[0] > w[0] (lex
+    # true via the first element) or s[0] == w[0] and s[1] > w[1] (lex true
+    # via the second). Without that precondition the equivalence breaks --
+    # e.g. search=(16, 64) vs window=(32, 16) would lex-trigger this branch
+    # while being invalid input.
     if search_area_size_tuple > window_size_tuple:
         aa = normalize_intensity(aa)
         bb = normalize_intensity(bb)
