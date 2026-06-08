@@ -41,6 +41,33 @@ import yaml
 from scipy.optimize import Bounds, LinearConstraint, milp
 from scipy.sparse import csr_matrix
 
+# DIS serializes its `preset` enum by name in get_config()/timing.json, but
+# the estimator constructor only accepts an int (or PresetType). Map known
+# names back to ints so exported configs re-load directly.
+_PRESET_NAME_TO_INT = {
+    "ULTRAFAST": 0,
+    "FAST": 1,
+    "MEDIUM": 2,
+    "HIGH_QUALITY": 3,
+}
+
+
+def _normalize_config(config: dict[str, Any]) -> dict[str, Any]:
+    """Coerce serialized enum values back to a re-loadable form.
+
+    Args:
+        config: A candidate's stored estimator config.
+
+    Returns:
+        A shallow copy with a string ``preset`` mapped to its int value
+        (other values are left untouched).
+    """
+    cfg = dict(config)
+    preset = cfg.get("preset")
+    if isinstance(preset, str) and preset in _PRESET_NAME_TO_INT:
+        cfg["preset"] = _PRESET_NAME_TO_INT[preset]
+    return cfg
+
 
 def _export_models(
     summary: dict[str, Any],
@@ -78,7 +105,7 @@ def _export_models(
                 "name": entry["cache_id"],
                 "estimator": estimator,
                 "estimate_type": estimate_type,
-                "config": config,
+                "config": _normalize_config(config),
             }
         )
     path.parent.mkdir(parents=True, exist_ok=True)

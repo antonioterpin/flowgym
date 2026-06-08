@@ -153,6 +153,15 @@ def test_export_models_writes_collectable_estimators_list(
     ]
 
 
+def test_export_normalizes_preset_enum_name(tmp_path: Path) -> None:
+    """A serialized preset name (e.g. FAST) is exported as its int value."""
+    summary = {"selected": [{"cache_id": "a", "config": {"preset": "FAST"}}]}
+    out = tmp_path / "m.yaml"
+    select_ensemble._export_models(summary, out, "dis_jax", "flow")
+    data = yaml.safe_load(out.read_text())
+    assert data["estimators"][0]["config"]["preset"] == 1
+
+
 def test_export_models_end_to_end(tmp_path: Path) -> None:
     """--export-models writes the chosen subset using timing.json configs."""
     keys = [1, 2, 3]
