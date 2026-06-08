@@ -845,9 +845,8 @@ def deform_windows(
       ``map_coordinates`` linear interpolation and ``"nearest"`` border mode
       as the reference.
 
-    Only the linear case is reproduced: openpiv's default cubic field
-    interpolation (``RectBivariateSpline`` degree 3) has no exact JAX
-    equivalent.
+    Only linear field interpolation is implemented; cubic
+    (``RectBivariateSpline`` degree 3) is tracked in #64.
 
     Args:
         frame: Single image of shape (height, width).
@@ -926,9 +925,13 @@ def multipass_deform(
     image"`` recipe (the second image is deformed with ``-v`` so the sample
     grid is ``(y + v, x + u)``).
 
-    NaN windows are replaced with zero before deformation and accumulation;
-    statistical outlier replacement between passes (openpiv's
-    ``replace_outliers``) is left to the caller.
+    Failed (NaN) windows are handled differently by pass count, by design:
+    ``n_passes == 1`` returns the single-pass field with NaNs intact (matching
+    :func:`extended_search_area_piv`), while ``n_passes >= 2`` zeroes them with
+    ``nan_to_num`` before deformation and accumulation, matching openpiv's
+    iterative recipe. Callers that mask on ``isfinite`` must account for this
+    switch. Without between-pass outlier replacement the estimate can drift
+    (see #65); ``replace_outliers`` between passes is left to the caller.
 
     Args:
         img1: First image batch of shape (B, H, W).
@@ -937,6 +940,13 @@ def multipass_deform(
         search_area_size: Search area size.
         overlap: Overlap between windows.
         n_passes: Number of passes (``1`` reduces to a single correlation).
+
+    Note:
+        ``window_size``, ``search_area_size``, ``overlap`` and ``n_passes``
+        are baked in at trace time (the ``range(n_passes - 1)`` loop and
+        ``get_field_shape``), so under ``jax.jit`` they must be marked static
+        (e.g. ``static_argnames=("window_size", "search_area_size",
+        "overlap", "n_passes")``).
 
     Returns:
         Displacement field of shape (B, n_rows, n_cols, 2).

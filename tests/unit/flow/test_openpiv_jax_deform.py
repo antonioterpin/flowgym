@@ -240,11 +240,15 @@ def test_multipass_single_pass_equals_extended_search():
 
 
 def test_multipass_improves_accuracy():
-    """Iterative deformation does not worsen the single-pass estimate.
+    """Iterative deformation measurably improves the single-pass estimate.
 
-    On a smooth non-uniform flow the multipass median endpoint error should
-    be no larger than the single pass (and typically smaller), measured
-    against the true displacement (dx = -U, dy = +V).
+    On a smooth non-uniform flow the first deformation (pass 2) is where the
+    method earns its keep and must cut the single-pass median endpoint error
+    by a solid margin. Further passes must not blow up past the single pass:
+    without between-pass outlier replacement the error is non-monotonic and
+    creeps back up (it peaks at pass 2 and worsens after, see #65), so the
+    pass-3 bound is a no-worse guard rather than strict improvement. Error is
+    measured against the true displacement (dx = -U, dy = +V).
     """
     img1, img2, big_u, big_v = _warped_pair(128, 128, seed=0)
     ws = sas = 32
@@ -268,10 +272,18 @@ def test_multipass_improves_accuracy():
     err1 = endpoint_err(
         np.asarray(multipass_deform(a, b, n_passes=1, **kwargs))[0]
     )
+    err2 = endpoint_err(
+        np.asarray(multipass_deform(a, b, n_passes=2, **kwargs))[0]
+    )
     err3 = endpoint_err(
         np.asarray(multipass_deform(a, b, n_passes=3, **kwargs))[0]
     )
-    assert err3 <= err1 + 1e-3, f"multipass worsened: {err1:.4f} -> {err3:.4f}"
+    # Pass 2 (the first deformation) must cut the single-pass error by a solid
+    # margin (measured ~0.21 -> 0.13). The old `err3 <= err1 + 1e-3` bound
+    # caught only catastrophic regressions.
+    assert err2 <= 0.8 * err1, f"no improvement: {err1:.4f} -> {err2:.4f}"
+    # Later passes must not drift past the single pass (see #65).
+    assert err3 <= err1, f"drifted past single pass: {err1:.4f} -> {err3:.4f}"
 
 
 def test_multipass_jit():
