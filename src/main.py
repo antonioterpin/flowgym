@@ -70,6 +70,23 @@ def parse_args():
         help="Dataset configuration file path.",
     )
 
+    parser.add_argument(
+        "--cache-root",
+        type=str,
+        default=None,
+        help="Override the cache root_dir from the dataset's caching block "
+        "(the block still supplies the spec). Enables filling a cache "
+        "without editing the dataset config.",
+    )
+
+    parser.add_argument(
+        "--cache-id",
+        type=str,
+        default=None,
+        help="Override the base cache_id from the dataset's caching block. "
+        "The estimator-specific suffix is still appended.",
+    )
+
     return parser.parse_args()
 
 

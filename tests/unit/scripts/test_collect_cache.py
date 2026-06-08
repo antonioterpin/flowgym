@@ -1,0 +1,122 @@
+"""Tests for the generic cache-collection sweep wrapper."""
+
+from __future__ import annotations
+
+import importlib.util
+from pathlib import Path
+
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_SCRIPT = _REPO_ROOT / "scripts" / "collect_cache.py"
+
+_spec = importlib.util.spec_from_file_location("collect_cache", _SCRIPT)
+assert _spec is not None and _spec.loader is not None
+collect_cache = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(collect_cache)
+
+
+def test_build_eval_command_basic() -> None:
+    """The command targets main.py eval with the shared cache root."""
+    cmd = collect_cache.build_eval_command(
+        ("uv", "run", "python"),
+        Path("m.yaml"),
+        Path("d.yaml"),
+        Path("caches"),
+    )
+    assert cmd == [
+        "uv",
+        "run",
+        "python",
+        "src/main.py",
+        "--mode",
+        "eval",
+        "--estimator",
+        "m.yaml",
+        "--dataset",
+        "d.yaml",
+        "--cache-root",
+        "caches",
+    ]
+
+
+def test_build_eval_command_with_cache_id() -> None:
+    """A base cache id is forwarded to main.py."""
+    cmd = collect_cache.build_eval_command(
+        (".venv/bin/python",),
+        Path("m.yaml"),
+        Path("d.yaml"),
+        Path("c"),
+        cache_id="base",
+    )
+    assert cmd[0] == ".venv/bin/python"
+    assert cmd[cmd.index("--cache-id") + 1] == "base"
+
+
+def test_main_succeeds_with_noop_runner(tmp_path: Path) -> None:
+    """Loop returns 0 when every per-model run exits cleanly."""
+    m1 = tmp_path / "m1.yaml"
+    m1.write_text("x", encoding="utf-8")
+    m2 = tmp_path / "m2.yaml"
+    m2.write_text("x", encoding="utf-8")
+    d = tmp_path / "d.yaml"
+    d.write_text("y", encoding="utf-8")
+    rc = collect_cache.main(
+        [
+            "--models",
+            str(m1),
+            str(m2),
+            "--dataset",
+            str(d),
+            "--cache-root",
+            str(tmp_path / "c"),
+            "--runner",
+            "true",
+        ]
+    )
+    assert rc == 0
+
+
+def test_main_reports_failure_with_failing_runner(tmp_path: Path) -> None:
+    """A non-zero per-model exit propagates to a non-zero return code."""
+    m = tmp_path / "m.yaml"
+    m.write_text("x", encoding="utf-8")
+    d = tmp_path / "d.yaml"
+    d.write_text("y", encoding="utf-8")
+    rc = collect_cache.main(
+        [
+            "--models",
+            str(m),
+            "--dataset",
+            str(d),
+            "--cache-root",
+            str(tmp_path / "c"),
+            "--runner",
+            "false",
+        ]
+    )
+    assert rc == 1
+
+
+def test_limit_truncates_model_list(tmp_path: Path) -> None:
+    """--limit processes only the first N models."""
+    models = []
+    for i in range(3):
+        p = tmp_path / f"m{i}.yaml"
+        p.write_text("x", encoding="utf-8")
+        models.append(str(p))
+    d = tmp_path / "d.yaml"
+    d.write_text("y", encoding="utf-8")
+    rc = collect_cache.main(
+        [
+            "--models",
+            *models,
+            "--dataset",
+            str(d),
+            "--cache-root",
+            str(tmp_path / "c"),
+            "--runner",
+            "true",
+            "--limit",
+            "1",
+        ]
+    )
+    assert rc == 0
