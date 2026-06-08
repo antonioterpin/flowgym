@@ -8,6 +8,7 @@ from flowgym.density.simple import SimpleDensityEstimator
 from flowgym.flow.consensus import ConsensusFlowEstimator
 from flowgym.flow.dis import DISJAXFlowFieldEstimator
 from flowgym.flow.dummy import DummyEstimator
+from flowgym.flow.lima.lima_piv import LimaPivEstimator
 from flowgym.flow.open_piv import OpenPIVJAXEstimator
 from flowgym.flow.postprocess.oracle_threshold import (
     LearnedOracleThresholdEstimator,
@@ -65,6 +66,7 @@ ALL_ESTIMATORS: dict[str, type[Estimator] | MissingDependency] = {
     "horn_schunck": HornSchunckEstimator,
     "consensus": ConsensusFlowEstimator,
     "raft_jax": RaftJaxEstimator,
+    "lima_piv": LimaPivEstimator,
     "raft_torch": RaftTorchEstimator,
     "dummy": DummyEstimator,
     "learned_oracle_threshold": LearnedOracleThresholdEstimator,
