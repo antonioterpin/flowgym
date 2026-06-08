@@ -29,6 +29,7 @@ therefore pinned in two parts: unflagged windows must match the
 vectorized reference exactly, flagged windows must be zero.
 """
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -636,9 +637,18 @@ def test_sig2noise_val_matches_reference(threshold, shape):
 
     ref = validation.sig2noise_val(s2n.copy(), threshold=threshold)
     got = np.asarray(sig2noise_val(jnp.asarray(s2n), threshold=threshold))
+    jit_got = np.asarray(
+        jax.jit(sig2noise_val, static_argnames="threshold")(
+            jnp.asarray(s2n), threshold=threshold
+        )
+    )
 
     assert got.dtype == bool
     np.testing.assert_array_equal(got, np.asarray(ref))
+    # Close the loop under jit too: a jitted-vs-eager-self check would agree
+    # even if both drifted from openpiv (e.g. dtype/weak-typing quirks), so
+    # pin the jitted path directly against the reference.
+    np.testing.assert_array_equal(jit_got, np.asarray(ref))
 
 
 def test_sig2noise_val_nan_is_not_flagged():
