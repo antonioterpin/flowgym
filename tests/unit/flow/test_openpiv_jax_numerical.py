@@ -301,6 +301,43 @@ def test_fft_correlate_linear_matches_reference(window_size, overlap):
     np.testing.assert_allclose(got, np.asarray(ref), atol=1e-5)
 
 
+@pytest.mark.parametrize("window_size, overlap", [(32, 16), (24, 12), (16, 8)])
+def test_fft_correlate_circular_matches_reference(window_size, overlap):
+    """Circular correlation matches openpiv, pinning the ``s2 = bb`` scaling.
+
+    Regression guard for the normalization denominator: this PR divides the
+    correlation by ``bb.shape[-2:]`` (openpiv's convention) rather than the
+    parent branch's ``aa.shape[-2:]``. The two agree for the in-tree caller
+    because ``aa`` is padded to ``bb``'s shape, but pinning the raw circular
+    output against the reference with ``normalized_correlation=True`` locks
+    the scaling so it cannot silently drift back to the old denominator.
+    """
+    frame_a, frame_b = _shifted_pair(96, 96, shift_y=3, shift_x=-2, seed=0)
+    aa = sliding_window_array(
+        jnp.asarray(frame_a)[None],
+        (window_size, window_size),
+        (overlap, overlap),
+    )[0]
+    bb = sliding_window_array(
+        jnp.asarray(frame_b)[None],
+        (window_size, window_size),
+        (overlap, overlap),
+    )[0]
+
+    got = np.asarray(
+        fft_correlate_images(aa, bb, correlation_method="circular")
+    )
+    ref = pyprocess.fft_correlate_images(
+        np.asarray(aa),
+        np.asarray(bb),
+        correlation_method="circular",
+        normalized_correlation=True,
+    )
+
+    assert got.shape == np.asarray(ref).shape
+    np.testing.assert_allclose(got, np.asarray(ref), atol=1e-5)
+
+
 def test_fft_correlate_invalid_method_raises():
     """An unknown correlation method raises a clear ValueError."""
     win = jnp.ones((2, 16, 16))

@@ -148,7 +148,7 @@ def extended_search_area_piv(
 
     # Compute correlation (normalizes the windows internally, matching the
     # reference's normalized_correlation=True path).
-    corr = fft_correlate_images(aa, bb, correlation_method)
+    corr = fft_correlate_images(aa, bb, correlation_method=correlation_method)
 
     # Find peaks and compute displacements. subpixel_method is static, so it
     # is closed over rather than vmapped.
@@ -224,11 +224,19 @@ def fft_correlate_images(
         bb: Second image batch (..., height, width).
         correlation_method: Either ``"circular"`` or ``"linear"``.
 
+    Note:
+        ``correlation_method`` is a Python string that selects a code path,
+        so under ``jax.jit`` it must be marked static (e.g.
+        ``static_argnames="correlation_method"``). The ``ValueError`` below
+        only fires when the value is concrete; passing it as a traced
+        argument instead raises an opaque tracer ``TypeError``.
+
     Returns:
         Cross-correlation result (..., height, width).
 
     Raises:
-        ValueError: If ``correlation_method`` is not implemented.
+        ValueError: If ``correlation_method`` is not implemented (only when
+            the argument is a concrete Python string, not a tracer).
     """
     if correlation_method not in ("circular", "linear"):
         raise ValueError(
@@ -251,6 +259,13 @@ def fft_correlate_images(
         )
         f2a = jnp.conj(jnp.fft.rfft2(aa, s=fsize, axes=(-2, -1)))
         f2b = jnp.fft.rfft2(bb, s=fsize, axes=(-2, -1))
+        # No `s=fsize` on the inverse, deliberately reproducing openpiv: with
+        # odd fsize (e.g. 63) rfft2 produces a last-axis length of 32, and
+        # irfft2 without `s` infers 2*(32-1) = 62, so corr's last axis is
+        # fsize-1 -- asymmetric and one short of fsize. The centred crop below
+        # still lands the right pixels because the s1-sized window fits inside
+        # that shorter axis. Do NOT add `s=fsize` to "match" the forward
+        # transform; it would shift the crop and desync from the reference.
         corr = jnp.fft.irfft2(f2a * f2b, axes=(-2, -1)).real
         corr = jnp.fft.fftshift(corr, axes=(-2, -1))
         corr = corr[
