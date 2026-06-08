@@ -25,9 +25,64 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
+import yaml
+
 DEFAULT_RUNNER = "uv run python"
+
+
+def load_estimators_list(path: Path) -> list[dict]:
+    """Load the ``estimators:`` entries from an estimators_list YAML.
+
+    This is the multi-estimator format consumed by ``art_of_piv`` (e.g.
+    ``dis_models_20.yaml``): a top-level ``estimators:`` key holding a list
+    of ``{name, estimator, estimate_type, config}`` dicts.
+
+    Args:
+        path: Path to the estimators_list YAML.
+
+    Returns:
+        The list of estimator-entry dicts.
+
+    Raises:
+        ValueError: If the file has no non-empty ``estimators:`` list.
+    """
+    with path.open("r", encoding="utf-8") as fh:
+        data = yaml.safe_load(fh)
+    estimators = data.get("estimators") if isinstance(data, dict) else None
+    if not estimators:
+        raise ValueError(f"{path} has no non-empty `estimators:` list")
+    return estimators
+
+
+def materialize_model_configs(
+    entries: list[dict],
+    workdir: Path,
+) -> list[Path]:
+    """Write estimators_list entries as standalone model config YAMLs.
+
+    Each entry is emitted as a ``{estimator, estimate_type, config}`` YAML
+    (the ``name`` key, which is list-only metadata, is dropped) so it can be
+    passed to ``src/main.py --model``.
+
+    Args:
+        entries: Estimator-entry dicts from :func:`load_estimators_list`.
+        workdir: Directory to write the per-entry YAMLs into.
+
+    Returns:
+        Paths to the written model config YAMLs, in entry order.
+    """
+    paths: list[Path] = []
+    for idx, entry in enumerate(entries):
+        model = {k: v for k, v in entry.items() if k != "name"}
+        raw_stem = str(entry.get("name", f"model_{idx}"))
+        stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in raw_stem)
+        out = workdir / f"{stem}.yaml"
+        out.write_text(yaml.dump(model), encoding="utf-8")
+        paths.append(out)
+    return paths
 
 
 def build_eval_command(
@@ -82,8 +137,17 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--models",
         type=Path,
         nargs="+",
-        required=True,
-        help="Model config YAMLs to evaluate (one cache each).",
+        default=None,
+        help="Standalone model config YAMLs to evaluate (one cache each).",
+    )
+    parser.add_argument(
+        "--estimators-list",
+        type=Path,
+        nargs="+",
+        default=None,
+        help="estimators_list YAMLs (a top-level `estimators:` list, e.g. "
+        "dis_models_20.yaml). Every sub-estimator is collected as its own "
+        "cache; nested lists dedupe by cache_id, so the superset suffices.",
     )
     parser.add_argument(
         "--dataset",
@@ -122,7 +186,10 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Stop at the first failing config instead of continuing.",
     )
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if not args.models and not args.estimators_list:
+        parser.error("provide --models and/or --estimators-list")
+    return args
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -135,7 +202,16 @@ def main(argv: list[str] | None = None) -> int:
         Process exit code (0 if every config succeeded, 1 otherwise).
     """
     args = _parse_args(argv)
-    models = args.models if args.limit is None else args.models[: args.limit]
+
+    models: list[Path] = list(args.models or [])
+    if args.estimators_list:
+        workdir = Path(tempfile.mkdtemp(prefix="collect_cache_"))
+        for list_path in args.estimators_list:
+            entries = load_estimators_list(list_path)
+            models.extend(materialize_model_configs(entries, workdir))
+
+    if args.limit is not None:
+        models = models[: args.limit]
     runner = tuple(args.runner.split())
 
     n_ok = 0

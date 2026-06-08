@@ -10,6 +10,7 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+import yaml
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _SCRIPT = _REPO_ROOT / "scripts" / "select_ensemble.py"
@@ -113,6 +114,78 @@ def test_works_without_timing_json(tiny_cache: Path) -> None:
     assert E.shape == (3, 4)
     assert set(cache_ids) == {"cand_a", "cand_b", "cand_c"}
     assert all(r.get("mean_ms") is None for r in records)
+
+
+def test_partial_cache_is_dropped_not_fatal(tiny_cache: Path) -> None:
+    """A cache with a minority (incomplete) key set is dropped, not fatal."""
+    # tiny_cache has 3 candidates over keys [10,20,30,40]; add a partial one.
+    _write_candidate(tiny_cache, "cand_partial", [10, 20], [0.0, 0.0])
+    E, cache_ids, _ = select_ensemble._load_cache(
+        tiny_cache, metric="epe", verbose=False
+    )
+    assert E.shape == (3, 4)  # the 4-key majority survives
+    assert "cand_partial" not in cache_ids
+
+
+def test_export_models_writes_collectable_estimators_list(
+    tmp_path: Path,
+) -> None:
+    """Selected configs are exported as a collect_cache estimators_list."""
+    summary = {
+        "selected": [
+            {"cache_id": "a", "config": {"patch_size": 7, "preset": 1}},
+            {"cache_id": "b", "config": {}},  # no stored config -> skipped
+        ]
+    }
+    out = tmp_path / "chosen_models.yaml"
+    written, skipped = select_ensemble._export_models(
+        summary, out, "dis_jax", "flow"
+    )
+    assert (written, skipped) == (1, 1)
+    data = yaml.safe_load(out.read_text())
+    assert data["estimators"] == [
+        {
+            "name": "a",
+            "estimator": "dis_jax",
+            "estimate_type": "flow",
+            "config": {"patch_size": 7, "preset": 1},
+        }
+    ]
+
+
+def test_export_models_end_to_end(tmp_path: Path) -> None:
+    """--export-models writes the chosen subset using timing.json configs."""
+    keys = [1, 2, 3]
+    _write_candidate(
+        tmp_path,
+        "x",
+        keys,
+        [0.0, 5.0, 5.0],
+        timing={"config": {"patch_size": 7}},
+    )
+    _write_candidate(
+        tmp_path,
+        "y",
+        keys,
+        [5.0, 0.0, 0.0],
+        timing={"config": {"patch_size": 9}},
+    )
+    out = tmp_path / "models.yaml"
+    rc = select_ensemble.main(
+        [
+            "--cache-root",
+            str(tmp_path),
+            "--K",
+            "2",
+            "--export-models",
+            str(out),
+        ]
+    )
+    assert rc == 0
+    data = yaml.safe_load(out.read_text())
+    sizes = {e["config"]["patch_size"] for e in data["estimators"]}
+    assert sizes == {7, 9}
+    assert all(e["estimator"] == "dis_jax" for e in data["estimators"])
 
 
 def test_finite_time_limit_without_timing_drops_all(tiny_cache: Path) -> None:

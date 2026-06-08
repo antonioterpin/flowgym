@@ -27,16 +27,64 @@ Example:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import sys
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pyarrow.parquet as pq
+import yaml
 from scipy.optimize import Bounds, LinearConstraint, milp
 from scipy.sparse import csr_matrix
+
+
+def _export_models(
+    summary: dict[str, Any],
+    path: Path,
+    estimator: str,
+    estimate_type: str,
+) -> tuple[int, int]:
+    """Write a selection's configs as a collect-ready estimators_list YAML.
+
+    The output is the ``estimators:`` format consumed by
+    ``collect_cache.py --estimators-list``, so a chosen subset can be
+    re-collected on other splits (train/val/test) directly. Candidates
+    whose cache stored no ``config`` (e.g. caches written with only a
+    ``meta.json``) are skipped.
+
+    Args:
+        summary: A selection summary from :func:`_summarize_selection`.
+        path: Output YAML path.
+        estimator: ``estimator`` field for each emitted entry.
+        estimate_type: ``estimate_type`` field for each emitted entry.
+
+    Returns:
+        A pair ``(written, skipped)`` counting emitted and config-less
+        entries.
+    """
+    entries: list[dict[str, Any]] = []
+    skipped = 0
+    for entry in summary["selected"]:
+        config = entry.get("config") or {}
+        if not config:
+            skipped += 1
+            continue
+        entries.append(
+            {
+                "name": entry["cache_id"],
+                "estimator": estimator,
+                "estimate_type": estimate_type,
+                "config": config,
+            }
+        )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as fh:
+        yaml.dump({"estimators": entries}, fh, sort_keys=False)
+    return len(entries), skipped
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -106,6 +154,27 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=Path,
         default=None,
         help="Optional path to dump the full result JSON.",
+    )
+    parser.add_argument(
+        "--export-models",
+        type=Path,
+        default=None,
+        help="Write the selected subset's configs as an estimators_list "
+        "YAML (consumable by collect_cache.py --estimators-list) to "
+        "re-collect on other splits.",
+    )
+    parser.add_argument(
+        "--export-estimator",
+        type=str,
+        default="dis_jax",
+        help="`estimator` field for --export-models entries (default: "
+        "dis_jax).",
+    )
+    parser.add_argument(
+        "--export-estimate-type",
+        type=str,
+        default="flow",
+        help="`estimate_type` field for --export-models entries.",
     )
     parser.add_argument(
         "-v",
@@ -187,8 +256,7 @@ def _load_cache(
         stat to filter on.
 
     Raises:
-        RuntimeError: If no candidates were found or key sets disagree
-            across candidates.
+        RuntimeError: If no candidates with data shards were found.
     """
     all_subdirs = sorted(p for p in cache_root.iterdir() if p.is_dir())
     subdirs = [p for p in all_subdirs if list((p / "data").glob("part-*"))]
@@ -207,35 +275,49 @@ def _load_cache(
     if not subdirs:
         raise RuntimeError(f"no candidates with data shards under {cache_root}")
 
-    canonical_keys: np.ndarray | None = None
-    err_rows: list[np.ndarray] = []
-    cache_ids: list[str] = []
-    records: list[dict[str, Any]] = []
-
+    # Load every candidate, then keep only those sharing the majority key
+    # set. A union of caches can contain partial / interrupted ones (fewer
+    # rows); rather than aborting the whole selection, those are dropped
+    # with a warning so the consistent majority is still usable.
+    loaded: list[tuple[Path, dict[str, Any], np.ndarray, np.ndarray]] = []
+    sigs: list[str] = []
     for idx, subdir in enumerate(subdirs):
         record, keys, errors = _load_candidate(subdir, metric)
         order = np.argsort(keys, kind="stable")
         sorted_keys = keys[order]
-        if canonical_keys is None:
-            canonical_keys = sorted_keys
-            err_rows.append(errors[order])
-        else:
-            if sorted_keys.shape != canonical_keys.shape or not np.array_equal(
-                sorted_keys, canonical_keys
-            ):
-                raise RuntimeError(
-                    f"key set mismatch: {subdir} differs from {subdirs[0]}",
-                )
-            err_rows.append(errors[order])
-
-        cache_ids.append(record.get("cache_id", subdir.name))
-        records.append(record)
+        loaded.append((subdir, record, sorted_keys, errors[order]))
+        sigs.append(hashlib.md5(sorted_keys.tobytes()).hexdigest())
         if verbose and (idx + 1) % 100 == 0:
             print(f"loaded {idx + 1}/{len(subdirs)} candidates", flush=True)
 
-    assert canonical_keys is not None
+    majority_sig = Counter(sigs).most_common(1)[0][0]
+    dropped = [
+        (sd, sk)
+        for (sd, _, sk, _), sig in zip(loaded, sigs, strict=True)
+        if sig != majority_sig
+    ]
+    kept = [
+        item
+        for item, sig in zip(loaded, sigs, strict=True)
+        if sig == majority_sig
+    ]
+    if dropped:
+        print(
+            f"warning: dropped {len(dropped)} candidate(s) whose key set "
+            f"differs from the majority ({len(kept)} share it); likely "
+            "incomplete caches:",
+            file=sys.stderr,
+        )
+        for sd, sk in dropped[:20]:
+            print(f"  - {sd.name} ({sk.size} keys)", file=sys.stderr)
+        if len(dropped) > 20:
+            print(f"  ... ({len(dropped) - 20} more)", file=sys.stderr)
 
-    E = np.stack(err_rows, axis=0).astype(np.float32, copy=False)
+    cache_ids = [rec.get("cache_id", sd.name) for (sd, rec, _, _) in kept]
+    records = [rec for (_, rec, _, _) in kept]
+    E = np.stack([er for (_, _, _, er) in kept], axis=0).astype(
+        np.float32, copy=False
+    )
     return E, cache_ids, records
 
 
@@ -684,6 +766,19 @@ def main(argv: list[str] | None = None) -> int:
         with args.out.open("w", encoding="utf-8") as fh:
             json.dump(payload, fh, indent=2)
         print(f"wrote {args.out}")
+
+    if args.export_models is not None:
+        best = exact_summary if exact_summary is not None else greedy_summary
+        written, skipped = _export_models(
+            best,
+            args.export_models,
+            args.export_estimator,
+            args.export_estimate_type,
+        )
+        msg = f"exported {written} model config(s) to {args.export_models}"
+        if skipped:
+            msg += f" ({skipped} skipped: no stored config)"
+        print(msg)
 
     return 0
 
