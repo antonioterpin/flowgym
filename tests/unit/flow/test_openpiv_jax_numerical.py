@@ -37,6 +37,7 @@ from openpiv import filters, pyprocess, validation
 
 from flowgym.flow.open_piv.openpiv_jax import replace_outliers
 from flowgym.flow.open_piv.process import (
+    _as_pair,
     extended_search_area_piv,
     fft_correlate_images,
     find_all_first_peaks,
@@ -490,6 +491,46 @@ def test_pipeline_rectangular_windows_matches_reference(
     np.testing.assert_allclose(
         v_jax[finite], np.asarray(v_ref)[finite], atol=1e-2
     )
+
+
+def test_as_pair_rejects_non_pair_tuple_under_debug(monkeypatch):
+    """_as_pair flags a malformed (non-length-2) tuple when validation is on.
+
+    The check is opt-in (``DEBUG``-gated), consistent with the rest of the
+    geometry validation; with ``DEBUG`` off a 3-tuple is silently truncated.
+    """
+    monkeypatch.setattr("flowgym.flow.open_piv.process.DEBUG", True)
+    with pytest.raises(AssertionError):
+        _as_pair((32, 16, 8))
+
+
+@pytest.mark.parametrize(
+    "window_size, search_area_size, overlap",
+    [
+        (32, 16, 8),  # search_area_size < window_size
+        (16, 16, 16),  # overlap == search_area_size (not strictly smaller)
+    ],
+)
+def test_pipeline_invalid_geometry_flagged_under_debug(
+    monkeypatch, window_size, search_area_size, overlap
+):
+    """Geometry constraints are validated, but only when DEBUG is enabled.
+
+    These checks are opt-in by design (see the ``extended_search_area_piv``
+    docstring): with ``DEBUG`` disabled the inputs pass silently, which is
+    intentional, not a missing check. Enabling ``DEBUG`` must surface them.
+    """
+    monkeypatch.setattr("flowgym.flow.open_piv.process.DEBUG", True)
+    frame_a = jnp.zeros((1, 64, 64))
+    frame_b = jnp.zeros((1, 64, 64))
+    with pytest.raises(AssertionError):
+        extended_search_area_piv(
+            frame_a,
+            frame_b,
+            window_size=window_size,
+            search_area_size=search_area_size,
+            overlap=overlap,
+        )
 
 
 # ---------------------------------------------------------------------------

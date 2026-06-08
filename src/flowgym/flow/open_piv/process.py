@@ -27,6 +27,11 @@ def _as_pair(value: int | tuple[int, int]) -> tuple[int, int]:
         The value as a ``(height, width)`` tuple of ints.
     """
     if isinstance(value, (tuple, list)):
+        if DEBUG:
+            assert len(value) == 2, (
+                "Expected an int or a (height, width) pair, got "
+                f"length-{len(value)} {value!r}."
+            )
         return (int(value[0]), int(value[1]))
     return (int(value), int(value))
 
@@ -101,6 +106,14 @@ def extended_search_area_piv(
         static_argnames=("window_size", "search_area_size", "overlap",
         "sig2noise_method", "subpixel_method", "correlation_method"))``)
         alongside the window-geometry arguments.
+
+        Input validation is opt-in: the geometry constraints
+        (``search_area_size >= window_size`` and
+        ``overlap < search_area_size`` per axis) and the ``(height, width)``
+        shape of tuple arguments are checked only under the module ``DEBUG``
+        flag. With ``DEBUG`` disabled (the default) malformed geometry is not
+        rejected here -- this is intentional for runtime/jit leanness, not a
+        missing check.
 
     Returns:
         Displacement field of shape (batch_size, n_rows, n_cols, 2). If
