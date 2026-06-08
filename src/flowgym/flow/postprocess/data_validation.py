@@ -443,8 +443,10 @@ def universal_median_test(
 
     # Combine the per-component normalized residuals with the L2 norm, as in
     # eq. 2 of Westerweel & Scarano (2005). A per-component OR would flag
-    # different vectors near the threshold.
-    r0_combined = jnp.sqrt(jnp.sum(jnp.square(r0), axis=-1))
+    # different vectors near the threshold. linalg.norm reads directly as the
+    # paper's eq. 2 and is more numerically robust than sqrt(sum(square(...)))
+    # for extreme residuals.
+    r0_combined = jnp.linalg.norm(r0, axis=-1)
 
     return (
         flow_field,

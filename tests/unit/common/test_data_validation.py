@@ -365,27 +365,40 @@ def test_universal_vs_naive(batch, height, width, radius, r_threshold):
 def test_universal_median_uses_l2_combination_not_per_component():
     """The test combines component residuals with the L2 norm (eq. 2).
 
-    Regression guard for the per-component-OR bug: the implementation must
-    match the L2 reference and, on a field where the two combinations
-    disagree, must *not* match the per-component-OR reference. A vector whose
-    u and v normalized residuals each sit just below the threshold but whose
-    L2 combination exceeds it has to be flagged.
+    Regression guard for the per-component-OR bug, on an explicit minimal
+    field. The centre vector sits in an otherwise-antisymmetric 3x3
+    neighbourhood whose per-component median is ``0`` and median-absolute-
+    deviation is ``9.9``; with the default ``epsilon=0.1`` the divisor is
+    exactly ``10.0``, so the centre vector ``(15.0, 15.0)`` has normalized
+    residuals ``r0_u == r0_v == 1.5``. Under per-component OR (threshold
+    ``2.0``) each component sits below the threshold, so the vector is
+    *valid*; its L2 combination ``sqrt(1.5**2 + 1.5**2) ~= 2.12`` exceeds the
+    threshold and must flag it. An L2 implementation therefore flags the
+    centre while an OR implementation does not.
     """
-    # Search for a field where the L2 and OR references genuinely disagree,
-    # so the assertion has teeth rather than passing vacuously.
     r_threshold, radius = 2.0, 1
-    for seed in range(50):
-        ff = np.asarray(jrandom.normal(jrandom.PRNGKey(seed), (1, 9, 9, 2)))
-        out_l2 = _naive_median_test(
-            ff, r_threshold=r_threshold, radius=radius, combine="l2"
-        )
-        out_or = _naive_median_test(
-            ff, r_threshold=r_threshold, radius=radius, combine="or"
-        )
-        if np.any(out_l2 != out_or):
-            break
-    else:
-        pytest.fail("Could not construct an L2-vs-OR disagreement field.")
+    # Per component: four neighbours at -9.9 and four at +9.9 (median 0,
+    # MAD 9.9), centre at 15.0. The exact placement of the +/- values around
+    # the centre does not matter, only that there are four of each.
+    val = 9.9
+    plane = np.array(
+        [
+            [-val, -val, -val],
+            [-val, 15.0, +val],
+            [+val, +val, +val],
+        ],
+        dtype=np.float32,
+    )
+    ff = np.stack([plane, plane], axis=-1)[None]  # (1, 3, 3, 2)
+
+    out_l2 = _naive_median_test(
+        ff, r_threshold=r_threshold, radius=radius, combine="l2"
+    )
+    out_or = _naive_median_test(
+        ff, r_threshold=r_threshold, radius=radius, combine="or"
+    )
+    # The two references disagree exactly at the constructed centre vector.
+    assert out_l2[0, 1, 1] and not out_or[0, 1, 1]
 
     _, valid, _ = universal_median_test(
         jnp.asarray(ff),
@@ -398,8 +411,8 @@ def test_universal_median_uses_l2_combination_not_per_component():
 
     # Matches the L2 (paper) reference everywhere ...
     np.testing.assert_array_equal(got_outlier, out_l2)
-    # ... and differs from the per-component-OR behaviour where they diverge.
-    assert np.any(got_outlier != out_or)
+    # ... and flags the centre vector that per-component OR would keep.
+    assert got_outlier[0, 1, 1] and not out_or[0, 1, 1]
 
 
 @pytest.mark.skipif(
