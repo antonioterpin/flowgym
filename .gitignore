@@ -209,6 +209,8 @@ results/**/checkpoints/**
 # Experiment outputs
 experiments/*/runs/
 experiments/*/_generated/
+experiments/lima/output/
+experiments/lima/.runport
 
 # Per-run experiment temp configs (regenerated on each run)
 experiments/**/temp_*.yaml

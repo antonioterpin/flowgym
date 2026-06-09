@@ -1,0 +1,21 @@
+# LIMA-6 (LIMAR2): replicate padding, search range 2 — the 2025 paper's
+# recommended configuration. Multi-level Jacobian-penalised L1 loss.
+estimator: lima_piv
+estimate_type: flow
+out_dir: "experiments/lima/output"
+run_name: "lima_piv_class1_kinematic"
+config:
+  jit: true
+  search_range: 2
+  padding_mode: replicate
+  refine_levels: 6
+  lambda_u: 0.91
+  lambda_j: 0.09
+  grad_clip_norm: 1.0
+  use_temporal_propagation: false
+  history_size: 1
+  optimizer_config:
+    name: adam
+    # Paper uses 1e-4/2e-4 over a 200-epoch budget; raised here for faster
+    # convergence within a reduced-budget run.
+    learning_rate: 0.0005
