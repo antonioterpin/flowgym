@@ -285,7 +285,23 @@ def _naive_median_test(
     r_threshold: float = 2.0,
     epsilon: float = 1e-1,
     radius: int = 1,
+    combine: str = "l2",
 ) -> np.ndarray:
+    """Reference normalized median test, transcribed from the paper.
+
+    Independent per-pixel implementation of eq. 2 of Westerweel & Scarano
+    (2005): the centre is excluded from the neighbour statistics, the
+    per-component normalized residuals ``r0`` are formed, and the vector is
+    flagged when the combined residual exceeds ``r_threshold``.
+
+    ``combine`` selects how the two component residuals are combined:
+    ``"l2"`` (the paper's eq. 2, ``sqrt(r0_u**2 + r0_v**2)``) or ``"or"``
+    (per-component thresholding, the pre-fix behaviour). It exists only so a
+    single reference can express both forms and the discriminating test can
+    pin the implementation to the L2 one.
+    """
+    if combine not in ("l2", "or"):
+        raise ValueError(f"Unknown combine mode: {combine!r}")
     B, H, W, C = flow_field.shape
     wsize = 2 * radius + 1
     mask = np.ones((wsize, wsize), dtype=bool)
@@ -307,7 +323,10 @@ def _naive_median_test(
                 median = np.median(neigh, axis=0)
                 rm = np.median(np.abs(neigh - median), axis=0)
                 r0 = np.abs(patch[radius, radius, :] - median) / (rm + epsilon)
-                outlier[b, y, x] = np.any(r0 > r_threshold)
+                if combine == "l2":
+                    outlier[b, y, x] = np.sqrt(np.sum(r0**2)) > r_threshold
+                else:
+                    outlier[b, y, x] = bool(np.any(r0 > r_threshold))
 
     return outlier
 
@@ -341,6 +360,59 @@ def test_universal_vs_naive(batch, height, width, radius, r_threshold):
 
     # Move JAX result to host memory for comparison
     np.testing.assert_array_equal(np.asarray(actual), expected_valid)
+
+
+def test_universal_median_uses_l2_combination_not_per_component():
+    """The test combines component residuals with the L2 norm (eq. 2).
+
+    Regression guard for the per-component-OR bug, on an explicit minimal
+    field. The centre vector sits in an otherwise-antisymmetric 3x3
+    neighbourhood whose per-component median is ``0`` and median-absolute-
+    deviation is ``9.9``; with the default ``epsilon=0.1`` the divisor is
+    exactly ``10.0``, so the centre vector ``(15.0, 15.0)`` has normalized
+    residuals ``r0_u == r0_v == 1.5``. Under per-component OR (threshold
+    ``2.0``) each component sits below the threshold, so the vector is
+    *valid*; its L2 combination ``sqrt(1.5**2 + 1.5**2) ~= 2.12`` exceeds the
+    threshold and must flag it. An L2 implementation therefore flags the
+    centre while an OR implementation does not.
+    """
+    r_threshold, radius = 2.0, 1
+    # Per component: four neighbours at -9.9 and four at +9.9 (median 0,
+    # MAD 9.9), centre at 15.0. The exact placement of the +/- values around
+    # the centre does not matter, only that there are four of each.
+    val = 9.9
+    plane = np.array(
+        [
+            [-val, -val, -val],
+            [-val, 15.0, +val],
+            [+val, +val, +val],
+        ],
+        dtype=np.float32,
+    )
+    ff = np.stack([plane, plane], axis=-1)[None]  # (1, 3, 3, 2)
+
+    out_l2 = _naive_median_test(
+        ff, r_threshold=r_threshold, radius=radius, combine="l2"
+    )
+    out_or = _naive_median_test(
+        ff, r_threshold=r_threshold, radius=radius, combine="or"
+    )
+    # The two references disagree exactly at the constructed centre vector.
+    assert out_l2[0, 1, 1] and not out_or[0, 1, 1]
+
+    _, valid, _ = universal_median_test(
+        jnp.asarray(ff),
+        r_threshold=r_threshold,
+        radius=radius,
+        valid=None,
+        state=None,
+    )
+    got_outlier = ~np.asarray(valid)
+
+    # Matches the L2 (paper) reference everywhere ...
+    np.testing.assert_array_equal(got_outlier, out_l2)
+    # ... and flags the centre vector that per-component OR would keep.
+    assert got_outlier[0, 1, 1] and not out_or[0, 1, 1]
 
 
 @pytest.mark.skipif(
