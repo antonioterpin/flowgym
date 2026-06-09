@@ -1,0 +1,72 @@
+# TRUE kinematic training for LIMA (Manickathan, Mucignat & Lunati, Meas. Sci.
+# Technol. 33, 124006, 2022): supervise on RANDOMLY GENERATED smooth
+# displacement fields, not on stored CFD/DNS fields. Both halves are now random
+# -- synthpix's in-memory KinematicDataSource emits fresh smooth random fields,
+# and SyntheticImageSampler renders fresh particle images on top of each one.
+# Requires synthpix>=0.3.0 (scheduler_class: "kinematic"). Resolves issue #68;
+# contrast with train.yaml, which is supervised training on the *real* class-1
+# fields with only the image rendering randomized.
+seed: 0
+batch_size: 10
+flow_fields_per_batch: 10
+batches_per_flow_batch: 1
+buffer_size: 150
+loop: true
+randomize: true
+include_images: false   # required: the kinematic source generates images
+episode_length: 0       # required: the kinematic source is non-episodic
+worker_count: 0
+
+# --- Kinematic flow-field generator (synthpix KinematicDataSource) -----------
+# ds_ref = a * G_sigma * xi, with xi ~ U(-1, 1), G_sigma a Gaussian filter of
+# width sigma (px), and a a per-field linear scale factor.
+#
+# IMPORTANT: synthpix applies a LINEAR scale (a is multiplied straight into the
+# filtered noise); it is NOT the paper's per-field peak-displacement target.
+# Gaussian filtering attenuates the noise amplitude strongly (and sigma-
+# dependently), so synthpix's own defaults (sigma 5-100, a 0-16) produce
+# degenerate sub-pixel fields (per-field peak |d| ~ 0.10 px median) -- useless
+# for training. The ranges below are CALIBRATED (see experiments/lima/RESULTS.md)
+# so per-field peak |d| spans a PIV-realistic ~0-18 px (median ~2.4 px),
+# overlapping the class-1 test distribution the model is evaluated on.
+scheduler_class: "kinematic"
+num_examples: 18278          # paper's random-field count (LIMA-1 Table 1)
+filter_sigma_range: [5, 30]  # Gaussian correlation length (px)
+scale_factor_range: [0, 120] # calibrated linear scale -> peak |d| ~0-18 px
+
+# Image generation parameters (randomized per batch -> data augmentation),
+# identical to train.yaml so the kinematic vs class-1 comparison is fair.
+image_shape: [256, 256]
+dt: 1
+seeding_density_range: [0.03, 0.04]
+p_hide_img1: 0.0001
+p_hide_img2: 0.0001
+diameter_ranges: [[1.5, 2.5]]
+diameter_var: 0.03
+intensity_ranges: [[150, 230]]
+intensity_var: 0.01
+rho_ranges: [[-0.1, 0.1]]
+rho_var: 0.1
+noise_uniform: 0.001
+noise_gaussian_mean: 0.0
+noise_gaussian_std: 0.001
+
+# Flow generation parameters (displacements already in pixels). The kinematic
+# source supplies the fields directly, so the speed bounds below are inert; they
+# are kept aligned with train.yaml for renderer parity.
+velocities_per_pixel: 1.0
+resolution: 1
+flow_field_size: [256, 256]
+img_offset: [0, 0]
+min_speed_x: 0
+max_speed_x: 0
+min_speed_y: 0
+max_speed_y: 0
+output_units: "pixels"
+eval_gt: false
+
+# Supervised training controls (mirrors train.yaml for a like-for-like run)
+num_batches: 40000
+save_every: 8000
+log_every: 500
+save_only_best: false

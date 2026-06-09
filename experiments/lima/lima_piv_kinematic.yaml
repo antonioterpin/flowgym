@@ -1,0 +1,23 @@
+# LIMA-6 (LIMAR2) for TRUE kinematic training (random displacement fields).
+# Identical architecture to lima_piv.yaml; only the output location differs so
+# kinematic checkpoints (out_dir/estimator/seed) do not clobber the class-1
+# run's. run_name differs purely for W&B run separation.
+estimator: lima_piv
+estimate_type: flow
+out_dir: "experiments/lima/output_kinematic"
+run_name: "lima_piv_true_kinematic"
+config:
+  jit: true
+  search_range: 2
+  padding_mode: replicate
+  refine_levels: 6
+  lambda_u: 0.91
+  lambda_j: 0.09
+  grad_clip_norm: 1.0
+  use_temporal_propagation: false
+  history_size: 1
+  optimizer_config:
+    name: adam
+    # Paper uses 1e-4/2e-4 over a 200-epoch budget; raised here for faster
+    # convergence within a reduced-budget run (matches lima_piv.yaml).
+    learning_rate: 0.0005
