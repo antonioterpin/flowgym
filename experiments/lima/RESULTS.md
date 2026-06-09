@@ -91,3 +91,19 @@ GOGGLES_PORT=$PORT PYTHONPATH=src XLA_PYTHON_CLIENT_PREALLOCATE=false \
   --dataset experiments/lima/eval.yaml \
   --load_from experiments/lima/output/lima_piv/0/checkpoints/32000
 ```
+
+## References
+
+- Manickathan, L., Mucignat, C., & Lunati, I. (2023). "A lightweight neural
+  network designed for fluid velocimetry." *Experiments in Fluids*, 64, 161.
+  https://doi.org/10.1007/s00348-023-03695-8
+- Mucignat, C., Zdybał, K., & Lunati, I. (2025). "Improving the performance of a
+  lightweight convolutional neural network for particle image velocimetry
+  through hyper-parameter and padding optimization." *Physics of Fluids*, 37,
+  105112. https://doi.org/10.1063/5.0283779
+- Manickathan, L., Mucignat, C., & Lunati, I. (2022). "Kinematic training of
+  convolutional neural networks for particle image velocimetry." *Measurement
+  Science and Technology*, 33, 124006. https://doi.org/10.1088/1361-6501/ac8fae
+- Hur, J., & Roth, S. (2019). "Iterative residual refinement for joint optical
+  flow and occlusion estimation." *CVPR*.
+  https://doi.org/10.1109/CVPR.2019.00590

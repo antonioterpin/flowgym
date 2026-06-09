@@ -11,6 +11,14 @@ These are the parameter-free building blocks used by the LIMA model:
 - ``pad_for_conv`` applies the explicit padding required to keep dilated
   convolutions size-preserving, supporting the padding schemes studied in
   Mucignat, Zdybał & Lunati (Phys. Fluids 2025).
+
+References:
+    Mucignat, Zdybał & Lunati, Phys. Fluids 37, 105112 (2025),
+    https://doi.org/10.1063/5.0283779 (padding Eq. 1 and search range);
+    Wereley & Meinhart, "Second-order accurate particle image velocimetry",
+    Exp. Fluids 31, 258-268 (2001), https://doi.org/10.1007/s003480100281
+    (symmetric midpoint warping). See the ``flowgym.flow.lima`` package
+    docstring for the full reference list.
 """
 
 import jax.numpy as jnp

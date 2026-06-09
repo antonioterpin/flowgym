@@ -5,6 +5,15 @@ Wraps :class:`flowgym.nn.lima_model.LimaModel` as a trainable
 Jacobian-penalised L1 loss of Manickathan, Mucignat & Lunati (Exp. Fluids
 2023) and the replicate-padding / reduced-search-range defaults of Mucignat,
 Zdybał & Lunati (Phys. Fluids 2025).
+
+References:
+    Manickathan, Mucignat & Lunati, Exp. Fluids 64, 161 (2023),
+    https://doi.org/10.1007/s00348-023-03695-8 (architecture + loss, Eq. 7,
+    Table 2 weights); Mucignat, Zdybał & Lunati, Phys. Fluids 37, 105112
+    (2025), https://doi.org/10.1063/5.0283779 (padding + search range);
+    Manickathan, Mucignat & Lunati, Meas. Sci. Technol. 33, 124006 (2022),
+    https://doi.org/10.1088/1361-6501/ac8fae (kinematic training). See the
+    ``flowgym.flow.lima`` package docstring for the full reference list.
 """
 
 from collections.abc import Sequence

@@ -22,6 +22,16 @@ original PyTorch LIMA; the tabulated architecture implemented here is ~0.93M
 (search range 2). The difference is most likely an additional, non-tabulated
 flow-estimator stack in the original; the padding/search-range contributions of
 the 2025 paper concern exactly the dilated decoder reproduced here.
+
+References:
+    Manickathan, Mucignat & Lunati, "A lightweight neural network designed for
+    fluid velocimetry", Exp. Fluids 64, 161 (2023),
+    https://doi.org/10.1007/s00348-023-03695-8; Mucignat, Zdybał & Lunati,
+    "Improving the performance of a lightweight CNN for PIV through
+    hyper-parameter and padding optimization", Phys. Fluids 37, 105112 (2025),
+    https://doi.org/10.1063/5.0283779; Hur & Roth, "Iterative residual
+    refinement...", CVPR 2019, https://doi.org/10.1109/CVPR.2019.00590. See the
+    ``flowgym.flow.lima`` package docstring for the full reference list.
 """
 
 import jax
