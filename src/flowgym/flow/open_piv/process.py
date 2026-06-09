@@ -372,6 +372,36 @@ def sig2noise_ratio(
     return jnp.where(flag, 0.0, ratio)
 
 
+def sig2noise_val(s2n: jnp.ndarray, threshold: float = 1.0) -> jnp.ndarray:
+    """Flag vectors whose signal-to-noise ratio is below a threshold.
+
+    JAX port of ``openpiv.validation.sig2noise_val``: vectors whose
+    signal-to-noise ratio (e.g. from :func:`sig2noise_ratio`) is below
+    ``threshold`` are marked as outliers. This completes the standard
+    signal-to-noise outlier-rejection path.
+
+    NaN entries in ``s2n`` yield ``False`` (not flagged), since ``nan <
+    threshold`` is ``False``, matching the reference.
+
+    Note:
+        This returns openpiv's convention, where ``True`` marks an *outlier*.
+        That is the **inverse** of flowgym's ``postprocess`` mask convention
+        (``True``/``1`` means *valid*; see ``postprocess.data_validation``).
+        Invert the result (``~mask``) before composing it with ``postprocess``
+        masks, otherwise it rejects exactly the vectors it should keep. The
+        openpiv name is kept for port parity.
+
+    Args:
+        s2n: Signal-to-noise ratios of any shape.
+        threshold: Vectors with ``s2n < threshold`` are flagged.
+
+    Returns:
+        Boolean array of the same shape as ``s2n``; ``True`` marks outliers
+        (openpiv convention -- see the Note above).
+    """
+    return s2n < threshold
+
+
 def subpixel_displacement(
     corr: jnp.ndarray,
     peaks_i: jnp.ndarray,

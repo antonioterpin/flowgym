@@ -29,10 +29,11 @@ therefore pinned in two parts: unflagged windows must match the
 vectorized reference exactly, flagged windows must be zero.
 """
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from openpiv import filters, pyprocess
+from openpiv import filters, pyprocess, validation
 
 from flowgym.flow.open_piv.openpiv_jax import replace_outliers
 from flowgym.flow.open_piv.process import (
@@ -42,6 +43,7 @@ from flowgym.flow.open_piv.process import (
     find_all_second_peaks,
     get_field_shape,
     sig2noise_ratio,
+    sig2noise_val,
     sliding_window_array,
     subpixel_displacement,
 )
@@ -770,3 +772,63 @@ def test_pipeline_sig2noise_matches_reference(
         s2n[~flags], np.asarray(s2n_ref)[~flags], rtol=1e-3
     )
     np.testing.assert_array_equal(s2n[flags], 0.0)
+
+
+# ---------------------------------------------------------------------------
+# sig2noise_val
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("threshold", [0.8, 1.0, 1.5, 2.0])
+@pytest.mark.parametrize("shape", [(7, 9), (3, 5, 5)])
+def test_sig2noise_val_matches_reference(threshold, shape):
+    """sig2noise_val matches openpiv.validation.sig2noise_val (2D and 3D)."""
+    rng = np.random.RandomState(sum(shape))
+    s2n = (rng.rand(*shape) * 3.0).astype(np.float64)
+
+    ref = validation.sig2noise_val(s2n.copy(), threshold=threshold)
+    got = np.asarray(sig2noise_val(jnp.asarray(s2n), threshold=threshold))
+    jit_got = np.asarray(
+        jax.jit(sig2noise_val, static_argnames="threshold")(
+            jnp.asarray(s2n), threshold=threshold
+        )
+    )
+
+    assert got.dtype == bool
+    np.testing.assert_array_equal(got, np.asarray(ref))
+    # Close the loop under jit too: a jitted-vs-eager-self check would agree
+    # even if both drifted from openpiv (e.g. dtype/weak-typing quirks), so
+    # pin the jitted path directly against the reference.
+    np.testing.assert_array_equal(jit_got, np.asarray(ref))
+
+
+def test_sig2noise_val_nan_is_not_flagged():
+    """NaN ratios are not flagged, matching numpy's nan < threshold == False."""
+    s2n = np.array([[1.5, np.nan], [0.5, 2.0]], dtype=np.float64)
+    ref = validation.sig2noise_val(s2n.copy(), threshold=1.0)
+    got = np.asarray(sig2noise_val(jnp.asarray(s2n), threshold=1.0))
+    np.testing.assert_array_equal(got, np.asarray(ref))
+    assert not bool(got[0, 1])  # the NaN entry stays valid
+
+
+def test_sig2noise_val_on_pipeline_ratios_matches_reference():
+    """On real pipeline s2n values, the mask matches openpiv's masking step.
+
+    This isolates the thresholding step: the JAX pipeline's signal-to-noise
+    array is fed to both implementations, so the comparison does not depend
+    on the (documented) sig2noise_ratio flag divergence between the JAX and
+    openpiv ratio computations.
+    """
+    frame_a, frame_b = _shifted_pair(96, 96, shift_y=2, shift_x=-3, seed=11)
+    _, s2n = extended_search_area_piv(
+        jnp.asarray(frame_a)[None],
+        jnp.asarray(frame_b)[None],
+        window_size=32,
+        overlap=16,
+        search_area_size=32,
+        sig2noise_method="peak2peak",
+    )
+    s2n_np = np.asarray(s2n[0])
+
+    for threshold in (0.5, 1.0, 1.3):
+        mask_jax = np.asarray(sig2noise_val(s2n[0], threshold=threshold))
+        mask_ref = validation.sig2noise_val(s2n_np.copy(), threshold=threshold)
+        np.testing.assert_array_equal(mask_jax, np.asarray(mask_ref))
