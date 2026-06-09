@@ -10,6 +10,32 @@ from flowgym.flow.process import img_resize
 from flowgym.utils import DEBUG
 
 
+def _as_int(value: int) -> int:
+    """Coerce an integer-like scalar to ``int``, rejecting non-integers.
+
+    Window/overlap normalization runs host-side (not in the traced path),
+    so this guard is always on rather than ``DEBUG``-gated: a non-integer
+    such as ``32.5`` would otherwise silently truncate to ``32`` and yield
+    a wrong-geometry PIV field instead of a clear error. Integer-valued
+    floats (``32.0``) and ``numpy`` integers pass through unchanged.
+
+    Args:
+        value: An integer-like scalar.
+
+    Returns:
+        The value as a Python ``int``.
+
+    Raises:
+        ValueError: If the value is not integer-like.
+    """
+    ivalue = int(value)
+    if ivalue != value:
+        raise ValueError(
+            f"Expected an integer-like window/overlap size, got {value!r}."
+        )
+    return ivalue
+
+
 def _as_pair(value: int | tuple[int, int]) -> tuple[int, int]:
     """Normalize an int or (height, width) pair to a 2-tuple of ints.
 
@@ -17,7 +43,8 @@ def _as_pair(value: int | tuple[int, int]) -> tuple[int, int]:
     given as a single int while rectangular windows use an explicit pair.
     A tuple/list is taken as the pair; any other value is treated as a
     scalar and duplicated, so integer-like scalars such as ``numpy.int32``
-    work too.
+    work too. Each element is coerced via :func:`_as_int`, so non-integer
+    sizes raise rather than silently truncating.
 
     Args:
         value: Either an integer-like scalar (square) or a ``(height,
@@ -32,8 +59,8 @@ def _as_pair(value: int | tuple[int, int]) -> tuple[int, int]:
                 "Expected an int or a (height, width) pair, got "
                 f"length-{len(value)} {value!r}."
             )
-        return (int(value[0]), int(value[1]))
-    return (int(value), int(value))
+        return (_as_int(value[0]), _as_int(value[1]))
+    return (_as_int(value), _as_int(value))
 
 
 @overload
@@ -175,9 +202,9 @@ def extended_search_area_piv(
     # this is equivalent to "search is larger on at least one axis": given
     # s[0] >= w[0] and s[1] >= w[1], if s != w then either s[0] > w[0] (lex
     # true via the first element) or s[0] == w[0] and s[1] > w[1] (lex true
-    # via the second). Without that precondition the equivalence breaks --
-    # e.g. search=(16, 64) vs window=(32, 16) would lex-trigger this branch
-    # while being invalid input.
+    # via the second). Without it the equivalence breaks the other way:
+    # search=(16, 64) vs window=(32, 16) is larger on axis 1 but lex-False
+    # (axis 0 decides), so this branch is wrongly skipped.
     if search_area_size_tuple > window_size_tuple:
         aa = normalize_intensity(aa)
         bb = normalize_intensity(bb)

@@ -504,6 +504,25 @@ def test_as_pair_rejects_non_pair_tuple_under_debug(monkeypatch):
         _as_pair((32, 16, 8))
 
 
+@pytest.mark.parametrize("value", [32.5, (32.5, 16), (16, 32.5)])
+def test_as_pair_rejects_non_integer_size(value):
+    """_as_pair rejects non-integer sizes with an always-on ValueError.
+
+    Window/overlap normalization is host-side Python (not in the traced
+    path), so unlike the ``DEBUG``-gated geometry checks this guard is
+    always on: silently truncating ``32.5`` to ``32`` would yield a
+    wrong-geometry PIV field rather than a clear error.
+    """
+    with pytest.raises(ValueError, match="integer"):
+        _as_pair(value)
+
+
+def test_as_pair_accepts_integer_valued_float():
+    """Integer-valued floats normalize to ints without error."""
+    assert _as_pair(32.0) == (32, 32)
+    assert _as_pair((16.0, 32)) == (16, 32)
+
+
 @pytest.mark.parametrize(
     "window_size, search_area_size, overlap",
     [
