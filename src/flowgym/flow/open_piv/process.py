@@ -139,8 +139,7 @@ def extended_search_area_piv(
         ``overlap < search_area_size`` per axis) and the ``(height, width)``
         shape of tuple arguments are checked only under the module ``DEBUG``
         flag. With ``DEBUG`` disabled (the default) malformed geometry is not
-        rejected here -- this is intentional for runtime/jit leanness, not a
-        missing check.
+        rejected here.
 
     Returns:
         Displacement field of shape (batch_size, n_rows, n_cols, 2). If
