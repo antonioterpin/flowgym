@@ -274,6 +274,165 @@ def test_pipeline_subpixel_method_matches_reference(
 
 
 # ---------------------------------------------------------------------------
+# fft_correlate_images: linear correlation
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("window_size, overlap", [(32, 16), (24, 12), (16, 8)])
+def test_fft_correlate_linear_matches_reference(window_size, overlap):
+    """Linear (zero-padded) correlation matches the openpiv reference."""
+    frame_a, frame_b = _shifted_pair(96, 96, shift_y=3, shift_x=-2, seed=0)
+    aa = sliding_window_array(
+        jnp.asarray(frame_a)[None],
+        (window_size, window_size),
+        (overlap, overlap),
+    )[0]
+    bb = sliding_window_array(
+        jnp.asarray(frame_b)[None],
+        (window_size, window_size),
+        (overlap, overlap),
+    )[0]
+
+    got = np.asarray(fft_correlate_images(aa, bb, correlation_method="linear"))
+    ref = pyprocess.fft_correlate_images(
+        np.asarray(aa),
+        np.asarray(bb),
+        correlation_method="linear",
+        normalized_correlation=True,
+    )
+
+    assert got.shape == np.asarray(ref).shape
+    np.testing.assert_allclose(got, np.asarray(ref), atol=1e-5)
+
+
+@pytest.mark.parametrize("window_size, overlap", [(32, 16), (24, 12), (16, 8)])
+def test_fft_correlate_circular_matches_reference(window_size, overlap):
+    """Circular correlation matches openpiv on the equal-shape path.
+
+    This pins openpiv parity for the in-tree caller, where ``aa`` and ``bb``
+    share a shape. It does *not* by itself lock the ``s2 = bb.shape``
+    normalization denominator: with ``aa.shape == bb.shape`` the parent
+    branch's ``s2 = aa.shape`` would produce byte-identical output. The
+    bb-vs-aa denominator fix is pinned separately by
+    :func:`test_fft_correlate_linear_pins_bb_denominator`, which uses a
+    deliberately mismatched pair so the two denominators diverge.
+    """
+    frame_a, frame_b = _shifted_pair(96, 96, shift_y=3, shift_x=-2, seed=0)
+    aa = sliding_window_array(
+        jnp.asarray(frame_a)[None],
+        (window_size, window_size),
+        (overlap, overlap),
+    )[0]
+    bb = sliding_window_array(
+        jnp.asarray(frame_b)[None],
+        (window_size, window_size),
+        (overlap, overlap),
+    )[0]
+
+    got = np.asarray(
+        fft_correlate_images(aa, bb, correlation_method="circular")
+    )
+    ref = pyprocess.fft_correlate_images(
+        np.asarray(aa),
+        np.asarray(bb),
+        correlation_method="circular",
+        normalized_correlation=True,
+    )
+
+    assert got.shape == np.asarray(ref).shape
+    np.testing.assert_allclose(got, np.asarray(ref), atol=1e-5)
+
+
+def test_fft_correlate_linear_pins_bb_denominator():
+    """Mismatched-shape correlation locks the ``s2 = bb.shape`` denominator.
+
+    The shared division ``corr / (s2[0] * s2[1])`` uses ``s2 = bb.shape[-2:]``
+    (openpiv's convention) rather than the parent branch's ``aa.shape[-2:]``.
+    The equal-shape parity tests cannot tell the two apart, because ``aa`` and
+    ``bb`` are the same size there. Here ``bb`` is deliberately smaller than
+    ``aa`` -- only the ``linear`` path admits mismatched shapes, since it
+    zero-pads both windows to a common ``fsize`` -- so dividing by ``aa``'s
+    area (576) instead of ``bb``'s (256) rescales every pixel by 256/576 and
+    breaks parity with the reference. A silent revert to ``s2 = aa.shape``
+    therefore fails this test, locking the shared denominator for *both*
+    correlation branches.
+    """
+    rng = np.random.RandomState(0)
+    aa = jnp.asarray(rng.rand(3, 24, 24).astype(np.float32))
+    bb = jnp.asarray(rng.rand(3, 16, 16).astype(np.float32))
+    assert aa.shape[-2:] != bb.shape[-2:]  # the whole point of this test
+
+    got = np.asarray(fft_correlate_images(aa, bb, correlation_method="linear"))
+    ref = pyprocess.fft_correlate_images(
+        np.asarray(aa),
+        np.asarray(bb),
+        correlation_method="linear",
+        normalized_correlation=True,
+    )
+
+    assert got.shape == np.asarray(ref).shape
+    np.testing.assert_allclose(got, np.asarray(ref), atol=1e-5)
+
+
+def test_fft_correlate_invalid_method_raises():
+    """An unknown correlation method raises a clear ValueError."""
+    win = jnp.ones((2, 16, 16))
+    with pytest.raises(ValueError, match="Unknown correlation_method"):
+        fft_correlate_images(win, win, correlation_method="quadratic")
+
+
+@pytest.mark.parametrize(
+    "window_size, search_area_size, overlap, shift_y, shift_x",
+    [
+        (32, 32, 16, 3, -2),
+        (16, 32, 8, 2, 4),
+        (24, 32, 12, -3, 1),
+    ],
+)
+def test_pipeline_linear_correlation_matches_reference(
+    window_size, search_area_size, overlap, shift_y, shift_x
+):
+    """End-to-end field with linear correlation matches the reference."""
+    height = width = 96
+    frame_a, frame_b = _shifted_pair(
+        height, width, shift_y=shift_y, shift_x=shift_x, seed=6
+    )
+    u_ref, v_ref, _ = pyprocess.extended_search_area_piv(
+        frame_a.copy(),
+        frame_b.copy(),
+        window_size=window_size,
+        overlap=overlap,
+        search_area_size=search_area_size,
+        correlation_method="linear",
+        subpixel_method="gaussian",
+        sig2noise_method="peak2peak",
+        normalized_correlation=True,
+        use_vectorized=True,
+    )
+    flow = np.asarray(
+        extended_search_area_piv(
+            jnp.asarray(frame_a)[None],
+            jnp.asarray(frame_b)[None],
+            window_size=window_size,
+            overlap=overlap,
+            search_area_size=search_area_size,
+            correlation_method="linear",
+        )
+    )[0]
+    u_jax, v_jax = flow[..., 0], flow[..., 1]
+
+    np.testing.assert_array_equal(
+        ~np.isfinite(u_jax), ~np.isfinite(np.asarray(u_ref))
+    )
+    finite = np.isfinite(u_jax) & np.isfinite(np.asarray(u_ref))
+    assert finite.any()
+    np.testing.assert_allclose(
+        u_jax[finite], np.asarray(u_ref)[finite], atol=1e-2
+    )
+    np.testing.assert_allclose(
+        v_jax[finite], np.asarray(v_ref)[finite], atol=1e-2
+    )
+
+
+# ---------------------------------------------------------------------------
 # extended_search_area_piv (full pipeline)
 # ---------------------------------------------------------------------------
 @pytest.mark.parametrize(
