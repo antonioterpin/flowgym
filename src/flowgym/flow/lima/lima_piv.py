@@ -26,6 +26,7 @@ from goggles.history.types import History
 
 from flowgym.common.base import NNEstimatorTrainableState
 from flowgym.flow.base import FlowFieldEstimator
+from flowgym.flow.lima.process import _PAD_MODES
 from flowgym.nn.lima_model import (
     DEFAULT_DECODER_CHANNELS,
     DEFAULT_DECODER_DILATIONS,
@@ -315,12 +316,16 @@ class LimaPivEstimator(FlowFieldEstimator):
         height_p = self._pad_to_multiple(H)
         width_p = self._pad_to_multiple(W)
         pad = ((0, 0), (0, height_p - H), (0, width_p - W), (0, 0))
-        images = jnp.pad(images, pad, mode="edge")
+        # Honor the estimator's padding_mode for the size-to-multiple padding
+        # so the border behaviour matches the convolution padding (e.g. a
+        # `zeros`/`reflect`/`circular` model no longer silently edge-pads here).
+        pad_mode = _PAD_MODES[self.padding_mode]
+        images = jnp.pad(images, pad, mode=pad_mode)
 
         flow_init = None
         if self.use_temporal_propagation:
             flow_init = jnp.pad(
-                state["estimates"][:, -1, ...], pad, mode="edge"
+                state["estimates"][:, -1, ...], pad, mode=pad_mode
             )
 
         per_level = cast(

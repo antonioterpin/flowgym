@@ -119,6 +119,8 @@ def main() -> None:
         )
     finally:
         sampler.shutdown()
+        if val_sampler is not None:
+            val_sampler.shutdown()
         time.sleep(3)
         gg.finish()
 

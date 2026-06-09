@@ -1,5 +1,6 @@
-# PIV class-1 TEST split evaluation (kinematic rendering, matching the repo's
-# piv_dataset_class1_eval.yaml). 450 flow fields / batch_size 10 = 45 batches.
+# PIV class-1 TEST split evaluation on the dataset's REAL recorded images
+# (include_images: true -> no synthetic rendering; the actual I0/I1 frames are
+# used). 450 flow fields / batch_size 10 = 45 batches.
 seed: 0
 batch_size: 10
 flow_fields_per_batch: 10

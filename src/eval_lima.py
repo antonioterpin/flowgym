@@ -47,8 +47,10 @@ def main() -> None:
     parser.add_argument("--label", type=str, default="LIMA")
     args = parser.parse_args()
 
-    ecfg = yaml.safe_load(open(args.estimator))
-    dcfg = yaml.safe_load(open(args.dataset))
+    with open(args.estimator) as f:
+        ecfg = yaml.safe_load(f)
+    with open(args.dataset) as f:
+        dcfg = yaml.safe_load(f)
     if args.load_from:
         ecfg["load_from"] = args.load_from
 
