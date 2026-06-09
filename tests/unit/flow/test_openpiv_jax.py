@@ -348,3 +348,18 @@ def test_extended_search_area_piv_flow_only_return(random_images):
     )
     assert isinstance(flow, jnp.ndarray)
     assert flow.shape[-1] == 2
+
+
+def test_subpixel_method_default_is_gaussian(random_images):
+    """The default sub-pixel method matches an explicit 'gaussian' request."""
+    img1, img2 = random_images
+    a = jnp.asarray(img1, dtype=jnp.float32)
+    b = jnp.asarray(img2, dtype=jnp.float32)
+    kwargs = {"window_size": 32, "overlap": 16, "search_area_size": 32}
+    default = np.asarray(extended_search_area_piv(a, b, **kwargs))
+    explicit = np.asarray(
+        extended_search_area_piv(a, b, subpixel_method="gaussian", **kwargs)
+    )
+    np.testing.assert_array_equal(np.isnan(default), np.isnan(explicit))
+    mask = ~np.isnan(default)
+    np.testing.assert_array_equal(default[mask], explicit[mask])

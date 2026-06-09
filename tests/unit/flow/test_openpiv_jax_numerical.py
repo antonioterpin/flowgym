@@ -68,13 +68,16 @@ def _shifted_pair(height, width, shift_y, shift_x, pad=8, seed=0):
 # subpixel_displacement
 # ---------------------------------------------------------------------------
 @pytest.mark.parametrize(
+    "subpixel_method", ["gaussian", "parabolic", "centroid"]
+)
+@pytest.mark.parametrize(
     "search_area_size, overlap",
     [(24, 12), (16, 8), (32, 16)],
 )
 def test_subpixel_displacement_matches_vectorized_reference(
-    search_area_size, overlap
+    search_area_size, overlap, subpixel_method
 ):
-    """JAX sub-pixel peak fitting matches openpiv's vectorized routine."""
+    """JAX sub-pixel peak fitting matches openpiv across all methods."""
     height = width = 96
     frame_a, frame_b = _shifted_pair(height, width, shift_y=2, shift_x=4)
 
@@ -94,15 +97,18 @@ def test_subpixel_displacement_matches_vectorized_reference(
     # JAX path: subpixel_displacement is already batched over windows.
     corr_windows = corr[0]
     disp_vx, disp_vy = subpixel_displacement(
-        corr_windows, peaks_i[0], peaks_j[0]
+        corr_windows,
+        peaks_i[0],
+        peaks_j[0],
+        subpixel_method=subpixel_method,
     )
     disp_vx = np.asarray(disp_vx)
     disp_vy = np.asarray(disp_vy)
 
-    # Reference path: identical gaussian sub-pixel fit.
+    # Reference path: same sub-pixel estimator.
     corr_ref = np.asarray(corr_windows).astype(np.float32)
     u_ref, v_ref = pyprocess.vectorized_correlation_to_displacements(
-        corr_ref, subpixel_method="gaussian"
+        corr_ref, subpixel_method=subpixel_method
     )
 
     # Invalid (NaN) windows must agree exactly between implementations.
@@ -119,6 +125,149 @@ def test_subpixel_displacement_matches_vectorized_reference(
     )
     np.testing.assert_allclose(
         disp_vy[finite], np.asarray(v_ref)[finite], atol=1e-4
+    )
+
+
+def test_subpixel_displacement_invalid_method_raises():
+    """An unknown subpixel method raises a clear ValueError."""
+    corr = jnp.ones((1, 8, 8))
+    peaks_i = jnp.array([4])
+    peaks_j = jnp.array([4])
+    with pytest.raises(ValueError, match="Unknown subpixel_method"):
+        subpixel_displacement(corr, peaks_i, peaks_j, subpixel_method="quartic")
+
+
+def test_pipeline_invalid_subpixel_method_raises():
+    """The full pipeline surfaces the ValueError, not an opaque tracer error.
+
+    ``extended_search_area_piv`` routes ``subpixel_method`` through to
+    ``subpixel_displacement``; this pins that the validation still fires
+    end-to-end, so a refactor hiding the inner call behind another
+    jit/vmap wrapper cannot silently drop it.
+    """
+    frame_a = jnp.zeros((1, 32, 32))
+    frame_b = jnp.zeros((1, 32, 32))
+    with pytest.raises(ValueError, match="Unknown subpixel_method"):
+        extended_search_area_piv(
+            frame_a,
+            frame_b,
+            window_size=16,
+            overlap=8,
+            search_area_size=16,
+            subpixel_method="quartic",
+        )
+
+
+def test_subpixel_parabolic_centroid_unguarded_match_reference():
+    """Degenerate stencils reproduce openpiv's unguarded Inf/NaN exactly.
+
+    The parabolic and centroid divisors are intentionally left unguarded to
+    preserve 1-to-1 parity with openpiv (whose
+    ``vectorized_correlation_to_displacements`` divides with the identical
+    expressions). This pins that contract at the stencil level so a future
+    ``jnp.where`` "fix" that silently desyncs from the reference is caught.
+    Peaks are supplied explicitly, so the result depends only on the
+    division, not on argmax tie-breaking.
+    """
+    eps = 1e-7
+    H = W = 8
+    # window 0: flat plus-shape -> parabolic den == 0, nom == 0 -> 0/0 -> NaN
+    # window 1: cl + cr == 2*c (asymmetric) -> parabolic den == 0 -> +/-Inf
+    # window 2: centroid divisor cl + c + cr ~= 0 (post-normalization
+    #           negatives) -> finite but garbage absolute position
+    corr = np.zeros((3, H, W), dtype=np.float32)
+    corr[0, 3:6, 4] = 1.0
+    corr[0, 4, 3:6] = 1.0
+    corr[1, 3, 4], corr[1, 4, 4], corr[1, 5, 4] = 0.5, 1.0, 1.5
+    corr[1, 4, 3], corr[1, 4, 5] = 0.5, 1.5
+    corr[2, 3, 4], corr[2, 4, 4], corr[2, 5, 4] = -1.0, 1.5, -0.5
+    corr[2, 4, 3], corr[2, 4, 5] = -1.0, -0.5
+    peaks_i = jnp.array([4, 4, 4])
+    peaks_j = jnp.array([4, 4, 4])
+
+    def _reference(method):
+        # openpiv's arithmetic on the same eps-stabilised float32 stencil.
+        cc = corr + eps
+        k = np.arange(3)
+        c = cc[k, 4, 4]
+        cl, cr = cc[k, 3, 4], cc[k, 5, 4]
+        cd, cu = cc[k, 4, 3], cc[k, 4, 5]
+        with np.errstate(divide="ignore", invalid="ignore"):
+            if method == "parabolic":
+                si = (cl - cr) / (2 * cl - 4 * c + 2 * cr)
+                sj = (cd - cu) / (2 * cd - 4 * c + 2 * cu)
+                return sj + 4 - np.floor(W / 2), si + 4 - np.floor(H / 2)
+            fi = np.float32(4)
+            si = ((fi - 1) * cl + fi * c + (fi + 1) * cr) / (cl + c + cr)
+            sj = ((fi - 1) * cd + fi * c + (fi + 1) * cu) / (cd + c + cu)
+            return sj - np.floor(W / 2), si - np.floor(H / 2)
+
+    for method in ("parabolic", "centroid"):
+        vx, vy = subpixel_displacement(
+            jnp.asarray(corr), peaks_i, peaks_j, subpixel_method=method
+        )
+        vx, vy = np.asarray(vx), np.asarray(vy)
+        rx, ry = _reference(method)
+        # Non-finite (NaN/Inf) positions agree exactly with the reference ...
+        np.testing.assert_array_equal(np.isfinite(vx), np.isfinite(rx))
+        np.testing.assert_array_equal(np.isfinite(vy), np.isfinite(ry))
+        # ... and finite values match, even where the divisor collapses.
+        fx, fy = np.isfinite(vx), np.isfinite(vy)
+        np.testing.assert_allclose(vx[fx], rx[fx], rtol=1e-4, atol=1e-4)
+        np.testing.assert_allclose(vy[fy], ry[fy], rtol=1e-4, atol=1e-4)
+
+
+@pytest.mark.parametrize(
+    "subpixel_method", ["gaussian", "parabolic", "centroid"]
+)
+@pytest.mark.parametrize(
+    "window_size, search_area_size, overlap",
+    [(32, 32, 16), (16, 32, 8)],
+)
+def test_pipeline_subpixel_method_matches_reference(
+    subpixel_method, window_size, search_area_size, overlap
+):
+    """End-to-end field matches the reference pipeline for each method."""
+    height = width = 96
+    frame_a, frame_b = _shifted_pair(
+        height, width, shift_y=3, shift_x=-2, seed=4
+    )
+
+    u_ref, v_ref, _ = pyprocess.extended_search_area_piv(
+        frame_a.copy(),
+        frame_b.copy(),
+        window_size=window_size,
+        overlap=overlap,
+        search_area_size=search_area_size,
+        correlation_method="circular",
+        subpixel_method=subpixel_method,
+        sig2noise_method="peak2peak",
+        normalized_correlation=True,
+        use_vectorized=True,
+    )
+
+    flow = np.asarray(
+        extended_search_area_piv(
+            jnp.asarray(frame_a)[None],
+            jnp.asarray(frame_b)[None],
+            window_size=window_size,
+            overlap=overlap,
+            search_area_size=search_area_size,
+            subpixel_method=subpixel_method,
+        )
+    )[0]
+    u_jax, v_jax = flow[..., 0], flow[..., 1]
+
+    np.testing.assert_array_equal(
+        ~np.isfinite(u_jax), ~np.isfinite(np.asarray(u_ref))
+    )
+    finite = np.isfinite(u_jax) & np.isfinite(np.asarray(u_ref))
+    assert finite.any()
+    np.testing.assert_allclose(
+        u_jax[finite], np.asarray(u_ref)[finite], atol=1e-2
+    )
+    np.testing.assert_allclose(
+        v_jax[finite], np.asarray(v_ref)[finite], atol=1e-2
     )
 
 

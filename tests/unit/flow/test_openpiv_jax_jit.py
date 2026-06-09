@@ -81,13 +81,20 @@ def test_find_all_first_peaks_jit(windows):
     _assert_same(pj_e, pj_c)
 
 
-def test_subpixel_displacement_jit(windows):
-    """subpixel_displacement traces and matches eager (NaNs included)."""
+@pytest.mark.parametrize(
+    "subpixel_method", ["gaussian", "parabolic", "centroid"]
+)
+def test_subpixel_displacement_jit(windows, subpixel_method):
+    """subpixel_displacement traces and matches eager for every method."""
     corr = fft_correlate_images(windows, windows)[0]
     peaks_i, peaks_j = find_all_first_peaks(windows)
-    jitted = jax.jit(subpixel_displacement)
-    vx_e, vy_e = subpixel_displacement(corr, peaks_i[0], peaks_j[0])
-    vx_c, vy_c = jitted(corr, peaks_i[0], peaks_j[0])
+    jitted = jax.jit(subpixel_displacement, static_argnames="subpixel_method")
+    vx_e, vy_e = subpixel_displacement(
+        corr, peaks_i[0], peaks_j[0], subpixel_method=subpixel_method
+    )
+    vx_c, vy_c = jitted(
+        corr, peaks_i[0], peaks_j[0], subpixel_method=subpixel_method
+    )
     _assert_same(vx_e, vx_c)
     _assert_same(vy_e, vy_c)
 
