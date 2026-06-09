@@ -1,5 +1,6 @@
 """Module for OpenPIV processing in JAX."""
 
+from collections.abc import Callable
 from typing import overload
 
 import jax
@@ -819,7 +820,7 @@ def upsample_flow(
     return jnp.stack((flows_x_resized, flows_y_resized), axis=-1)
 
 
-def deform_windows(
+def _deform_windows(
     frame: jnp.ndarray,
     x: jnp.ndarray,
     y: jnp.ndarray,
@@ -827,6 +828,11 @@ def deform_windows(
     v: jnp.ndarray,
 ) -> jnp.ndarray:
     """Deform an image by the displacement field of a previous PIV pass.
+
+    Internal helper for :func:`multipass_deform`; kept private because ``v``
+    follows openpiv's image-y-down convention (the image is sampled at
+    ``(y - v, x + u)``), which is a footgun for direct callers. Use
+    :func:`multipass_deform`, which owns the sign handling.
 
     JAX port of openpiv's ``windef.deform_windows`` at linear interpolation
     (``interpolation_order = interpolation_order2 = 1``). The coarse
@@ -857,7 +863,19 @@ def deform_windows(
 
     Returns:
         The deformed image of shape (height, width).
+
+    Raises:
+        ValueError: If the window-centre grid has fewer than 2 points on an
+            axis (no defined spacing).
     """
+    # Always-on (DEBUG-independent): with DEBUG off, JAX clamps the out-of-range
+    # y1[1]/x1[1] index so a 1xN/Nx1 grid would silently return a non-finite
+    # image instead of raising. The grid shape is static, so fail fast here.
+    if x.shape[0] < 2 or x.shape[1] < 2:
+        raise ValueError(
+            "Window-centre grid needs >= 2 points on each axis to define a "
+            f"spacing; got grid shape {x.shape}."
+        )
     if DEBUG:
         assert frame.ndim == 2, (
             f"Frame must be 2D (height, width), instead {frame.shape}"
@@ -867,10 +885,6 @@ def deform_windows(
         )
         assert u.shape == x.shape and v.shape == x.shape, (
             "u and v must match the window-centre grid shape."
-        )
-        assert x.shape[0] >= 2 and x.shape[1] >= 2, (
-            "Window-centre grid needs >= 2 points on each axis to define a "
-            f"spacing; got grid shape {x.shape}."
         )
 
     frame = frame.astype(jnp.float32)
@@ -913,6 +927,7 @@ def multipass_deform(
     search_area_size: int,
     overlap: int,
     n_passes: int,
+    between_passes: Callable[[jnp.ndarray, int], jnp.ndarray] | None = None,
 ) -> jnp.ndarray:
     """Iterative window-deformation PIV at a fixed grid resolution.
 
@@ -930,8 +945,9 @@ def multipass_deform(
     :func:`extended_search_area_piv`), while ``n_passes >= 2`` zeroes them with
     ``nan_to_num`` before deformation and accumulation, matching openpiv's
     iterative recipe. Callers that mask on ``isfinite`` must account for this
-    switch. Without between-pass outlier replacement the estimate can drift
-    (see #65); ``replace_outliers`` between passes is left to the caller.
+    switch. Without between-pass outlier replacement the estimate drifts for
+    ``n_passes > 2`` (it peaks at pass 2; see #65); pass ``between_passes`` to
+    clean the field between passes (e.g. an outlier replacement) to avoid this.
 
     Args:
         img1: First image batch of shape (B, H, W).
@@ -940,13 +956,18 @@ def multipass_deform(
         search_area_size: Search area size.
         overlap: Overlap between windows.
         n_passes: Number of passes (``1`` reduces to a single correlation).
+        between_passes: Optional ``(flow, pass_index) -> flow`` callback applied
+            to the accumulated field after each deformation pass (``pass_index``
+            counts from 1), before the next pass deforms by it. Use it to inject
+            outlier replacement and suppress the ``n_passes > 2`` drift. The
+            default ``None`` leaves the field untouched (openpiv parity).
 
     Note:
         ``window_size``, ``search_area_size``, ``overlap`` and ``n_passes``
         are baked in at trace time (the ``range(n_passes - 1)`` loop and
         ``get_field_shape``), so under ``jax.jit`` they must be marked static
         (e.g. ``static_argnames=("window_size", "search_area_size",
-        "overlap", "n_passes")``).
+        "overlap", "n_passes")``); ``between_passes`` must be static too.
 
     Returns:
         Displacement field of shape (B, n_rows, n_cols, 2).
@@ -982,10 +1003,10 @@ def multipass_deform(
     def deform_batch(frame, u, v):
         # "second image" method: deform with -v so frame_b is sampled at
         # (y + v, x + u), the current displacement estimate.
-        return deform_windows(frame, x_grid, y_grid, u, -v)
+        return _deform_windows(frame, x_grid, y_grid, u, -v)
 
     flow = jnp.nan_to_num(flow)
-    for _ in range(n_passes - 1):
+    for i in range(n_passes - 1):
         img2_def = jax.vmap(deform_batch)(img2, flow[..., 0], flow[..., 1])
         residual = extended_search_area_piv(
             img1,
@@ -995,5 +1016,7 @@ def multipass_deform(
             overlap=overlap,
         )
         flow = flow + jnp.nan_to_num(residual)
+        if between_passes is not None:
+            flow = between_passes(flow, i + 1)
 
     return flow
