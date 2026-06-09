@@ -10,13 +10,66 @@ from flowgym.flow.process import img_resize
 from flowgym.utils import DEBUG
 
 
+def _as_int(value: int) -> int:
+    """Coerce an integer-like scalar to ``int``, rejecting non-integers.
+
+    Window/overlap normalization runs host-side (not in the traced path),
+    so this guard is always on rather than ``DEBUG``-gated: a non-integer
+    such as ``32.5`` would otherwise silently truncate to ``32`` and yield
+    a wrong-geometry PIV field instead of a clear error. Integer-valued
+    floats (``32.0``) and ``numpy`` integers pass through unchanged.
+
+    Args:
+        value: An integer-like scalar.
+
+    Returns:
+        The value as a Python ``int``.
+
+    Raises:
+        ValueError: If the value is not integer-like.
+    """
+    ivalue = int(value)
+    if ivalue != value:
+        raise ValueError(
+            f"Expected an integer-like window/overlap size, got {value!r}."
+        )
+    return ivalue
+
+
+def _as_pair(value: int | tuple[int, int]) -> tuple[int, int]:
+    """Normalize an int or (height, width) pair to a 2-tuple of ints.
+
+    Mirrors openpiv's scalar-to-tuple reshaping so square windows can be
+    given as a single int while rectangular windows use an explicit pair.
+    A tuple/list is taken as the pair; any other value is treated as a
+    scalar and duplicated, so integer-like scalars such as ``numpy.int32``
+    work too. Each element is coerced via :func:`_as_int`, so non-integer
+    sizes raise rather than silently truncating.
+
+    Args:
+        value: Either an integer-like scalar (square) or a ``(height,
+            width)`` pair.
+
+    Returns:
+        The value as a ``(height, width)`` tuple of ints.
+    """
+    if isinstance(value, (tuple, list)):
+        if DEBUG:
+            assert len(value) == 2, (
+                "Expected an int or a (height, width) pair, got "
+                f"length-{len(value)} {value!r}."
+            )
+        return (_as_int(value[0]), _as_int(value[1]))
+    return (_as_int(value), _as_int(value))
+
+
 @overload
 def extended_search_area_piv(
     img1: jnp.ndarray,
     img2: jnp.ndarray,
-    window_size: int,
-    search_area_size: int,
-    overlap: int,
+    window_size: int | tuple[int, int],
+    search_area_size: int | tuple[int, int],
+    overlap: int | tuple[int, int],
     sig2noise_method: None = None,
     width: int = 2,
     subpixel_method: str = "gaussian",
@@ -28,9 +81,9 @@ def extended_search_area_piv(
 def extended_search_area_piv(
     img1: jnp.ndarray,
     img2: jnp.ndarray,
-    window_size: int,
-    search_area_size: int,
-    overlap: int,
+    window_size: int | tuple[int, int],
+    search_area_size: int | tuple[int, int],
+    overlap: int | tuple[int, int],
     sig2noise_method: str,
     width: int = 2,
     subpixel_method: str = "gaussian",
@@ -41,9 +94,9 @@ def extended_search_area_piv(
 def extended_search_area_piv(
     img1: jnp.ndarray,
     img2: jnp.ndarray,
-    window_size: int,
-    search_area_size: int,
-    overlap: int,
+    window_size: int | tuple[int, int],
+    search_area_size: int | tuple[int, int],
+    overlap: int | tuple[int, int],
     sig2noise_method: str | None = None,
     width: int = 2,
     subpixel_method: str = "gaussian",
@@ -81,11 +134,24 @@ def extended_search_area_piv(
         "sig2noise_method", "subpixel_method", "correlation_method"))``)
         alongside the window-geometry arguments.
 
+        Input validation is opt-in: the geometry constraints
+        (``search_area_size >= window_size`` and
+        ``overlap < search_area_size`` per axis) and the ``(height, width)``
+        shape of tuple arguments are checked only under the module ``DEBUG``
+        flag. With ``DEBUG`` disabled (the default) malformed geometry is not
+        rejected here.
+
     Returns:
         Displacement field of shape (batch_size, n_rows, n_cols, 2). If
         ``sig2noise_method`` is set, a tuple of the displacement field and
         the signal-to-noise ratios of shape (batch_size, n_rows, n_cols).
     """
+    # Accept square (int) or rectangular ((height, width)) windows, mirroring
+    # openpiv's scalar-to-tuple reshaping.
+    window_size_tuple = _as_pair(window_size)
+    overlap_tuple = _as_pair(overlap)
+    search_area_size_tuple = _as_pair(search_area_size)
+
     # Validate inputs
     if DEBUG:
         assert img1.ndim == 3, (
@@ -94,18 +160,14 @@ def extended_search_area_piv(
         assert img2.ndim == 3, (
             f"Image must be (batch_size, height, width), instead {img2.shape}"
         )
-        assert isinstance(window_size, int), "Window size must be an integer"
-        assert isinstance(overlap, int), "Overlap must be an integer"
-        assert isinstance(search_area_size, int)
-        # TODO: allow <=
-        assert search_area_size >= window_size, (
-            "Search area size must be greater than window size"
-        )
-
-    # TODO: extend to handle non-square windows
-    window_size_tuple = (window_size, window_size)
-    overlap_tuple = (overlap, overlap)
-    search_area_size_tuple = (search_area_size, search_area_size)
+        assert (
+            search_area_size_tuple[0] >= window_size_tuple[0]
+            and search_area_size_tuple[1] >= window_size_tuple[1]
+        ), "Search area size must be >= window size on both axes"
+        assert (
+            overlap_tuple[0] < search_area_size_tuple[0]
+            and overlap_tuple[1] < search_area_size_tuple[1]
+        ), "Overlap must be smaller than the search area size on both axes"
 
     # Extract windows
     aa = sliding_window_array(img1, search_area_size_tuple, overlap_tuple)
@@ -134,7 +196,15 @@ def extended_search_area_piv(
     # and normalizes BEFORE masking so the zeroed border does not pollute the
     # per-window mean/std. fft_correlate_images then normalizes once more, so
     # the extended-search branch is normalized twice exactly as in openpiv.
-    if search_area_size > window_size:
+    # Lexicographic tuple comparison, matching openpiv exactly. Under the
+    # per-axis `search >= window` precondition (asserted above under DEBUG)
+    # this is equivalent to "search is larger on at least one axis": given
+    # s[0] >= w[0] and s[1] >= w[1], if s != w then either s[0] > w[0] (lex
+    # true via the first element) or s[0] == w[0] and s[1] > w[1] (lex true
+    # via the second). Without it the equivalence breaks the other way:
+    # search=(16, 64) vs window=(32, 16) is larger on axis 1 but lex-False
+    # (axis 0 decides), so this branch is wrongly skipped.
+    if search_area_size_tuple > window_size_tuple:
         aa = normalize_intensity(aa)
         bb = normalize_intensity(bb)
         mask = jnp.zeros(search_area_size_tuple, dtype=aa.dtype)

@@ -204,6 +204,35 @@ def test_extended_search_area_piv_jit(
     _assert_same(eager, compiled)
 
 
+def test_extended_search_area_piv_rectangular_jit(image_pair):
+    """The pipeline traces with static rectangular (tuple) window geometry."""
+    img1, img2 = image_pair
+    window_size, search_area_size, overlap = (16, 32), (24, 32), (8, 16)
+    jitted = jax.jit(
+        extended_search_area_piv,
+        static_argnames=("window_size", "search_area_size", "overlap"),
+    )
+    eager = extended_search_area_piv(
+        img1,
+        img2,
+        window_size=window_size,
+        search_area_size=search_area_size,
+        overlap=overlap,
+    )
+    compiled = jitted(
+        img1,
+        img2,
+        window_size=window_size,
+        search_area_size=search_area_size,
+        overlap=overlap,
+    )
+    n_rows, n_cols = get_field_shape(
+        (img1.shape[1], img1.shape[2]), search_area_size, overlap
+    )
+    assert eager.shape == (img1.shape[0], n_rows, n_cols, 2)
+    _assert_same(eager, compiled)
+
+
 def test_extended_search_area_piv_jit_no_recompile(image_pair):
     """Re-calling the jitted pipeline with new data does not retrace."""
     img1, img2 = image_pair

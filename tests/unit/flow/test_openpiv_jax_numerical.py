@@ -37,6 +37,7 @@ from openpiv import filters, pyprocess, validation
 
 from flowgym.flow.open_piv.openpiv_jax import replace_outliers
 from flowgym.flow.open_piv.process import (
+    _as_pair,
     extended_search_area_piv,
     fft_correlate_images,
     find_all_first_peaks,
@@ -430,6 +431,125 @@ def test_pipeline_linear_correlation_matches_reference(
     np.testing.assert_allclose(
         v_jax[finite], np.asarray(v_ref)[finite], atol=1e-2
     )
+
+
+# ---------------------------------------------------------------------------
+# extended_search_area_piv: rectangular (non-square) windows
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "window_size, search_area_size, overlap",
+    [
+        ((16, 32), (16, 32), (8, 16)),  # standard, non-square
+        ((32, 16), (32, 16), (16, 8)),  # transposed
+        ((16, 24), (24, 32), (8, 12)),  # extended on both axes
+        ((16, 32), (24, 32), (8, 16)),  # extended on one axis
+    ],
+)
+def test_pipeline_rectangular_windows_matches_reference(
+    window_size, search_area_size, overlap
+):
+    """End-to-end field with rectangular windows matches the reference."""
+    height = width = 96
+    frame_a, frame_b = _shifted_pair(
+        height, width, shift_y=3, shift_x=-2, seed=1
+    )
+    u_ref, v_ref, _ = pyprocess.extended_search_area_piv(
+        frame_a.copy(),
+        frame_b.copy(),
+        window_size=window_size,
+        overlap=overlap,
+        search_area_size=search_area_size,
+        correlation_method="circular",
+        subpixel_method="gaussian",
+        sig2noise_method="peak2peak",
+        normalized_correlation=True,
+        use_vectorized=True,
+    )
+    flow = np.asarray(
+        extended_search_area_piv(
+            jnp.asarray(frame_a)[None],
+            jnp.asarray(frame_b)[None],
+            window_size=window_size,
+            overlap=overlap,
+            search_area_size=search_area_size,
+        )
+    )[0]
+    u_jax, v_jax = flow[..., 0], flow[..., 1]
+
+    n_rows, n_cols = get_field_shape((height, width), search_area_size, overlap)
+    assert flow.shape == (n_rows, n_cols, 2)
+    assert np.asarray(u_ref).shape == (n_rows, n_cols)
+
+    np.testing.assert_array_equal(
+        ~np.isfinite(u_jax), ~np.isfinite(np.asarray(u_ref))
+    )
+    finite = np.isfinite(u_jax) & np.isfinite(np.asarray(u_ref))
+    assert finite.any()
+    np.testing.assert_allclose(
+        u_jax[finite], np.asarray(u_ref)[finite], atol=1e-2
+    )
+    np.testing.assert_allclose(
+        v_jax[finite], np.asarray(v_ref)[finite], atol=1e-2
+    )
+
+
+def test_as_pair_rejects_non_pair_tuple_under_debug(monkeypatch):
+    """_as_pair flags a malformed (non-length-2) tuple when validation is on.
+
+    The check is opt-in (``DEBUG``-gated), consistent with the rest of the
+    geometry validation; with ``DEBUG`` off a 3-tuple is silently truncated.
+    """
+    monkeypatch.setattr("flowgym.flow.open_piv.process.DEBUG", True)
+    with pytest.raises(AssertionError):
+        _as_pair((32, 16, 8))
+
+
+@pytest.mark.parametrize("value", [32.5, (32.5, 16), (16, 32.5)])
+def test_as_pair_rejects_non_integer_size(value):
+    """_as_pair rejects non-integer sizes with an always-on ValueError.
+
+    Window/overlap normalization is host-side Python (not in the traced
+    path), so unlike the ``DEBUG``-gated geometry checks this guard is
+    always on: silently truncating ``32.5`` to ``32`` would yield a
+    wrong-geometry PIV field rather than a clear error.
+    """
+    with pytest.raises(ValueError, match="integer"):
+        _as_pair(value)
+
+
+def test_as_pair_accepts_integer_valued_float():
+    """Integer-valued floats normalize to ints without error."""
+    assert _as_pair(32.0) == (32, 32)
+    assert _as_pair((16.0, 32)) == (16, 32)
+
+
+@pytest.mark.parametrize(
+    "window_size, search_area_size, overlap",
+    [
+        (32, 16, 8),  # search_area_size < window_size
+        (16, 16, 16),  # overlap == search_area_size (not strictly smaller)
+    ],
+)
+def test_pipeline_invalid_geometry_flagged_under_debug(
+    monkeypatch, window_size, search_area_size, overlap
+):
+    """Geometry constraints are validated, but only when DEBUG is enabled.
+
+    These checks are opt-in by design (see the ``extended_search_area_piv``
+    docstring): with ``DEBUG`` disabled the inputs pass silently, which is
+    intentional, not a missing check. Enabling ``DEBUG`` must surface them.
+    """
+    monkeypatch.setattr("flowgym.flow.open_piv.process.DEBUG", True)
+    frame_a = jnp.zeros((1, 64, 64))
+    frame_b = jnp.zeros((1, 64, 64))
+    with pytest.raises(AssertionError):
+        extended_search_area_piv(
+            frame_a,
+            frame_b,
+            window_size=window_size,
+            search_area_size=search_area_size,
+            overlap=overlap,
+        )
 
 
 # ---------------------------------------------------------------------------
