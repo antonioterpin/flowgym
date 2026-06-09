@@ -19,7 +19,7 @@ DNS turbulence, JHTDB channel/isotropic/MHD, SQG, backstep, cylinder, uniform).
   every time it is drawn, so the effective training set is far larger.
 - **Optimizer:** Adam, lr **5e-4** (raised from the paper's 1e-4/2e-4 for a
   reduced-budget run), global-norm grad clip 1.0. Multi-level Jacobian-penalised
-  L1 loss (λ_u=0.91, λ_J=0.09).
+  L1 loss (lambda_u=0.91, lambda_J=0.09).
 - **Budget:** 40,000 batches × 10 = 400k image-pair presentations, ~36 min on
   one RTX 5090. (The paper trains 200 epochs ≈ 3.6–7.4 M presentations.)
 - **Eval** (`src/eval_lima.py`): endpoint error EPE = ‖pred − gt‖ per pixel,
@@ -37,7 +37,7 @@ DNS turbulence, JHTDB channel/isotropic/MHD, SQG, backstep, cylinder, uniform).
 
 **Best checkpoint: 32,000.** EPE drops ~26× from the random-init baseline to
 **0.065 px mean / 0.055 px median**, comparable to or better than the paper's
-LIMA-6 (⟨ε⟩ ≈ 0.17 px on the Carlier DNS case — a different test set).
+LIMA-6 (mean EPE ≈ 0.17 px on the Carlier DNS case — a different test set).
 
 **Late-training regression:** between 32k and 40k the `uniform` (large
 pure-translation) scenario blew up from 0.068 → 0.96 px (median stayed at
