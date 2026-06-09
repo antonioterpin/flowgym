@@ -1,0 +1,55 @@
+# Kinematic training set for LIMA: synthpix renders fresh randomized particle
+# images each batch on top of the class-1 displacement fields (train split).
+# include_images: false -> kinematic image generation (Manickathan et al. 2022).
+seed: 0
+batch_size: 10
+flow_fields_per_batch: 10
+batches_per_flow_batch: 1
+buffer_size: 150
+loop: true
+randomize: true
+include_images: false
+# Non-episodic sampler: with loop:true it iterates indefinitely (num_epochs
+# = None), so supervised training can run for any num_batches. Driven by
+# train_lima_supervised.py (bypasses the episodic FluidEnv path).
+episode_length: 0
+worker_count: 0
+
+# Image generation parameters (randomized per batch -> data augmentation)
+image_shape: [256, 256]
+dt: 1
+seeding_density_range: [0.03, 0.04]
+p_hide_img1: 0.0001
+p_hide_img2: 0.0001
+diameter_ranges: [[1.5, 2.5]]
+diameter_var: 0.03
+intensity_ranges: [[150, 230]]
+intensity_var: 0.01
+rho_ranges: [[-0.1, 0.1]]
+rho_var: 0.1
+noise_uniform: 0.001
+noise_gaussian_mean: 0.0
+noise_gaussian_std: 0.001
+
+# Flow generation parameters (displacements already in pixels)
+velocities_per_pixel: 1.0
+resolution: 1
+flow_field_size: [256, 256]
+img_offset: [0, 0]
+min_speed_x: 0
+max_speed_x: 0
+min_speed_y: 0
+max_speed_y: 0
+output_units: "pixels"
+
+# Class-1 train-split flow fields (local mirror of activefluidcontrol/piv-class1)
+file_list:
+  - /home/antonioterpin/data/piv-class1/train
+scheduler_class: ".mat"
+eval_gt: false
+
+# Supervised training controls
+num_batches: 40000
+save_every: 8000
+log_every: 500
+save_only_best: false

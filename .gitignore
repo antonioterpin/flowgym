@@ -209,6 +209,11 @@ results/**/checkpoints/**
 # Experiment outputs
 experiments/*/runs/
 experiments/*/_generated/
+experiments/lima/output/
+experiments/lima/.runport
+# Stray run artifacts (e.g. when a driver is launched from inside src/)
+src/experiments/
+*.env
 
 # Per-run experiment temp configs (regenerated on each run)
 experiments/**/temp_*.yaml
