@@ -45,7 +45,7 @@ class DISJAXFlowFieldEstimator(FlowFieldEstimator):
 
     def __init__(
         self,
-        preset: PresetType | int = 1,
+        preset: PresetType | int | str = 1,
         start_level: int = 0,
         levels: int = 4,
         level_steps: int = 1,
@@ -63,6 +63,9 @@ class DISJAXFlowFieldEstimator(FlowFieldEstimator):
 
         Args:
             preset: DIS preset (0=ultrafast,1=fast,2=medium,3=high_quality).
+                Accepts the int, a ``PresetType``, or its enum name (e.g.
+                ``"FAST"``) so a config round-tripped through
+                :meth:`get_config` re-loads directly.
             start_level: Starting level for the pyramid.
             levels: Number of levels for the pyramid.
             level_steps: Number of steps between levels.
@@ -78,10 +81,20 @@ class DISJAXFlowFieldEstimator(FlowFieldEstimator):
 
         Raises:
             ValueError: If parameter validation fails.
-            TypeError: If preset is neither int nor PresetType.
+            TypeError: If preset is not an int, str, or PresetType.
         """
-        # Validate and convert preset
-        if isinstance(preset, int):
+        # Validate and convert preset. A str is treated as an enum name
+        # (PresetType.name, as emitted by get_config) so configs round-trip.
+        if isinstance(preset, str):
+            try:
+                preset_enum = PresetType[preset]
+            except KeyError:
+                preset_names = ", ".join(e.name for e in PresetType)
+                raise ValueError(
+                    f"preset={preset!r}, but a string preset must name a "
+                    f"PresetType ({preset_names})"
+                ) from None
+        elif isinstance(preset, int):
             try:
                 preset_enum = PresetType(preset)
             except ValueError:
@@ -96,7 +109,7 @@ class DISJAXFlowFieldEstimator(FlowFieldEstimator):
             preset_enum = preset
         else:
             raise TypeError(
-                f"preset={preset}, but it must be an int or PresetType."
+                f"preset={preset}, but it must be an int, str, or PresetType."
             )
 
         self.preset = preset_enum
@@ -211,7 +224,14 @@ class DISJAXFlowFieldEstimator(FlowFieldEstimator):
         self,
         steps: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
-        """Preload learned-oracle checkpoints to keep runtime jittable."""
+        """Preload learned-oracle checkpoints to keep runtime jittable.
+
+        Args:
+            steps: Postprocessing step descriptors to scan and preload.
+
+        Returns:
+            The steps with learned-oracle state materialized in place.
+        """
         from flowgym.flow.postprocess.data_validation import (  # noqa: PLC0415
             preload_learned_oracle_state,
         )
@@ -353,7 +373,11 @@ class DISJAXFlowFieldEstimator(FlowFieldEstimator):
         }
 
     def supports_jit(self) -> bool:
-        """Disable JIT only if learned-oracle state is not preloaded."""
+        """Disable JIT only if learned-oracle state is not preloaded.
+
+        Returns:
+            True unless a learned-oracle step lacks preloaded state.
+        """
         for step in self.postprocessing_steps:
             if (
                 step.keywords.get("name") == "learned_oracle_threshold"

@@ -21,6 +21,44 @@ from flowgym.utils import dump_yaml, load_configuration
 logger = gg.get_logger("flowgym", with_metrics=True)
 
 
+def apply_cache_cli_overrides(
+    caching_config: dict | None,
+    cache_root: str | None,
+    cache_id: str | None,
+) -> dict | None:
+    """Override the cache ``root_dir`` / ``cache_id`` from CLI flags.
+
+    The cache ``spec`` stays declarative in the dataset config; these
+    flags only redirect where a cache lands and how it is named, so one
+    dataset config can fill many caches (e.g. one per estimator in a sweep).
+
+    Args:
+        caching_config: Parsed caching block from the dataset config, or
+            None when the dataset declares no caching.
+        cache_root: Override for the cache root directory, or None.
+        cache_id: Override for the base cache id, or None.
+
+    Returns:
+        The (possibly updated) caching config.
+
+    Raises:
+        ValueError: If an override is given but the dataset config has no
+            caching block to supply the required ``spec``.
+    """
+    if cache_root is None and cache_id is None:
+        return caching_config
+    if caching_config is None:
+        raise ValueError(
+            "--cache-root/--cache-id require a `caching:` block (with at "
+            "least a `spec`) in the dataset config."
+        )
+    if cache_root is not None:
+        caching_config["root_dir"] = str(cache_root)
+    if cache_id is not None:
+        caching_config["cache_id"] = cache_id
+    return caching_config
+
+
 def prepare_configs(
     args: argparse.Namespace,
 ) -> tuple[
@@ -155,6 +193,14 @@ def prepare_configs(
                 shape = tuple(v[1])
                 parsed_spec[k] = (dtype_str, shape)
             caching_config["spec"] = parsed_spec
+
+    # CLI flags override where the cache lands / its base id (spec stays
+    # in the dataset config). Lets one dataset config fill many caches.
+    caching_config = apply_cache_cli_overrides(
+        caching_config,
+        getattr(args, "cache_root", None),
+        getattr(args, "cache_id", None),
+    )
 
     if args.mode == "compare-samplers":
         # create a second sampler to load real images from files

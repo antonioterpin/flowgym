@@ -102,6 +102,71 @@ These scripts are meant to be practical references for the real example
 files, so the most important thing to compare is the difference between the
 first and second run.
 
+## Collecting caches from the command line
+
+The example scripts above generate their own data and configs. To fill a
+cache for your own estimator and dataset, you do not need a bespoke script:
+the standard evaluation entry point writes the cache for any estimator that
+implements `enrich()` (DIS, RAFT, openpiv, art_of_piv, …).
+
+Put the cache `spec` in the dataset config (this is the only
+estimator-specific part — it must match what the estimator's `enrich()`
+returns):
+
+```yaml
+caching:
+  spec:
+    epe: [float32, []]
+    relative_epe: [float32, []]
+  warm_start: index
+```
+
+Then point `--cache-root` (and optionally `--cache-id`) at the output. These
+flags supply the cache location, so the same dataset config can fill many
+caches without edits:
+
+```bash
+uv run python src/main.py --mode eval \
+    --estimator estimator.yaml --dataset dataset.yaml \
+    --cache-root caches/
+```
+
+The cache lands in `caches/<cache_id>/`, where `<cache_id>` is the base id
+plus the estimator's own config/weights suffix (from `get_cache_id_suffix`).
+
+## Sweeping many configs
+
+`scripts/collect_cache.py` runs the command above once per estimator config,
+into a shared `--cache-root`. Each config gets its own `<cache_id>` subdir,
+runs as an isolated subprocess (so JIT/GPU memory is released between
+configs), and the sweep continues past a failing config:
+
+```bash
+uv run python scripts/collect_cache.py \
+    --models estimators/*.yaml \
+    --dataset dataset.yaml \
+    --cache-root caches/
+```
+
+Nothing in either step is specific to an algorithm — the dataset config's
+`spec` is the only knob that depends on the estimator.
+
+## Selecting an ensemble from a cache
+
+`scripts/select_ensemble.py` consumes a directory of such caches and picks a
+size-`K` subset minimizing the aggregate per-image best error (greedy, plus
+an exact MILP for the mean aggregator with `--exact`):
+
+```bash
+uv run python scripts/select_ensemble.py \
+    --cache-root caches/ --K 3 --metric epe
+```
+
+`--metric` selects the parquet error column (default `epe`). Timing is
+optional: pass `--time-limit` only if each cache dir carries a `timing.json`
+(timing is device-dependent and collected separately from the
+device-independent error).
+
 ## Related docs
 
 - [Flow evaluation](flow-eval.md)

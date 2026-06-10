@@ -649,6 +649,7 @@ dependencies = [
     { name = "jax" },
     { name = "pip" },
     { name = "robo-goggles" },
+    { name = "scipy" },
 ]
 
 [package.optional-dependencies]
@@ -723,6 +724,7 @@ requires-dist = [
     { name = "pyoptflow", marker = "extra == 'other-methods'" },
     { name = "robo-goggles", specifier = ">=0.2.0" },
     { name = "robo-goggles", extras = ["wandb"], marker = "extra == 'wandb'" },
+    { name = "scipy", specifier = ">=1.11.0" },
     { name = "sphinx", marker = "extra == 'docs'", specifier = "==7.4.7" },
     { name = "sphinx-rtd-theme", marker = "extra == 'docs'", specifier = "==2.0.0" },
     { name = "torch", marker = "extra == 'other-methods'", specifier = ">=1.13.1" },

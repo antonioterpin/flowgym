@@ -30,6 +30,7 @@ dependencies = [
     "ipywidgets",
     "robo-goggles>=0.2.0",
     "pip>=26.1",
+    "scipy>=1.11.0",
 ]
 
 [project.urls]
