@@ -35,11 +35,25 @@ except:
 class RaftTorchEstimator(FlowFieldEstimator):
     """RAFT flow field estimator using two-frame history."""
 
+    # Interrogation window geometry and refinement depth. The RAFT256
+    # subclass overrides these to (256, 64, 16).
+    _raft_offset = 32  # patch / interrogation window size
+    _raft_shift = 8  # patch shift
+    _raft_iters = 12  # number of GRU refinement iterations
+
     def __init__(self, **kwargs):
         """Initialize the RAFT estimator in pytorch."""
         # Validate RAFT specific parameters
-        self.raft = RAFT().to(device)
+        self.raft = self._build_raft()
         super().__init__(**kwargs)
+
+    def _build_raft(self):
+        """Build the PyTorch RAFT module.
+
+        Subclasses override this to swap in a different architecture (e.g.
+        RAFT256) while reusing the patchify/fold estimation logic.
+        """
+        return RAFT().to(device)
 
     def _estimate(
         self,
@@ -77,9 +91,9 @@ class RaftTorchEstimator(FlowFieldEstimator):
 
         args = Args()
         args.amp = True
-        args.iters = 12  # typical RAFT number of iterations
-        args.offset = 32  # patch size
-        args.shift = 8  # patch shift
+        args.iters = self._raft_iters  # number of RAFT refinement iterations
+        args.offset = self._raft_offset  # patch size
+        args.shift = self._raft_shift  # patch shift
         args.split_size = 50  # process 50 patches at a time
 
         # Example: zero ground truth and args config
@@ -254,3 +268,24 @@ class RaftTorchEstimator(FlowFieldEstimator):
         wind = wind_inner + wind_outer
         wind = wind / np.average(wind)
         return wind
+
+
+class RaftTorch256Estimator(RaftTorchEstimator):
+    """RAFT256-PIV flow field estimator using two-frame history.
+
+    Reuses the patchify/fold estimation pipeline of
+    :class:`RaftTorchEstimator` and only swaps in the RAFT256 architecture
+    (1/8-resolution encoder with convex upsampling) and the published
+    RAFT256-PIV window geometry: 256x256 interrogation windows, 64 px shift
+    and 16 refinement iterations.
+    """
+
+    _raft_offset = 256  # interrogation window size
+    _raft_shift = 64  # patch shift
+    _raft_iters = 16  # number of RAFT256 refinement iterations
+
+    def _build_raft(self):
+        """Build the PyTorch RAFT256 module."""
+        from flowgym.nn.raft_torch_nn.flowNetsRAFT256 import RAFT256
+
+        return RAFT256().to(device)

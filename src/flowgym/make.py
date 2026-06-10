@@ -532,7 +532,7 @@ def make_estimator(
         # back a local filesystem path the downstream loaders consume
         # unchanged.
         resolved_load_from = resolve_checkpoint_source(load_from)
-        if estimator_config["estimator"] == "raft_torch":
+        if estimator_config["estimator"] in ("raft_torch", "raft_torch_256"):
             if torch is None:
                 raise ValueError("torch required for raft_torch model")
             # ``torch.load`` needs the checkpoint *file*. A ``wandb://``

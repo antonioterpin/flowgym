@@ -11,6 +11,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
+from flax import linen as nn
 from goggles.history.types import History
 
 if TYPE_CHECKING:
@@ -158,7 +159,21 @@ class RaftJaxEstimator(FlowFieldEstimator):
             )
         self.use_temporal_propagation = use_temporal_propagation
 
-        self.model = RaftEstimatorModel(
+        self.model = self._build_model()
+
+        super().__init__(**kwargs)
+
+    def _build_model(self) -> nn.Module:
+        """Build the Flax flow model.
+
+        Subclasses (e.g. the RAFT256 variant) override this to swap in a
+        different architecture while reusing the rest of the estimator
+        (patchify/fold, training step and caching).
+
+        Returns:
+            The Flax module used for inference and training.
+        """
+        return RaftEstimatorModel(
             hidden_dim=self.hidden_dim,
             context_dim=self.context_dim,
             corr_levels=self.corr_levels,
@@ -168,8 +183,6 @@ class RaftJaxEstimator(FlowFieldEstimator):
             dropout=self.dropout,
             train=self.train,
         )
-
-        super().__init__(**kwargs)
 
     def create_trainable_state(
         self,

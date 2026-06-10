@@ -13,14 +13,19 @@ from flowgym.flow.open_piv import OpenPIVJAXEstimator
 from flowgym.flow.postprocess.oracle_threshold import (
     LearnedOracleThresholdEstimator,
 )
+from flowgym.flow.raft.raft256_jax import RaftJax256Estimator
 from flowgym.flow.raft.raft_jax import RaftJaxEstimator
 from flowgym.utils import MissingDependency, optional_import
 
 raft_mod = optional_import("flowgym.flow.raft.raft_piv_pytorch")
 if raft_mod is not None:
     RaftTorchEstimator = raft_mod.RaftTorchEstimator
+    RaftTorch256Estimator = raft_mod.RaftTorch256Estimator
 else:
     RaftTorchEstimator = MissingDependency(
+        "raft_piv_pytorch", ["other_methods"]
+    )
+    RaftTorch256Estimator = MissingDependency(
         "raft_piv_pytorch", ["other_methods"]
     )
 
@@ -66,8 +71,10 @@ ALL_ESTIMATORS: dict[str, type[Estimator] | MissingDependency] = {
     "horn_schunck": HornSchunckEstimator,
     "consensus": ConsensusFlowEstimator,
     "raft_jax": RaftJaxEstimator,
+    "raft_jax_256": RaftJax256Estimator,
     "lima_piv": LimaPivEstimator,
     "raft_torch": RaftTorchEstimator,
+    "raft_torch_256": RaftTorch256Estimator,
     "dummy": DummyEstimator,
     "learned_oracle_threshold": LearnedOracleThresholdEstimator,
 }
