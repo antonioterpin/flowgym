@@ -1,20 +1,9 @@
 """End-to-end demo of the sweep cache / timing / ensemble-selection scripts.
 
-Shows the three estimator-agnostic sweep tools working together on a small,
-fully synthetic dataset (no downloads; runs on CPU):
-
-1. ``scripts/collect_cache.py``   -- fill the per-image **error** cache
-   (device-independent; reusable across machines).
-2. ``scripts/collect_timing.py``  -- write per-config ``timing.json``
-   (device-dependent inference time) into the *same* cache dirs.
-3. ``scripts/select_ensemble.py`` -- pick a size-K subset minimizing the
-   per-image best error, optionally under a latency bound, and export the
-   chosen configs as a collect-ready ``estimators_list`` YAML.
-
-The three are inter-compatible by construction: each config's error parquet
-and its ``timing.json`` land in the same ``<cache-root>/<cache_id>/`` dir
-(``cache_id`` = base + the estimator's ``get_cache_id_suffix``), and
-``select_ensemble`` reads both from there.
+Runs ``collect_cache.py`` -> ``collect_timing.py`` -> ``select_ensemble.py``
+on a small, fully synthetic dataset (no downloads; runs on CPU). See
+``docs/examples/sweep-ensemble.md`` for what each step does and why the
+three tools are inter-compatible.
 
 Run:
 
