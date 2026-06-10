@@ -10,9 +10,13 @@ The script picks a subset ``S`` (|S| = K) that minimizes the aggregator
 
     cost(S) = aggregator_i( min_{a in S} e_{a, i} ),
 
-optionally subject to a per-candidate inference-time bound. A greedy
-solver runs always; an exact MILP (HiGHS via :func:`scipy.optimize.milp`)
-is available for the mean aggregator with ``--exact``.
+optionally subject to a per-candidate inference-time bound. The greedy
+solver runs always and supports both aggregators. An exact MILP (HiGHS
+via :func:`scipy.optimize.milp`) is available with ``--exact`` for the
+mean aggregator only: the MILP objective is the linear sum
+``sum_{a,i} e_{a,i} y_{a,i}`` (the mean up to the constant ``1/M``),
+whereas the median is a non-linear order statistic the assignment LP
+cannot express, so ``--exact`` is a no-op for ``--aggregator median``.
 
 Timing is optional: a candidate only needs a ``timing.json`` when a
 finite ``--time-limit`` is requested (timing is device-dependent and
@@ -41,33 +45,6 @@ import yaml
 from scipy.optimize import Bounds, LinearConstraint, milp
 from scipy.sparse import csr_matrix
 
-# DIS serializes its `preset` enum by name in get_config()/timing.json, but
-# the estimator constructor only accepts an int (or PresetType). Map known
-# names back to ints so exported configs re-load directly.
-_PRESET_NAME_TO_INT = {
-    "ULTRAFAST": 0,
-    "FAST": 1,
-    "MEDIUM": 2,
-    "HIGH_QUALITY": 3,
-}
-
-
-def _normalize_config(config: dict[str, Any]) -> dict[str, Any]:
-    """Coerce serialized enum values back to a re-loadable form.
-
-    Args:
-        config: A candidate's stored estimator config.
-
-    Returns:
-        A shallow copy with a string ``preset`` mapped to its int value
-        (other values are left untouched).
-    """
-    cfg = dict(config)
-    preset = cfg.get("preset")
-    if isinstance(preset, str) and preset in _PRESET_NAME_TO_INT:
-        cfg["preset"] = _PRESET_NAME_TO_INT[preset]
-    return cfg
-
 
 def _export_models(
     summary: dict[str, Any],
@@ -79,9 +56,15 @@ def _export_models(
 
     The output is the ``estimators:`` format consumed by
     ``collect_cache.py --estimators-list``, so a chosen subset can be
-    re-collected on other splits (train/val/test) directly. Candidates
-    whose cache stored no ``config`` (e.g. caches written with only a
-    ``meta.json``) are skipped.
+    re-collected on other splits (train/val/test) directly. Each config is
+    emitted verbatim, so re-loading it is the estimator's responsibility
+    (e.g. the DIS estimator accepts its ``preset`` enum name directly).
+
+    The per-candidate ``config`` is read from each candidate's
+    ``timing.json`` (an externally-supplied schema; the in-repo cache
+    writer emits only a ``meta.json`` with ``cache_id``/``version``/
+    ``spec`` and no ``config``). Candidates whose cache stored no
+    ``config`` are skipped.
 
     Args:
         summary: A selection summary from :func:`_summarize_selection`.
@@ -105,7 +88,7 @@ def _export_models(
                 "name": entry["cache_id"],
                 "estimator": estimator,
                 "estimate_type": estimate_type,
-                "config": _normalize_config(config),
+                "config": config,
             }
         )
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -168,7 +151,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--exact",
         action="store_true",
-        help="Run exact MILP after greedy (only supported for mean).",
+        help="Run exact MILP after greedy to refine its selection. Only "
+        "the mean aggregator is supported (the MILP minimizes the linear "
+        "sum = mean); --exact is a no-op for --aggregator median.",
     )
     parser.add_argument(
         "--milp-timeout",
@@ -188,7 +173,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Write the selected subset's configs as an estimators_list "
         "YAML (consumable by collect_cache.py --estimators-list) to "
-        "re-collect on other splits.",
+        "re-collect on other splits. Each config is read from the "
+        "candidate's timing.json (external schema); candidates without a "
+        "stored config are skipped.",
     )
     parser.add_argument(
         "--export-estimator",
@@ -725,8 +712,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.exact:
         if args.aggregator != "mean":
             print(
-                "note: --exact is only supported for --aggregator mean in v1; "
-                "skipping MILP and using greedy result.",
+                "note: --exact supports only --aggregator mean (the MILP "
+                "minimizes the linear sum = mean; the median is a non-linear "
+                "order statistic); skipping MILP and using greedy result.",
             )
         else:
             print(

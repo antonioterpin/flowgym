@@ -148,13 +148,30 @@ def test_materialize_drops_name_and_writes_model_yaml(tmp_path: Path) -> None:
     work = tmp_path / "work"
     work.mkdir()
     paths = collect_cache.materialize_model_configs(entries, work)
-    assert [p.name for p in paths] == ["DIS_a.yaml", "DIS_b.yaml"]
+    assert [p.name for p in paths] == ["000_DIS_a.yaml", "001_DIS_b.yaml"]
     model = yaml.safe_load(paths[0].read_text())
     assert model == {
         "estimator": "dis_jax",
         "estimate_type": "flow",
         "config": {"preset": 1, "patch_size": 7},
     }
+
+
+def test_materialize_dedupes_duplicate_names(tmp_path: Path) -> None:
+    """Entries sharing a name get distinct files (idx prefix), not collision."""
+    entries = [
+        {"name": "dup", "estimator": "dis_jax", "config": {"patch_size": 7}},
+        {"name": "dup", "estimator": "dis_jax", "config": {"patch_size": 9}},
+    ]
+    work = tmp_path / "work"
+    work.mkdir()
+    paths = collect_cache.materialize_model_configs(entries, work)
+    # Both entries survive: distinct paths, each carrying its own config.
+    assert len(set(paths)) == 2
+    sizes = {
+        yaml.safe_load(p.read_text())["config"]["patch_size"] for p in paths
+    }
+    assert sizes == {7, 9}
 
 
 def test_main_fans_out_over_estimators_list(tmp_path: Path) -> None:

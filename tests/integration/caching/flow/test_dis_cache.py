@@ -54,6 +54,24 @@ def test_dis_get_config():
     assert "start_level" in config
 
 
+def test_dis_preset_name_round_trips():
+    """A get_config preset name re-loads directly (int/name/enum agree)."""
+    # get_config emits the enum name; the constructor must accept it back.
+    by_name = DISJAXFlowFieldEstimator(preset="FAST")
+    assert by_name.preset is PresetType.FAST
+    by_int = DISJAXFlowFieldEstimator(preset=1)
+    assert by_name.get_config() == by_int.get_config()
+    # Full round-trip: config out -> construct -> same config.
+    reloaded = DISJAXFlowFieldEstimator(**by_name.get_config())
+    assert reloaded.get_config()["preset"] == "FAST"
+
+
+def test_dis_invalid_preset_name_raises():
+    """An unknown string preset is a ValueError, not a silent fallback."""
+    with pytest.raises(ValueError, match="PresetType"):
+        DISJAXFlowFieldEstimator(preset="fast")  # lower-case is not a name
+
+
 def test_dis_enrich(tmp_path):
     """DIS enrich returns an EPE array with the correct shape for each miss."""
     # Setup estimator

@@ -95,6 +95,86 @@ def test_greedy_selects_complementary_subset(
     assert payload["greedy"]["cost_mean"] == pytest.approx(2.0)
 
 
+def test_exact_matches_known_optimum(tiny_cache: Path, tmp_path: Path) -> None:
+    """--exact returns the known optimum; greedy is already optimal (gap 0)."""
+    out = tmp_path / "result.json"
+    rc = select_ensemble.main(
+        [
+            "--cache-root",
+            str(tiny_cache),
+            "--K",
+            "2",
+            "--exact",
+            "--out",
+            str(out),
+        ]
+    )
+    assert rc == 0
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    assert "exact" in payload
+    # {a,c} and {b,c} both reach the optimum mean 2.0.
+    assert payload["exact"]["cost_mean"] == pytest.approx(2.0)
+    assert {e["cache_id"] for e in payload["exact"]["selected"]} <= {
+        "cand_a",
+        "cand_b",
+        "cand_c",
+    }
+    # Greedy already finds the optimum here, so the greedy/exact gap is 0.
+    assert payload["greedy"]["cost_mean"] == pytest.approx(
+        payload["exact"]["cost_mean"]
+    )
+
+
+@pytest.fixture
+def greedy_suboptimal_cache(tmp_path: Path) -> Path:
+    """Build a cache where greedy is strictly worse than the exact optimum.
+
+    Solo means: cand_a=2.5 (best, greedy's seed), cand_b=cand_c=3.5. After
+    seeding cand_a, greedy adds cand_b for mean 1.75, but the true optimum
+    {cand_b, cand_c} has mean 1.0 -- so the MILP must refine greedy.
+
+    Args:
+        tmp_path: Pytest temporary directory.
+
+    Returns:
+        The cache root path.
+    """
+    keys = [1, 2, 3, 4]
+    _write_candidate(tmp_path, "cand_a", keys, [1.0, 1.0, 4.0, 4.0])
+    _write_candidate(tmp_path, "cand_b", keys, [1.0, 6.0, 1.0, 6.0])
+    _write_candidate(tmp_path, "cand_c", keys, [6.0, 1.0, 6.0, 1.0])
+    return tmp_path
+
+
+def test_exact_milp_refines_greedy(
+    greedy_suboptimal_cache: Path, tmp_path: Path
+) -> None:
+    """Greedy init + MILP refinement: the exact pass strictly improves."""
+    out = tmp_path / "result.json"
+    rc = select_ensemble.main(
+        [
+            "--cache-root",
+            str(greedy_suboptimal_cache),
+            "--K",
+            "2",
+            "--exact",
+            "--out",
+            str(out),
+        ]
+    )
+    assert rc == 0
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    greedy_cost = payload["greedy"]["cost_mean"]
+    exact_cost = payload["exact"]["cost_mean"]
+    assert greedy_cost == pytest.approx(1.75)  # greedy seeds the trap cand_a
+    assert exact_cost == pytest.approx(1.0)  # true optimum {cand_b, cand_c}
+    assert exact_cost < greedy_cost  # MILP refines past greedy
+    assert {e["cache_id"] for e in payload["exact"]["selected"]} == {
+        "cand_b",
+        "cand_c",
+    }
+
+
 def test_custom_metric_column(tmp_path: Path) -> None:
     """A non-default metric column is honoured via --metric."""
     keys = [1, 2, 3]
@@ -153,13 +233,17 @@ def test_export_models_writes_collectable_estimators_list(
     ]
 
 
-def test_export_normalizes_preset_enum_name(tmp_path: Path) -> None:
-    """A serialized preset name (e.g. FAST) is exported as its int value."""
+def test_export_preserves_config_verbatim(tmp_path: Path) -> None:
+    """Configs are exported untouched (the selector is algorithm-agnostic).
+
+    A serialized preset name (e.g. FAST) is emitted as-is; re-loading it is
+    the estimator's job (the DIS constructor accepts the enum name).
+    """
     summary = {"selected": [{"cache_id": "a", "config": {"preset": "FAST"}}]}
     out = tmp_path / "m.yaml"
     select_ensemble._export_models(summary, out, "dis_jax", "flow")
     data = yaml.safe_load(out.read_text())
-    assert data["estimators"][0]["config"]["preset"] == 1
+    assert data["estimators"][0]["config"]["preset"] == "FAST"
 
 
 def test_export_models_end_to_end(tmp_path: Path) -> None:

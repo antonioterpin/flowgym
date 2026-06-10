@@ -65,7 +65,9 @@ def materialize_model_configs(
 
     Each entry is emitted as a ``{estimator, estimate_type, config}`` YAML
     (the ``name`` key, which is list-only metadata, is dropped) so it can be
-    passed to ``src/main.py --model``.
+    passed to ``src/main.py --model``. The entry ``idx`` prefixes every
+    filename so two entries that share a ``name`` (or sanitize to the same
+    stem) never overwrite each other.
 
     Args:
         entries: Estimator-entry dicts from :func:`load_estimators_list`.
@@ -79,7 +81,7 @@ def materialize_model_configs(
         model = {k: v for k, v in entry.items() if k != "name"}
         raw_stem = str(entry.get("name", f"model_{idx}"))
         stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in raw_stem)
-        out = workdir / f"{stem}.yaml"
+        out = workdir / f"{idx:03d}_{stem}.yaml"
         out.write_text(yaml.dump(model), encoding="utf-8")
         paths.append(out)
     return paths
