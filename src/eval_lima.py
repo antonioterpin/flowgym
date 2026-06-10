@@ -3,7 +3,10 @@
 Builds the estimator (optionally restoring a trained checkpoint via
 ``--load_from``) and reports endpoint-error (EPE) statistics over the dataset,
 both full-field and excluding a 16 px border (the convention used in the LIMA
-papers). Reports a per-scenario breakdown when batch file names are available.
+papers: Manickathan, Mucignat & Lunati, Exp. Fluids 64, 161, 2023,
+https://doi.org/10.1007/s00348-023-03695-8, and Mucignat, Zdybał & Lunati,
+Phys. Fluids 37, 105112, 2025, https://doi.org/10.1063/5.0283779). Reports a
+per-scenario breakdown when batch file names are available.
 """
 
 import argparse

@@ -4,7 +4,8 @@ LIMA (lightweight image matching architecture) is a lean PWC-Net / IRR-PWC
 style coarse-to-fine network specialised for particle image velocimetry:
 
 - a six-level convolutional **encoder** (shared between the two frames) builds
-  a feature pyramid (Table I of Mucignat, Zdybał & Lunati 2025);
+  a feature pyramid (Table I of Mucignat, Zdybał & Lunati, Phys. Fluids 37,
+  105112, 2025; see References);
 - at each pyramid level the features are **symmetrically warped** toward the
   temporal midpoint and matched with a **local correlation** cost volume;
 - a single **weight-shared decoder** of dilated convolutions (Table III)
@@ -16,12 +17,14 @@ converts them to each level's resolution via the cumulative stride. This keeps
 the decoder's flow input on a consistent scale across levels, which is what
 makes a single shared decoder work for every pyramid level.
 
-The decoder follows the layer table given in the paper (corr + flow -> dilated
-convs -> 2-channel flow head). The paper reports ~1.6M parameters for the
-original PyTorch LIMA; the tabulated architecture implemented here is ~0.93M
-(search range 2). The difference is most likely an additional, non-tabulated
-flow-estimator stack in the original; the padding/search-range contributions of
-the 2025 paper concern exactly the dilated decoder reproduced here.
+The decoder follows the layer table given in the LIMA-2 paper (Mucignat, Zdybał
+& Lunati, Phys. Fluids 37, 105112, 2025; corr + flow -> dilated convs ->
+2-channel flow head). The original LIMA-1 paper (Manickathan, Mucignat & Lunati,
+Exp. Fluids 64, 161, 2023) reports ~1.6M parameters for the original PyTorch
+LIMA; the tabulated architecture implemented here is ~0.93M (search range 2).
+The difference is most likely an additional, non-tabulated flow-estimator stack
+in the original; the LIMA-2 padding/search-range contributions concern exactly
+the dilated decoder reproduced here.
 
 References:
     Manickathan, Mucignat & Lunati, "A lightweight neural network designed for

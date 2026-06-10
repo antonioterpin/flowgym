@@ -745,7 +745,7 @@ dev = [
     { name = "ruff", specifier = ">=0.14.14" },
     { name = "scikit-image", specifier = ">=0.20.0" },
     { name = "snowballstemmer" },
-    { name = "synthpix", git = "https://github.com/antonioterpin/synthpix.git?rev=8cfbd7d" },
+    { name = "synthpix", specifier = ">=0.3.1" },
     { name = "wandb", specifier = ">=0.16,<1.0" },
 ]
 dev-cuda12 = [
@@ -760,11 +760,11 @@ dev-cuda12 = [
     { name = "ruff", specifier = ">=0.14.14" },
     { name = "scikit-image", specifier = ">=0.20.0" },
     { name = "snowballstemmer" },
-    { name = "synthpix", git = "https://github.com/antonioterpin/synthpix.git?rev=8cfbd7d" },
-    { name = "synthpix", extras = ["cuda12"], git = "https://github.com/antonioterpin/synthpix.git?rev=8cfbd7d" },
+    { name = "synthpix", specifier = ">=0.3.1" },
+    { name = "synthpix", extras = ["cuda12"], specifier = ">=0.3.1" },
     { name = "wandb", specifier = ">=0.16,<1.0" },
 ]
-synthpix-cuda12 = [{ name = "synthpix", extras = ["cuda12"], git = "https://github.com/antonioterpin/synthpix.git?rev=8cfbd7d" }]
+synthpix-cuda12 = [{ name = "synthpix", extras = ["cuda12"], specifier = ">=0.3.1" }]
 
 [[package]]
 name = "fonttools"
@@ -3304,8 +3304,8 @@ wheels = [
 
 [[package]]
 name = "synthpix"
-version = "0.1.2"
-source = { git = "https://github.com/antonioterpin/synthpix.git?rev=8cfbd7d#8cfbd7d3538305e95b6084e85c14f9f0430e047b" }
+version = "0.3.1"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "gdown" },
     { name = "grain" },
@@ -3316,7 +3316,12 @@ dependencies = [
     { name = "pillow" },
     { name = "robo-goggles" },
     { name = "ruamel-yaml" },
+    { name = "scipy" },
     { name = "tqdm" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/94/d4/f9c8158d42bad745783c6728a2394a7a2aca2d69a918c9b1f429cc3c3f78/synthpix-0.3.1.tar.gz", hash = "sha256:217717fa0ac89198c408e37ae7637a8d0b9e1af5f4a525f6014de9dd05914cd5", size = 120859, upload-time = "2026-06-10T07:52:08.947Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f0/c6/e21fe31c53f6d0f42eefee8a1be94686b49ccc88782663a0423376ecaafc/synthpix-0.3.1-py3-none-any.whl", hash = "sha256:3f8bf8106e8765f242caaa9dea6c23b7d3490ca580a51526aedaa4be990b6cc5", size = 108394, upload-time = "2026-06-10T07:52:07.545Z" },
 ]
 
 [package.optional-dependencies]

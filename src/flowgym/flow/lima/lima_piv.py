@@ -106,7 +106,8 @@ class LimaPivEstimator(FlowFieldEstimator):
             lambda_u: Weight of the data (displacement) loss term.
             lambda_j: Weight of the Jacobian smoothness penalty.
             level_weights: Per-level loss weights (coarse to fine). Defaults to
-                the paper values when available, else a geometric schedule.
+                the LIMA-1 Table 2 values (Manickathan et al., Exp. Fluids 64,
+                161, 2023) when available, else a geometric schedule.
             use_temporal_propagation: Warm-start from the previous estimate.
             grad_clip_norm: Global-norm gradient clipping threshold.
             **kwargs: Forwarded to :class:`FlowFieldEstimator` (e.g.

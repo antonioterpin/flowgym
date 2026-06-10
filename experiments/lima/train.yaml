@@ -1,6 +1,8 @@
-# Kinematic training set for LIMA: synthpix renders fresh randomized particle
-# images each batch on top of the class-1 displacement fields (train split).
-# include_images: false -> kinematic image generation (Manickathan et al. 2022).
+# Regime A: SUPERVISED training of LIMA on the REAL class-1 displacement fields
+# (train split). synthpix renders fresh randomized particle images each batch on
+# top of those fixed fields (include_images: false). Only the images are random
+# -- this is NOT kinematic training in the random-displacement-field sense; see
+# train_kinematic.yaml (Regime B) and experiments/lima/RESULTS.md.
 seed: 0
 batch_size: 10
 flow_fields_per_batch: 10
