@@ -3,7 +3,7 @@
 # displacement fields, not on stored CFD/DNS fields. Both halves are now random
 # -- synthpix's in-memory KinematicDataSource emits fresh smooth random fields,
 # and SyntheticImageSampler renders fresh particle images on top of each one.
-# Requires synthpix>=0.3.0 (scheduler_class: "kinematic"). Resolves issue #68;
+# Requires synthpix>=0.3.1 (scheduler_class: "kinematic"). Resolves issue #68;
 # contrast with train.yaml, which is supervised training on the *real* class-1
 # fields with only the image rendering randomized.
 seed: 0
@@ -18,21 +18,19 @@ episode_length: 0       # required: the kinematic source is non-episodic
 worker_count: 0
 
 # --- Kinematic flow-field generator (synthpix KinematicDataSource) -----------
-# ds_ref = a * G_sigma * xi, with xi ~ U(-1, 1), G_sigma a Gaussian filter of
-# width sigma (px), and a a per-field linear scale factor.
-#
-# IMPORTANT: synthpix applies a LINEAR scale (a is multiplied straight into the
-# filtered noise); it is NOT the paper's per-field peak-displacement target.
-# Gaussian filtering attenuates the noise amplitude strongly (and sigma-
-# dependently), so synthpix's own defaults (sigma 5-100, a 0-16) produce
-# degenerate sub-pixel fields (per-field peak |d| ~ 0.10 px median) -- useless
-# for training. The ranges below are CALIBRATED (see experiments/lima/RESULTS.md)
-# so per-field peak |d| spans a PIV-realistic ~0-18 px (median ~2.4 px),
-# overlapping the class-1 test distribution the model is evaluated on.
+# ds_ref = a * G_sigma * xi, with xi ~ U(-1, 1) and G_sigma a Gaussian filter of
+# width sigma (px). With scale_mode: "peak" (the synthpix >=0.3.1 default), each
+# field is normalised so its peak displacement magnitude equals a (px) -- the
+# paper's per-field "Maximum displacement, max(ds_ref) (px)" (Manickathan,
+# Mucignat & Lunati, Exp. Fluids 64, 161, 2023, Table 1). Peak normalisation is
+# sigma-independent, so the paper's defaults below are used directly: no
+# per-config calibration, and the earlier linear-scale workaround (which needed
+# sigma 5-30, a 0-120 to avoid degenerate sub-pixel fields) is no longer needed.
 scheduler_class: "kinematic"
-num_examples: 18278          # paper's random-field count (LIMA-1 Table 1)
-filter_sigma_range: [5, 30]  # Gaussian correlation length (px)
-scale_factor_range: [0, 120] # calibrated linear scale -> peak |d| ~0-18 px
+num_examples: 18278           # paper's random-field count (LIMA-1 Table 1)
+filter_sigma_range: [5, 100]  # Gaussian correlation length sigma (px); paper range
+scale_mode: "peak"            # normalise each field to a target peak displacement
+scale_factor_range: [0, 16]   # peak displacement target max(ds_ref) a (px); paper range
 
 # Image generation parameters (randomized per batch -> data augmentation),
 # identical to train.yaml so the kinematic vs class-1 comparison is fair.

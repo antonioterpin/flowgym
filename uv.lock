@@ -743,7 +743,7 @@ dev = [
     { name = "ruff", specifier = ">=0.14.14" },
     { name = "scikit-image", specifier = ">=0.20.0" },
     { name = "snowballstemmer" },
-    { name = "synthpix", specifier = ">=0.3.0" },
+    { name = "synthpix", specifier = ">=0.3.1" },
     { name = "wandb", specifier = ">=0.16,<1.0" },
 ]
 dev-cuda12 = [
@@ -758,11 +758,11 @@ dev-cuda12 = [
     { name = "ruff", specifier = ">=0.14.14" },
     { name = "scikit-image", specifier = ">=0.20.0" },
     { name = "snowballstemmer" },
-    { name = "synthpix", specifier = ">=0.3.0" },
-    { name = "synthpix", extras = ["cuda12"], specifier = ">=0.3.0" },
+    { name = "synthpix", specifier = ">=0.3.1" },
+    { name = "synthpix", extras = ["cuda12"], specifier = ">=0.3.1" },
     { name = "wandb", specifier = ">=0.16,<1.0" },
 ]
-synthpix-cuda12 = [{ name = "synthpix", extras = ["cuda12"], specifier = ">=0.3.0" }]
+synthpix-cuda12 = [{ name = "synthpix", extras = ["cuda12"], specifier = ">=0.3.1" }]
 
 [[package]]
 name = "fonttools"
@@ -3302,7 +3302,7 @@ wheels = [
 
 [[package]]
 name = "synthpix"
-version = "0.3.0"
+version = "0.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "gdown" },
@@ -3317,9 +3317,9 @@ dependencies = [
     { name = "scipy" },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/41/dd/4a2dc9d61892cd51fef3b97b2785e1e134af77631cf769ffb3533769b6b0/synthpix-0.3.0.tar.gz", hash = "sha256:06f1ec6dbf87299fffd58b2f09a4f51917339bc7f1e923790831b570445c2b1b", size = 119790, upload-time = "2026-06-09T20:46:28.035Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/94/d4/f9c8158d42bad745783c6728a2394a7a2aca2d69a918c9b1f429cc3c3f78/synthpix-0.3.1.tar.gz", hash = "sha256:217717fa0ac89198c408e37ae7637a8d0b9e1af5f4a525f6014de9dd05914cd5", size = 120859, upload-time = "2026-06-10T07:52:08.947Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/72/ef/02b209e5809369482fc5c86013c6fdfb1f0a97e9ed3ea539e1b56fe931c3/synthpix-0.3.0-py3-none-any.whl", hash = "sha256:4075e6be8b153e91dc8b6f3b58b6c590abbc64765fff78ca00e4075ee64fc7a1", size = 107416, upload-time = "2026-06-09T20:46:26.403Z" },
+    { url = "https://files.pythonhosted.org/packages/f0/c6/e21fe31c53f6d0f42eefee8a1be94686b49ccc88782663a0423376ecaafc/synthpix-0.3.1-py3-none-any.whl", hash = "sha256:3f8bf8106e8765f242caaa9dea6c23b7d3490ca580a51526aedaa4be990b6cc5", size = 108394, upload-time = "2026-06-10T07:52:07.545Z" },
 ]
 
 [package.optional-dependencies]
