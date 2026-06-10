@@ -23,6 +23,11 @@ order most readers will want to follow.
   `examples/11_caching.py`. Cold/warm cache reuse with the DIS and RAFT
   demos. Treat as an advanced optimization topic after the core
   eval/training paths make sense.
+- [Sweep, time, and select an ensemble](sweep-ensemble.md) —
+  `examples/14_cache_sweep_ensemble.py`. Runs `collect_cache.py`,
+  `collect_timing.py`, and `select_ensemble.py` together over a small
+  synthetic sweep: error cache, per-config timing, and a `K`-subset
+  selection that exports a collect-ready config list.
 
 `src/main.py` is the CLI entrypoint these workflows invoke.
 
@@ -36,4 +41,5 @@ flow-eval
 supervised-training
 density-eval
 caching
+sweep-ensemble
 ```
