@@ -31,4 +31,5 @@ uv run python examples/03_density_eval.py
 
 - [Flow evaluation](flow-eval.md)
 - [Estimator API overview](../user-guide/estimator-api.md)
-- [Density estimators](../api/estimators.md#density-estimators)
+- [Simple density estimator](../api/estimators/density-simple.md)
+- [Neural density estimator](../api/estimators/density-nn.md)

@@ -15,6 +15,7 @@ extensions = [
     "myst_parser",
     "sphinx.ext.autodoc",
     "sphinx.ext.githubpages",
+    "sphinx.ext.mathjax",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
 ]
@@ -30,6 +31,7 @@ source_suffix = {
 
 myst_enable_extensions = [
     "colon_fence",
+    "dollarmath",
 ]
 myst_heading_anchors = 3
 
