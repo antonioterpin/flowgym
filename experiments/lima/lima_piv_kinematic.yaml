@@ -18,6 +18,8 @@ config:
   history_size: 1
   optimizer_config:
     name: adam
-    # Paper uses 1e-4/2e-4 over a 200-epoch budget; raised here for faster
-    # convergence within a reduced-budget run (matches lima_piv.yaml).
+    # The LIMA papers use 1e-4 (Manickathan et al., Exp. Fluids 64, 161, 2023)
+    # / 2e-4 (Mucignat, Zdybał & Lunati, Phys. Fluids 37, 105112, 2025) base lr
+    # over a 200-epoch budget; raised here for faster convergence within a
+    # reduced-budget run (matches lima_piv.yaml).
     learning_rate: 0.0005

@@ -1,11 +1,11 @@
 # TRUE kinematic training for LIMA (Manickathan, Mucignat & Lunati, Meas. Sci.
-# Technol. 33, 124006, 2022): supervise on RANDOMLY GENERATED smooth
+# Technol. 33, 124006, 2022; doi:10.1088/1361-6501/ac8fae): supervise on RANDOMLY GENERATED smooth
 # displacement fields, not on stored CFD/DNS fields. Both halves are now random
 # -- synthpix's in-memory KinematicDataSource emits fresh smooth random fields,
 # and SyntheticImageSampler renders fresh particle images on top of each one.
-# Requires synthpix>=0.3.1 (scheduler_class: "kinematic"). Resolves issue #68;
-# contrast with train.yaml, which is supervised training on the *real* class-1
-# fields with only the image rendering randomized.
+# Requires synthpix>=0.3.1 (scheduler_class: "kinematic"). Contrast with
+# train.yaml, which is supervised training on the *real* class-1 fields with
+# only the image rendering randomized.
 seed: 0
 batch_size: 10
 flow_fields_per_batch: 10
@@ -21,16 +21,16 @@ worker_count: 0
 # ds_ref = a * G_sigma * xi, with xi ~ U(-1, 1) and G_sigma a Gaussian filter of
 # width sigma (px). With scale_mode: "peak" (the synthpix >=0.3.1 default), each
 # field is normalised so its peak displacement magnitude equals a (px) -- the
-# paper's per-field "Maximum displacement, max(ds_ref) (px)" (Manickathan,
-# Mucignat & Lunati, Exp. Fluids 64, 161, 2023, Table 1). Peak normalisation is
-# sigma-independent, so the paper's defaults below are used directly: no
+# the LIMA-1 paper's per-field "Maximum displacement, max(ds_ref) (px)" (Manickathan,
+# Mucignat & Lunati, Exp. Fluids 64, 161, 2023, Table 1; doi:10.1007/s00348-023-03695-8). Peak normalisation is
+# sigma-independent, so the LIMA-1 paper's defaults (Manickathan et al., Exp. Fluids 64, 161, 2023, Table 1) below are used directly: no
 # per-config calibration, and the earlier linear-scale workaround (which needed
 # sigma 5-30, a 0-120 to avoid degenerate sub-pixel fields) is no longer needed.
 scheduler_class: "kinematic"
-num_examples: 18278           # paper's random-field count (LIMA-1 Table 1)
-filter_sigma_range: [5, 100]  # Gaussian correlation length sigma (px); paper range
+num_examples: 18278           # LIMA-1 random-field count (Manickathan et al., Exp. Fluids 64, 161, 2023, Table 1)
+filter_sigma_range: [5, 100]  # Gaussian correlation length sigma (px); LIMA-1 range (Manickathan et al., Exp. Fluids 64, 161, 2023, Table 1)
 scale_mode: "peak"            # normalise each field to a target peak displacement
-scale_factor_range: [0, 16]   # peak displacement target max(ds_ref) a (px); paper range
+scale_factor_range: [0, 16]   # peak displacement target max(ds_ref) a (px); LIMA-1 range (Manickathan et al., Exp. Fluids 64, 161, 2023, Table 1)
 
 # Image generation parameters (randomized per batch -> data augmentation),
 # identical to train.yaml so the kinematic vs class-1 comparison is fair.

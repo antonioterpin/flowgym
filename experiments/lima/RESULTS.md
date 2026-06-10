@@ -11,7 +11,7 @@ cylinder, uniform):
 - **Regime B — true kinematic training** (`train_kinematic.yaml`): the
   displacement fields are themselves *randomly generated* (synthpix
   `KinematicDataSource`, >=0.3.1); the model never sees a class-1 field during
-  training — the Manickathan et al. (2022) kinematic strategy. Tests
+  training — the Manickathan et al. kinematic-training strategy (Meas. Sci. Technol. 33, 124006, 2022; see References). Tests
   out-of-distribution generalization to class-1.
 
 > **Terminology.** Regime A was originally labelled "kinematic training", but
@@ -23,8 +23,8 @@ cylinder, uniform):
 
 ### Setup
 
-- **Model:** LIMA-6, replicate padding, search range 2 (LIMAR2), the 2025
-  paper's recommended config. ~0.93 M params (tabulated architecture).
+- **Model:** LIMA-6, replicate padding, search range 2 (LIMAR2), the
+  recommended config of Mucignat, Zdybał & Lunati (Phys. Fluids 37, 105112, 2025; see References). ~0.93 M params (tabulated architecture).
   `experiments/lima/lima_piv.yaml`.
 - **Training** (`experiments/lima/train.yaml`): synthpix renders fresh
   randomized particle images each batch on top of the class-1 *train-split*
@@ -36,13 +36,15 @@ cylinder, uniform):
 - **Data:** local mirror of the HF dataset — full test split (450 fields) + a
   150-field-per-scenario train subset (1,350 fields). Each field is re-rendered
   every time it is drawn, so the effective training set is far larger.
-- **Optimizer:** Adam, lr **5e-4** (raised from the paper's 1e-4/2e-4 for a
-  reduced-budget run), global-norm grad clip 1.0. Multi-level Jacobian-penalised
+- **Optimizer:** Adam, lr **5e-4** (raised from the LIMA papers' base 1e-4/2e-4
+  for a reduced-budget run — Manickathan, Mucignat & Lunati, Exp. Fluids 64, 161,
+  2023 [1e-4] and Mucignat, Zdybał & Lunati, Phys. Fluids 37, 105112, 2025 [2e-4];
+  see References), global-norm grad clip 1.0. Multi-level Jacobian-penalised
   L1 loss (lambda_u=0.91, lambda_J=0.09).
 - **Budget:** 40,000 batches × 10 = 400k image-pair presentations, ~36 min on
-  one RTX 5090. (The paper trains 200 epochs ≈ 3.6–7.4 M presentations.)
+  one RTX 5090. (The LIMA papers train 200 epochs ≈ 3.6–7.4 M presentations: Manickathan, Mucignat & Lunati, Exp. Fluids 64, 161, 2023 [18,278 examples, ≈3.6 M] and Mucignat, Zdybał & Lunati, Phys. Fluids 37, 105112, 2025 [37,000 examples, ≈7.4 M]; see References.)
 - **Eval** (`src/eval_lima.py`): endpoint error EPE = ‖pred − gt‖ per pixel,
-  reported excluding a 16 px border (paper convention), over all 450 test fields.
+  reported excluding a 16 px border (LIMA paper convention; Manickathan, Mucignat & Lunati, Exp. Fluids 64, 161, 2023; see References), over all 450 test fields.
 
 ### Learning curve — class-1 test (rendered, in-distribution)
 
@@ -55,8 +57,8 @@ cylinder, uniform):
 | 39,999 (final) | 0.115 px | 0.057 px | 1.007 |
 
 **Best checkpoint: 32,000.** EPE drops ~26× from the random-init baseline to
-**0.065 px mean / 0.055 px median**, comparable to or better than the paper's
-LIMA-6 (mean EPE ≈ 0.17 px on the Carlier DNS case — a different test set).
+**0.065 px mean / 0.055 px median**, comparable to or better than the LIMA-1 paper's
+LIMA-6 (mean EPE ≈ 0.17 px on the Carlier DNS case — a different test set; Manickathan, Mucignat & Lunati, Exp. Fluids 64, 161, 2023; see References).
 
 **Late-training regression:** between 32k and 40k the `uniform` (large
 pure-translation) scenario blew up from 0.068 → 0.96 px (median stayed at
@@ -93,8 +95,7 @@ images (not re-rendered) — a harder, out-of-distribution test:
 
 Median EPE ≈ **0.15 px** (sub-pixel) on real images. The mean is inflated by the
 cylinder-near-wall real images (~0.5 px) where laser reflections and solid
-boundaries are hardest — the same regime where WIDIM also struggles (LIMA-1
-§3.3). The replicate padding (LIMAR) is specifically meant to help here.
+boundaries are hardest — the same regime where WIDIM also struggles (Manickathan, Mucignat & Lunati, Exp. Fluids 64, 161, 2023, §3.3; see References). The replicate padding (LIMAR) is specifically meant to help here.
 
 ## Regime B — true kinematic training (random displacement fields)
 
@@ -109,11 +110,11 @@ only the field source changes (`experiments/lima/train_kinematic.yaml`,
 ### Field generator
 
 synthpix generates each field as `ds = a * G_sigma * xi` (white noise `xi ~ U(-1,1)`,
-Gaussian filter of width `sigma` px; Manickathan et al. 2022 §2.2). We use
+Gaussian filter of width `sigma` px; Manickathan et al., Meas. Sci. Technol. 33, 124006, 2022, §2.2; see References). We use
 **`scale_mode: "peak"`** (the synthpix >=0.3.1 default), which normalises each
 field so its peak displacement magnitude equals `a` (px) — the paper's per-field
 "Maximum displacement, max(ds_ref) (px)" (Manickathan, Mucignat & Lunati, Exp.
-Fluids 64, 161, 2023, Table 1). Peak normalisation is sigma-independent, so the
+Fluids 64, 161, 2023, Table 1; doi:10.1007/s00348-023-03695-8). Peak normalisation is sigma-independent, so the
 **paper defaults sigma in [5,100], a in [0,16]** are used directly: no per-config
 calibration. (The earlier linear-scale workaround — sigma [5,30], a [0,120] — was
 needed only because synthpix 0.3.0 applied `a` as a raw multiplier, and Gaussian
@@ -129,13 +130,13 @@ Generated displacement distribution (N=600 fields, seed 0):
 
 Per-field peak |d| is uniform on [0,16] by construction; per-field mean |d|:
 median 3.16 px, overall mean 3.41 px. Only ~4 % of fields are sub-pixel (vs 21 %
-under the old linear calibration) — a healthier, paper-faithful PIV mix.
+under the old linear calibration) — a healthier, LIMA-1-faithful PIV mix (Manickathan, Mucignat & Lunati, Exp. Fluids 64, 161, 2023; see References).
 
 ### Setup
 
 - **Training** (`train_kinematic.yaml`): `scheduler_class: kinematic`,
-  `scale_mode: peak` with the paper ranges (sigma [5,100], a [0,16]), 18,278
-  generated fields (LIMA-1 Table 1 count), `include_images: false` so synthpix
+  `scale_mode: peak` with the LIMA-1 ranges (sigma [5,100], a [0,16]), 18,278
+  generated fields (Manickathan, Mucignat & Lunati, Exp. Fluids 64, 161, 2023, Table 1 count; see References), `include_images: false` so synthpix
   *also* renders fresh particle images on top — both halves random. Same Adam
   lr 5e-4, grad-clip 1.0, multi-level Jacobian L1 loss, 40,000 batches × 10 as
   Regime A (~35 min on one RTX 5090).
@@ -159,8 +160,8 @@ median** on class-1 test — an **~18× reduction** over the random-init baselin
 (Regime A, 0.065 px). The curve is **flat and stable**: no late-training
 blow-up — the `uniform` scenario sits at 0.038 px at both 32k and 39,999 (vs
 Regime A's 0.07→0.96 px spike) — because the kinematic distribution is broader
-and more uniform than the fixed class-1 fields. With the paper-faithful peak
-ranges this run also edges out the earlier linear-calibration run (0.094 vs
+and more uniform than the fixed class-1 fields. With the LIMA-1-faithful peak
+ranges (Manickathan, Mucignat & Lunati, Exp. Fluids 64, 161, 2023, Table 1; see References) this run also edges out the earlier linear-calibration run (0.094 vs
 0.111 px mean) and fixes its weakest case, `uniform` (0.038 vs 0.207 px).
 
 #### Best checkpoint (32k) — per-scenario mean EPE (excl. 16px), rendered test
