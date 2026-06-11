@@ -24,6 +24,8 @@ class ConvBlock(nn.Module):
         norm_fn: Normalization type ("batch", "instance", "group", "none").
         activation: Activation function to apply.
         group_size: Group size for group normalization.
+        padding: Convolution padding ("SAME"/"VALID" or explicit
+            ``((low, high), ...)`` pairs per spatial dimension).
     """
 
     features: int
@@ -32,6 +34,7 @@ class ConvBlock(nn.Module):
     norm_fn: str = "none"  # 'batch', 'instance', 'group', 'none'
     activation: Callable | None = nn.relu
     group_size: int = 8  # for group norm
+    padding: str | Sequence[tuple[int, int]] = "SAME"
 
     @nn.compact
     def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
@@ -53,7 +56,7 @@ class ConvBlock(nn.Module):
             features=self.features,
             kernel_size=self.kernel_size,
             strides=self.strides,
-            padding="SAME",
+            padding=self.padding,
             dtype=x.dtype,
         )(x)
 
@@ -86,12 +89,15 @@ class ResidualBlock(nn.Module):
         kernel_size: Size of convolutional kernel.
         strides: Stride for convolution.
         norm_fn: Normalization type.
+        padding: Convolution padding for the two 3x3 convs ("SAME"/"VALID"
+            or explicit ``((low, high), ...)`` pairs per spatial dimension).
     """
 
     features: int
     kernel_size: tuple[int, int] = (3, 3)
     strides: tuple[int, int] = (1, 1)
     norm_fn: str = "none"
+    padding: str | Sequence[tuple[int, int]] = "SAME"
 
     @nn.compact
     def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
@@ -113,6 +119,7 @@ class ResidualBlock(nn.Module):
             kernel_size=self.kernel_size,
             strides=self.strides,
             norm_fn=self.norm_fn,
+            padding=self.padding,
         )(x)
         # Second conv
         x = ConvBlock(
@@ -120,6 +127,7 @@ class ResidualBlock(nn.Module):
             kernel_size=(3, 3),
             strides=(1, 1),
             norm_fn=self.norm_fn,
+            padding=self.padding,
         )(x)
         # Adjust channels of residual
         residual = nn.Conv(
@@ -243,12 +251,23 @@ class EncoderBlock(nn.Module):
         norm_fn: Normalization type.
         dropout: Dropout rate.
         train: Whether the module is in training mode.
+        residual_strides: Per-residual-block strides (six blocks); all-ones
+            keeps full resolution, ``(2, 1, 2, 1, 2, 1)`` downsamples by 1/8.
+        residual_padding: Convolution padding for the residual 3x3 convs.
     """
 
     output_dim: int
     norm_fn: str = "none"
     dropout: float = 0.0
     train: bool = False
+    # Per-residual-block strides (six blocks). All-ones keeps the full
+    # resolution RAFT32 encoder; (2, 1, 2, 1, 2, 1) downsamples by 1/8 for
+    # the RAFT256 encoder.
+    residual_strides: tuple[int, ...] = (1, 1, 1, 1, 1, 1)
+    # Convolution padding for the residual 3x3 convs. "SAME" matches PyTorch
+    # for stride 1; strided convs need explicit ((1, 1), (1, 1)) padding to
+    # reproduce PyTorch's symmetric ``padding=1``.
+    residual_padding: str | Sequence[tuple[int, int]] = "SAME"
 
     @nn.compact
     def __call__(
@@ -275,12 +294,16 @@ class EncoderBlock(nn.Module):
             strides=(1, 1),
             norm_fn=self.norm_fn,
         )(x_array)
-        x_array = ResidualBlock(features=64, norm_fn=self.norm_fn)(x_array)
-        x_array = ResidualBlock(features=64, norm_fn=self.norm_fn)(x_array)
-        x_array = ResidualBlock(features=96, norm_fn=self.norm_fn)(x_array)
-        x_array = ResidualBlock(features=96, norm_fn=self.norm_fn)(x_array)
-        x_array = ResidualBlock(features=128, norm_fn=self.norm_fn)(x_array)
-        x_array = ResidualBlock(features=128, norm_fn=self.norm_fn)(x_array)
+        residual_features = (64, 64, 96, 96, 128, 128)
+        for features, stride in zip(
+            residual_features, self.residual_strides, strict=True
+        ):
+            x_array = ResidualBlock(
+                features=features,
+                strides=(stride, stride),
+                norm_fn=self.norm_fn,
+                padding=self.residual_padding,
+            )(x_array)
         out = ConvBlock(
             features=self.output_dim,
             kernel_size=(1, 1),
@@ -529,6 +552,68 @@ class ScanBodyBlock(nn.Module):
         flow = coords1 - self.coords0
 
         return (net, coords1), flow
+
+
+class ScanBody256Block(nn.Module):
+    """Scan body for RAFT256 refinement with convex upsampling.
+
+    Identical to :class:`ScanBodyBlock` except that the learned upsampling
+    mask returned by the update block is used to convex-upsample the
+    1/8-resolution flow to full resolution at every iteration, matching the
+    PyTorch ``RAFT256`` forward pass.
+
+    Attributes:
+        update_block: Update block module for flow refinement.
+        coords0: Initial coordinate grid (at 1/8 resolution).
+        corr_radius: Correlation radius for lookup.
+        inp: Input features.
+        corr_pyramid: Correlation pyramid.
+    """
+
+    update_block: nn.Module
+    coords0: jnp.ndarray
+    corr_radius: int
+    inp: jnp.ndarray
+    corr_pyramid: list
+
+    @nn.compact
+    def __call__(
+        self,
+        carry: tuple[jnp.ndarray, jnp.ndarray],
+    ) -> tuple[tuple[jnp.ndarray, jnp.ndarray], jnp.ndarray]:
+        """Apply one refinement step and convex-upsample the flow.
+
+        Args:
+            carry: Tuple containing hidden state and coordinates tensors.
+
+        Returns:
+            A tuple containing `(updated carry, upsampled flow)`.
+        """
+        # Import here to avoid circular dependency
+        from flowgym.flow.raft.process import (  # noqa: PLC0415
+            convex_upsample,
+            correlation_block,
+        )
+
+        net, coords1 = carry
+
+        # Detach gradients to prevent backprop through time
+        coords1 = jax.lax.stop_gradient(coords1)
+
+        # Compute correlation features
+        corr = correlation_block(self.corr_pyramid, coords1, self.corr_radius)
+        # Compute flow as difference between coordinates
+        flow = coords1 - self.coords0
+        # Update hidden state, mask, and delta flow
+        net, mask, delta_flow = self.update_block(net, self.inp, corr, flow)
+
+        # Update coordinates with predicted flow
+        coords1 = coords1 + delta_flow
+
+        # Convex-upsample the 1/8-resolution flow to full resolution
+        flow_up = convex_upsample(coords1 - self.coords0, mask)
+
+        return (net, coords1), flow_up
 
 
 POSTPROCESS_REGISTRY: dict[str, Callable[[ArrayLike], jax.Array]] = {

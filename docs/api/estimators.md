@@ -14,7 +14,9 @@ estimators/flow-base
 estimators/dis-jax
 estimators/dis-opencv
 estimators/raft-jax
+estimators/raft-jax-256
 estimators/raft-pytorch
+estimators/raft-pytorch-256
 estimators/lima
 estimators/openpiv-jax
 estimators/openpiv

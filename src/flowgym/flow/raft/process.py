@@ -368,6 +368,53 @@ def fold_patches(patches: jnp.ndarray, H: int, W: int, S: int) -> jnp.ndarray:
     return full
 
 
+def convex_upsample(flow: jnp.ndarray, mask: jnp.ndarray) -> jnp.ndarray:
+    """Upsample a 1/8-resolution flow field to full resolution.
+
+    Mirrors the RAFT256-PIV convex upsampling head: each low-resolution flow
+    vector is scaled by 4 and replaced by a learned convex combination of its
+    3x3 neighbourhood, yielding an 8x8 block of high-resolution vectors. This
+    is the JAX/NHWC counterpart of the PyTorch ``RAFT256.upsample_flow``.
+
+    Args:
+        flow: (B, H, W, 2) flow field at 1/8 resolution, channels in (x, y)
+            order.
+        mask: (B, H, W, 9*8*8) unnormalised convex-combination logits, with
+            the channel axis ordered as (neighbour, sub_row, sub_col).
+
+    Returns:
+        (B, 8H, 8W, 2) upsampled flow field.
+    """
+    B, H, W, _ = flow.shape
+
+    # (B, H, W, 9 neighbours, 8 sub-rows, 8 sub-cols); softmax over neighbours.
+    mask = mask.reshape(B, H, W, 9, 8, 8)
+    mask = jax.nn.softmax(mask, axis=3)
+
+    # Unfold a 3x3 neighbourhood of (4 * flow) with zero padding, ordering the
+    # nine taps row-major in (kh, kw) to match torch ``F.unfold``.
+    scaled = 4.0 * flow
+    padded = jnp.pad(scaled, ((0, 0), (1, 1), (1, 1), (0, 0)))
+    taps = [
+        padded[:, kh : kh + H, kw : kw + W, :]
+        for kh in range(3)
+        for kw in range(3)
+    ]
+    neighbours = jnp.stack(taps, axis=-1)  # (B, H, W, 2, 9)
+
+    # Convex combination over the nine neighbours for every 8x8 sub-pixel. Use
+    # an explicit elementwise reduction (not einsum/matmul) to keep the
+    # accumulation in full float32 precision.
+    # neighbours -> (B, H, W, 2, 9, 1, 1); mask -> (B, H, W, 1, 9, 8, 8).
+    up = jnp.sum(
+        neighbours[..., None, None] * mask[..., None, :, :, :], axis=4
+    )  # (B, H, W, 2, 8, 8)
+
+    # (B, H, sub_row, W, sub_col, 2) -> (B, 8H, 8W, 2)
+    up = jnp.transpose(up, (0, 1, 4, 2, 5, 3))
+    return up.reshape(B, H * 8, W * 8, 2)
+
+
 # alternative to avg_pool from jax.lax
 # TODO: benchmark
 def avg_pool2(x: jnp.ndarray) -> jnp.ndarray:

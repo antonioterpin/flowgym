@@ -1,16 +1,32 @@
-"""Module implementing the RAFT model using Flax."""
+"""Module implementing the RAFT256 model using Flax.
+
+This is the 1/8-resolution variant of :class:`RaftEstimatorModel`. The feature
+and context encoders downsample the input by a factor of eight (stride-2 in
+each of the three residual stages), the recurrent refinement runs at that
+1/8 resolution, and a learned convex upsampling head reconstructs the
+full-resolution flow at every iteration. Every shared building block is reused
+from :mod:`flowgym.nn.blocks`, so the parameter tree is identical to RAFT32 and
+the same PyTorch -> Flax converter applies.
+"""
 
 from typing import cast
 
+import jax
 import jax.numpy as jnp
 from flax import linen as nn
 
 from flowgym.flow.raft.process import build_corr_pyramid
-from flowgym.nn.blocks import EncoderBlock, ScanBodyBlock, UpdateBlock
+from flowgym.nn.blocks import EncoderBlock, ScanBody256Block, UpdateBlock
+
+# Encoder strides that downsample the input by 1/8 across the three residual
+# stages, plus the explicit padding that reproduces PyTorch's symmetric
+# ``padding=1`` for the strided 3x3 convolutions.
+_DOWNSAMPLE_STRIDES: tuple[int, ...] = (2, 1, 2, 1, 2, 1)
+_CONV_PADDING: tuple[tuple[int, int], tuple[int, int]] = ((1, 1), (1, 1))
 
 
-class RaftEstimatorModel(nn.Module):
-    """RAFT32-PIV flow estimator model.
+class RaftEstimatorModel256(nn.Module):
+    """RAFT256 flow estimator model.
 
     Attributes:
         hidden_dim: Hidden dimension size.
@@ -36,29 +52,45 @@ class RaftEstimatorModel(nn.Module):
     def __call__(
         self, images: jnp.ndarray, flow_init: jnp.ndarray
     ) -> jnp.ndarray:
-        """Apply the RAFT estimator model to the input images.
+        """Apply the RAFT256 estimator model to the input images.
 
         Args:
-            images: Input image tensor of shape (B, H, W, 2).
-            flow_init: Initial flow tensor of shape (B, H, W, 2).
+            images: Input image tensor of shape (B, H, W, 2). H and W must be
+                divisible by 8.
+            flow_init: Initial flow tensor of shape (B, H, W, 2), at full
+                resolution.
 
         Returns:
-            Estimated optical flow of shape (B, H, W, 2).
+            Estimated optical flow of shape (iters, B, H, W, 2).
         """
         # Normalize images to [0, 1]
         images = images / 256.0
 
-        # TODO: Check order of img1 and img2 (flipped better performance)
         img1, img2 = jnp.split(images, 2, axis=-1)
         B, H, W, _ = img1.shape
-        coords0 = self._coords_grid(B, H, W)
-        coords1 = coords0 + flow_init
+        Hd, Wd = H // 8, W // 8
+
+        # Coordinate grid at 1/8 resolution.
+        coords0 = self._coords_grid(B, Hd, Wd)
+
+        # Downsample the (full-resolution) flow init to 1/8 and add it. For the
+        # common zero initialisation this is a no-op; it matches the PyTorch
+        # ``F.interpolate`` branch used for tiled/temporal inference.
+        flow_init_lr = jax.image.resize(
+            flow_init,
+            (B, Hd, Wd, 2),
+            method="bilinear",
+            antialias=False,
+        )
+        coords1 = coords0 + flow_init_lr
 
         fmap1, fmap2 = EncoderBlock(
             output_dim=256,
             norm_fn=self.norm_fn,
             dropout=self.dropout,
             train=self.train,
+            residual_strides=_DOWNSAMPLE_STRIDES,
+            residual_padding=_CONV_PADDING,
         )([img1, img2])
 
         cnet = EncoderBlock(
@@ -66,6 +98,8 @@ class RaftEstimatorModel(nn.Module):
             norm_fn=self.norm_fn,
             dropout=self.dropout,
             train=self.train,
+            residual_strides=_DOWNSAMPLE_STRIDES,
+            residual_padding=_CONV_PADDING,
         )(img1)
         net, inp = jnp.split(
             cast(jnp.ndarray, cnet), [self.hidden_dim], axis=-1
@@ -82,8 +116,7 @@ class RaftEstimatorModel(nn.Module):
         )
 
         ScanBlock = nn.scan(
-            # TODO: Check if remat helps with memory and speed (training)
-            nn.remat(ScanBodyBlock),
+            nn.remat(ScanBody256Block),
             variable_broadcast="params",
             split_rngs={"params": False},
             length=self.iters,
@@ -109,7 +142,7 @@ class RaftEstimatorModel(nn.Module):
             wd: Width of the grid.
 
         Returns:
-            Coordinate grid tensor.
+            Coordinate grid tensor of shape (batch, ht, wd, 2) in (x, y) order.
         """
         coords = jnp.meshgrid(jnp.arange(ht), jnp.arange(wd), indexing="ij")
         coords = jnp.stack(coords[::-1], axis=-1).astype(jnp.float32)

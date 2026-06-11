@@ -1,6 +1,9 @@
-# RAFT JAX estimator
+# RAFT32 JAX estimator
 
-JAX port of RAFT (learning-based optical flow).
+JAX port of the **RAFT32-PIV** variant of RAFT (learning-based optical flow).
+This is the default RAFT estimator (`raft_jax`, also registered explicitly as
+`raft_jax_32`); it runs on 32×32 interrogation windows. The larger-window
+sibling is [RAFT256 JAX](raft-jax-256.md).
 
 RAFT extracts per-pixel features from both frames and builds a 4D
 correlation volume that scores every pair of locations,

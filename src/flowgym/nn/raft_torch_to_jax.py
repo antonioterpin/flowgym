@@ -1,10 +1,16 @@
-"""Convert a PyTorch RAFT32-PIV checkpoint into Flax/JAX parameters.
+"""Convert a PyTorch RAFT-PIV checkpoint into Flax/JAX parameters.
 
-The PyTorch model is defined in ``flowgym.nn.raft_torch_nn`` and the
-Flax counterpart in ``flowgym.nn.raft_model``. Both implement the same
-RAFT architecture but with different parameter naming. This module
-builds an explicit mapping between PyTorch state-dict keys and the
-nested Flax parameter tree produced by ``RaftEstimatorModel.init``.
+The PyTorch models are defined in ``flowgym.nn.raft_torch_nn`` and the
+Flax counterparts in ``flowgym.nn.raft_model`` / ``flowgym.nn.raft256_model``.
+Both implement the same RAFT architecture but with different parameter
+naming. This module builds an explicit mapping between PyTorch state-dict
+keys and the nested Flax parameter tree produced by
+``RaftEstimatorModel.init``.
+
+The same mapping applies to RAFT32-PIV and RAFT256-PIV: the two variants
+differ only in the encoder strides (which do not change parameter shapes or
+names) and in whether the learned upsampling mask is used, so their
+state dicts — and the resulting Flax parameter trees — are identical.
 """
 
 from __future__ import annotations
