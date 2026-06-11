@@ -3,7 +3,7 @@
 PyTorch-backed RAFT256-PIV (learning-based flow for particle image
 velocimetry), used as the reference for the [RAFT256 JAX](raft-jax-256.md) port.
 
-RAFT256-PIV is the 1/8-resolution variant of [RAFT PyTorch](raft-pytorch.md):
+RAFT256-PIV is the 1/8-resolution variant of [RAFT32 PyTorch](raft-pytorch.md):
 the encoder downsamples each 256×256 interrogation window to 32×32 feature maps
 and a learned convex upsampling head reconstructs the full-resolution flow. The
 PyTorch modules are ported verbatim (up to formatting) from the reference

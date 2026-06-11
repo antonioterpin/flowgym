@@ -18,7 +18,7 @@ from flowgym.nn.raft256_model import RaftEstimatorModel256
 
 
 class RaftJax256Estimator(RaftJaxEstimator):
-    """RAFT256 estimator: 1/8-resolution convex-upsampling RAFT variant."""
+    """RAFT256-PIV estimator: 1/8-resolution convex-upsampling RAFT variant."""
 
     def __init__(
         self,

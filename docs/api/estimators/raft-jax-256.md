@@ -3,7 +3,7 @@
 JAX port of the RAFT256-PIV variant of RAFT (learning-based optical flow for
 particle image velocimetry).
 
-RAFT256-PIV is the 1/8-resolution variant of [RAFT JAX](raft-jax.md): the
+RAFT256-PIV is the 1/8-resolution variant of [RAFT32 JAX](raft-jax.md): the
 feature and context encoders downsample each 256×256 interrogation window to
 32×32 feature maps, the recurrent (GRU) refinement runs at that resolution, and
 a learned *convex upsampling* head reconstructs the full-resolution flow at

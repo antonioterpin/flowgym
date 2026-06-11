@@ -10,7 +10,7 @@ from flowgym.nn.blocks import EncoderBlock, ScanBodyBlock, UpdateBlock
 
 
 class RaftEstimatorModel(nn.Module):
-    """RAFT flow estimator model.
+    """RAFT32-PIV flow estimator model.
 
     Attributes:
         hidden_dim: Hidden dimension size.

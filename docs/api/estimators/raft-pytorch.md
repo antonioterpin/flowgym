@@ -1,6 +1,9 @@
-# RAFT PyTorch estimator
+# RAFT32 PyTorch estimator
 
-PyTorch-backed RAFT (learning-based flow).
+PyTorch-backed **RAFT32-PIV** (learning-based flow). This is the default RAFT
+estimator (`raft_torch`, also registered explicitly as `raft_torch_32`); it
+runs on 32×32 interrogation windows. The larger-window sibling is
+[RAFT256 PyTorch](raft-pytorch-256.md).
 
 RAFT extracts per-pixel features from both frames and builds a 4D
 correlation volume that scores every pair of locations,

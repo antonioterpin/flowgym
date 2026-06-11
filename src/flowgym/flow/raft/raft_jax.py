@@ -27,7 +27,7 @@ NORMKINDS: tuple[str, ...] = ("batch", "group", "instance", "none")
 
 
 class RaftJaxEstimator(FlowFieldEstimator):
-    """RAFT32 flow field estimator."""
+    """RAFT32-PIV flow field estimator; shared base for the RAFT variants."""
 
     def __init__(
         self,

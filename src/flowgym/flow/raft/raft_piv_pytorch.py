@@ -33,7 +33,7 @@ except:
 
 
 class RaftTorchEstimator(FlowFieldEstimator):
-    """RAFT flow field estimator using two-frame history."""
+    """RAFT32-PIV flow field estimator (two-frame history); base for variants."""
 
     # Interrogation window geometry and refinement depth. The RAFT256
     # subclass overrides these to (256, 64, 16).
@@ -42,13 +42,13 @@ class RaftTorchEstimator(FlowFieldEstimator):
     _raft_iters = 12  # number of GRU refinement iterations
 
     def __init__(self, **kwargs):
-        """Initialize the RAFT estimator in pytorch."""
+        """Initialize the RAFT32-PIV estimator in pytorch."""
         # Validate RAFT specific parameters
         self.raft = self._build_raft()
         super().__init__(**kwargs)
 
     def _build_raft(self):
-        """Build the PyTorch RAFT module.
+        """Build the PyTorch RAFT32 module.
 
         Subclasses override this to swap in a different architecture (e.g.
         RAFT256) while reusing the patchify/fold estimation logic.
