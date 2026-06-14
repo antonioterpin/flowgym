@@ -1,0 +1,42 @@
+project: Art_of_PIV
+estimator: art_of_piv
+estimate_type: flow
+config:
+  jit: true
+  router_config:
+    encoder:
+      features_list: [32, 64, 64]
+      output_dim: 64
+      use_residual: false
+      norm_fn: none
+    head:
+      hidden_dims: [512]
+      activation: relu
+  use_temporal_propagation: false
+  output_full_res: true
+  loss_config:
+    name: huber
+    reduction: mean
+  target_transform_config:
+    name: log
+  training_mode: regression
+  train_type: supervised
+  optimizer_config:
+    name: adam
+    hyperparams:
+      learning_rate:
+        schedule:
+          name: exponential_decay
+          init_value: 0.001
+          decay_rate: 0.1
+          end_value: 0.0001
+          transition_steps: 4000
+  gamma: 0
+  use_last_estimate: false
+  estimators_list_path: experiments/art_of_piv_training_dis_class1/models/dis_models.yaml
+
+study:
+  name: art_of_piv_training_dis_class1
+  tags:
+    method: regression
+    loss: huber

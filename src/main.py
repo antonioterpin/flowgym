@@ -123,7 +123,12 @@ if __name__ == "__main__":
     key = jax.random.PRNGKey(dataset_config["seed"])
     key, subkey = jax.random.split(key)
 
-    if args.mode not in ["train", "train-supervised"]:
+    # Only RL training ("train") uses the episodic FluidEnv. Supervised
+    # training and eval iterate a non-episodic sampler directly: PIV data is
+    # independent image pairs, not temporal episodes, so FluidEnv.reset()'s
+    # next_episode() call does not apply (and is unsupported by the .mat
+    # scheduler in current synthpix).
+    if args.mode != "train":
         # Load the dataset sampler
         sampler = synthpix.make(
             dataset_config, load_from=dataset_config.get("load_from")
@@ -145,8 +150,8 @@ if __name__ == "__main__":
             batch,
         )
     else:
-        # Create the environment for training
-        # The state of the environment is a tuple of (sampler, flow_gt)
+        # RL training ("train"): episodic environment whose state is a
+        # tuple of (sampler, flow_gt).
         env, env_state = FluidEnv.make(dataset_config=dataset_config)
 
         try:

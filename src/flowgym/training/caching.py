@@ -82,6 +82,7 @@ class CacheManager:
         cache_id: str,
         spec: CacheSpec,
         warm_start: Literal["none", "index", "all"] = "index",
+        read_only: bool = False,
     ) -> None:
         """Initialize the cache manager.
 
@@ -93,6 +94,10 @@ class CacheManager:
                 "none": No warm start.
                 "index": Load keys only (fast).
                 "all": Load all data into memory (slow init, fast lookup).
+            read_only: If True, never persist writes. Useful when the cache is
+                only consumed for read-through aggregation (e.g. an ArtOfPIV
+                meta cache whose results already live in the sub-caches), so
+                lookups still drive computation but nothing is flushed to disk.
         """
         self.root_dir = Path(root_dir)
         self.cache_id = cache_id
@@ -111,7 +116,7 @@ class CacheManager:
         else:
             self.cache_dir = self.root_dir / cache_id
             self.source_dirs = [self.cache_dir]
-            self.read_only = False
+            self.read_only = read_only
 
         self.spec = spec
         self.warm_start: Literal["none", "index", "all"] = warm_start

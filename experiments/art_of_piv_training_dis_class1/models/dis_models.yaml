@@ -1,0 +1,101 @@
+estimators:
+  - name: DIS_ps11_st1_gi6_lv3_sl0
+    estimator: dis_jax
+    estimate_type: flow
+    config:
+      jit: true
+      preset: 1
+      patch_size: 11
+      patch_stride: 1
+      grad_desc_iters: 6
+      var_refine_iters: 0 # WIP
+      use_mean_normalization: false #not yet implemented
+      use_spatial_propagation: false #not yet implemented
+      use_temporal_propagation: false #not yet implemented
+      start_level: 0
+      levels: 3
+      level_steps: 1
+      output_full_res: true
+      sequential_batch: true
+      preprocess: src/flowgym/config/estimators/pre-processing/common.yaml
+      postprocess: src/flowgym/config/estimators/post-processing/common.yaml
+  - name: DIS_ps17_st1_gi16_lv3_sl0
+    estimator: dis_jax
+    estimate_type: flow
+    config:
+      jit: true
+      preset: 1
+      patch_size: 17
+      patch_stride: 1
+      grad_desc_iters: 16
+      var_refine_iters: 0 # WIP
+      use_mean_normalization: false #not yet implemented
+      use_spatial_propagation: false #not yet implemented
+      use_temporal_propagation: false #not yet implemented
+      start_level: 0
+      levels: 3
+      level_steps: 1
+      output_full_res: true
+      sequential_batch: true
+      preprocess: src/flowgym/config/estimators/pre-processing/common.yaml
+      postprocess: src/flowgym/config/estimators/post-processing/common.yaml
+  - name: DIS_ps5_st1_gi6_lv2_sl0
+    estimator: dis_jax
+    estimate_type: flow
+    config:
+      jit: true
+      preset: 1
+      patch_size: 5
+      patch_stride: 1
+      grad_desc_iters: 6
+      var_refine_iters: 0 # WIP
+      use_mean_normalization: false #not yet implemented
+      use_spatial_propagation: false #not yet implemented
+      use_temporal_propagation: false #not yet implemented
+      start_level: 0
+      levels: 2
+      level_steps: 1
+      output_full_res: true
+      sequential_batch: true
+      preprocess: src/flowgym/config/estimators/pre-processing/common.yaml
+      postprocess: src/flowgym/config/estimators/post-processing/common.yaml
+  - name: DIS_ps7_st1_gi6_lv2_sl0
+    estimator: dis_jax
+    estimate_type: flow
+    config:
+      jit: true
+      preset: 1
+      patch_size: 7
+      patch_stride: 1
+      grad_desc_iters: 16
+      var_refine_iters: 0 # WIP
+      use_mean_normalization: false #not yet implemented
+      use_spatial_propagation: false #not yet implemented
+      use_temporal_propagation: false #not yet implemented
+      start_level: 0
+      levels: 2
+      level_steps: 1
+      output_full_res: true
+      sequential_batch: true
+      preprocess: src/flowgym/config/estimators/pre-processing/common.yaml
+      postprocess: src/flowgym/config/estimators/post-processing/common.yaml
+  - name: DIS_ps9_st1_gi6_lv3_sl0
+    estimator: dis_jax
+    estimate_type: flow
+    config:
+      jit: true
+      preset: 1
+      patch_size: 9
+      patch_stride: 1
+      grad_desc_iters: 6
+      var_refine_iters: 0 # WIP
+      use_mean_normalization: false #not yet implemented
+      use_spatial_propagation: false #not yet implemented
+      use_temporal_propagation: false #not yet implemented
+      start_level: 0
+      levels: 3
+      level_steps: 1
+      output_full_res: true
+      sequential_batch: true
+      preprocess: src/flowgym/config/estimators/pre-processing/common.yaml
+      postprocess: src/flowgym/config/estimators/post-processing/common.yaml

@@ -1,0 +1,16 @@
+# uv run python experiments/run.py --exp art_of_piv_training_dis_class1
+project: Art_of_PIV
+mode: train-supervised
+
+# Local dataset settings (copied from infra_smoke_v0).
+dataset: dataset.yaml
+
+# Compare training modes with matching sub-estimators.
+models:
+  - models/bandits_huber.yaml
+  - models/bandits_huber_softmax.yaml
+  - models/classification_softmax.yaml
+  - models/reg_huber.yaml
+
+seeds: [0, 1, 2, 3, 4]
+entrypoint: src/main.py
