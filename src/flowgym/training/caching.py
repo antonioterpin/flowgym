@@ -114,7 +114,7 @@ class CacheManager:
             self.read_only = False
 
         self.spec = spec
-        self.warm_start = warm_start
+        self.warm_start: Literal["none", "index", "all"] = warm_start
 
         # In-memory index of keys -> parquet file path/row location (optional)
         self.index: dict[int, tuple[str, int]] = {}
@@ -602,7 +602,10 @@ def enrich_batch(
         # Call estimator.enrich for missing entries
         try:
             payload_miss = estimator.enrich(
-                batch, miss_idxs_absolute, trainable_state=trainable_state
+                batch,
+                miss_idxs_absolute,
+                trainable_state=trainable_state,
+                cache_manager=cache_manager,
             )
         except Exception as e:
             logger.error(f"Error in estimator.enrich: {e}")

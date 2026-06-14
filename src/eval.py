@@ -3,6 +3,7 @@
 import contextlib
 import time
 from collections.abc import Callable
+from dataclasses import replace
 
 import jax
 import jax.numpy as jnp
@@ -27,6 +28,30 @@ from flowgym.types import (
 from flowgym.utils import block_until_ready_dict
 
 logger = get_logger(__name__, with_metrics=True)
+
+
+def _disable_exploration(
+    cache_payload: CachePayload | None,
+) -> CachePayload:
+    """Return a payload with ``is_training=False`` for evaluation paths.
+
+    Hoisted above the ``has_precomputed_errors`` short-circuit so the invariant
+    "any payload leaving an eval entry point has ``is_training=False``" holds
+    unconditionally -- if a future change ever makes the short-circuit fall
+    through to the estimator, we will not silently regress to training-time
+    exploration.
+
+    Args:
+        cache_payload: Optional incoming payload from the caller.
+
+    Returns:
+        A ``CachePayload`` with ``is_training=False``; either rebuilt from
+        ``cache_payload`` (preserving its other fields) or a fresh one when
+        the caller did not supply a payload.
+    """
+    if cache_payload is None:
+        return CachePayload(is_training=False)
+    return replace(cache_payload, is_training=False)
 
 
 def eval_flow(
@@ -59,6 +84,10 @@ def eval_flow(
     img1 = batch.images1
     img2 = batch.images2
     flow_field_gt = batch.flow_fields
+
+    # Normalize so any payload leaving eval has is_training=False; estimators
+    # (e.g. the ArtOfPIV router) branch on this to disable exploration noise.
+    cache_payload = _disable_exploration(cache_payload)
 
     # Create the estimation state
     estimation_state = create_state_fn(img1, key)
@@ -143,6 +172,10 @@ def eval_density(
     if batch.params is None:
         raise ValueError("Batch params cannot be None for density evaluation.")
     density_gt = batch.params.seeding_densities
+
+    # Normalize so any payload leaving eval has is_training=False; estimators
+    # (e.g. the ArtOfPIV router) branch on this to disable exploration noise.
+    cache_payload = _disable_exploration(cache_payload)
 
     # Create the estimation state
     estimation_state = create_state_fn(img1, key)
