@@ -722,7 +722,7 @@ requires-dist = [
     { name = "openpiv", marker = "extra == 'other-methods'" },
     { name = "pip", specifier = ">=26.1" },
     { name = "pyoptflow", marker = "extra == 'other-methods'" },
-    { name = "robo-goggles", specifier = ">=0.2.0" },
+    { name = "robo-goggles", specifier = ">=0.3.1" },
     { name = "robo-goggles", extras = ["wandb"], marker = "extra == 'wandb'" },
     { name = "scipy", specifier = ">=1.11.0" },
     { name = "sphinx", marker = "extra == 'docs'", specifier = "==7.4.7" },
@@ -2833,7 +2833,7 @@ wheels = [
 
 [[package]]
 name = "robo-goggles"
-version = "0.2.0"
+version = "0.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "imageio" },
@@ -2843,9 +2843,9 @@ dependencies = [
     { name = "ruamel-yaml" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/53/61/a1dd6f8148fc2948e767f310eff30c2a78de81477cc0c888043a003c540e/robo_goggles-0.2.0.tar.gz", hash = "sha256:16fd1df2f14e64dc198c65e208bd20b9ef5b3334cff146852a58169ead01d9fa", size = 96544, upload-time = "2026-05-01T08:22:30.755Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/09/25/7fede6f9410bc6ad8b2c84b707e0af61cb1eb6d278c9e53586747a8bd9ec/robo_goggles-0.3.1.tar.gz", hash = "sha256:5197aed73b635300ab1559e9794b6ca66950286265f3df5f7348c0b0dd916471", size = 107956, upload-time = "2026-06-11T09:40:05.517Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2d/67/d644914b09193f0e31559c5d73e2e80a64e9a67c0f2882376a7d7006f9d7/robo_goggles-0.2.0-py3-none-any.whl", hash = "sha256:bf24a98a09467a0d949db69c823c8e9eb8d68855acc008318e96002847502dae", size = 86672, upload-time = "2026-05-01T08:22:29.22Z" },
+    { url = "https://files.pythonhosted.org/packages/2c/b4/6857160e24bc58f7739e29617c375cec0782517d9b7f0c6bc28af81a9012/robo_goggles-0.3.1-py3-none-any.whl", hash = "sha256:25c3dcdf9049da066c37609e9e18c53f775e7853b52ae0f311c37da60725afe1", size = 98287, upload-time = "2026-06-11T09:40:04.04Z" },
 ]
 
 [package.optional-dependencies]

@@ -28,7 +28,7 @@ dependencies = [
     "jax>=0.6.0",
     "flax>=0.12.7",
     "ipywidgets",
-    "robo-goggles>=0.2.0",
+    "robo-goggles>=0.3.1",
     "pip>=26.1",
     "scipy>=1.11.0",
 ]
