@@ -16,13 +16,22 @@ References:
     ``flowgym.flow.lima`` package docstring for the full reference list.
 """
 
+from __future__ import annotations
+
+import hashlib
+import json
 from collections.abc import Sequence
-from typing import Any, cast
+from functools import partial
+from typing import TYPE_CHECKING, Any, cast
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import optax
 from goggles.history.types import History
+
+if TYPE_CHECKING:
+    from synthpix import SynthpixBatch
 
 from flowgym.common.base import NNEstimatorTrainableState
 from flowgym.flow.base import FlowFieldEstimator
@@ -340,6 +349,146 @@ class LimaPivEstimator(FlowFieldEstimator):
             finest, (B, height_p, width_p, 2), method="bilinear"
         )
         return flow[:, :H, :W, :], {}, {}
+
+    def enrich(
+        self,
+        batch: SynthpixBatch,
+        miss_idxs: jnp.ndarray,
+        **kwargs: Any,
+    ) -> dict[str, jnp.ndarray] | None:
+        """Compute the cache payload for missing keys (EPE).
+
+        Args:
+            batch: The batch of data (SynthpixBatch).
+            miss_idxs: Indices of samples in the batch that are missing
+                from cache.
+            **kwargs: Additional arguments, must include 'trainable_state'.
+
+        Returns:
+            Dictionary with "epe" values for the missing indices.
+        """
+        trainable_state = kwargs.get("trainable_state")
+        if trainable_state is None:
+            # Cannot compute without weights
+            return None
+
+        if batch.flow_fields is None:
+            return None
+
+        # Slice batch for missing indices (eager, host-side)
+        images1 = batch.images1[miss_idxs]
+        images2 = batch.images2[miss_idxs]
+        gt_flow = batch.flow_fields[miss_idxs]
+
+        # Check if empty (should not happen if check np.all(hit) before)
+        if images1.shape[0] == 0:
+            return {}
+
+        key = jax.random.PRNGKey(0)
+
+        # JIT-compiled computation
+        epe_mean, rel_mean = self._compute_cache_payload(
+            images1, images2, gt_flow, trainable_state, key
+        )
+
+        return {"epe": epe_mean, "relative_epe": rel_mean}
+
+    @partial(jax.jit, static_argnums=0)
+    def _compute_cache_payload(
+        self,
+        images1: jnp.ndarray,
+        images2: jnp.ndarray,
+        gt_flow: jnp.ndarray,
+        t_state: NNEstimatorTrainableState,
+        rng: jax.Array,
+    ) -> tuple[jnp.ndarray, jnp.ndarray]:
+        """Pure JAX computation of EPE metrics (JIT-compiled).
+
+        Args:
+            images1: First frame images (B, H, W).
+            images2: Second frame images (B, H, W).
+            gt_flow: Ground truth flow fields (B, H, W, 2).
+            t_state: Trainable state.
+            rng: Random key for state creation.
+
+        Returns:
+            Tuple of (epe_mean, relative_epe_mean), both shape (B,).
+        """
+        B, H, W = images1.shape
+        init_flow = jnp.zeros((B, H, W, 2), dtype=jnp.float32)
+
+        # Create state
+        state = self.create_state(
+            images1, init_flow, image_history_size=2, rng=rng
+        )
+
+        # Inference
+        state, _ = self(images2, state, t_state)
+        est_flow = state["estimates"][:, -1]
+
+        # Metrics
+        diff = est_flow - gt_flow
+        epe = jnp.linalg.norm(diff, axis=-1)
+        epe_mean = jnp.mean(epe, axis=(1, 2))
+
+        gt_norm = jnp.linalg.norm(gt_flow, axis=-1)
+        rel_err = (epe**2) / (jnp.maximum(gt_norm, 0.01) ** 2)
+        rel_epe_mean = jnp.mean(rel_err, axis=(1, 2))
+
+        return epe_mean, rel_epe_mean
+
+    def get_cache_id_suffix(
+        self,
+        trainable_state: NNEstimatorTrainableState,
+    ) -> str:
+        """Get a suffix for the cache ID based on model config and params hash.
+
+        Only includes configuration parameters that affect the mathematical
+        output during inference. Excludes training-only parameters (the loss
+        weights ``lambda_u``/``lambda_j``/``level_weights`` and
+        ``grad_clip_norm``), which never change the forward pass.
+
+        Args:
+            trainable_state: The current trainable state of the model, used
+                to hash the weights.
+
+        Returns:
+            A string suffix to append to the cache ID, encoding the model
+            configuration and weights.
+        """
+        # 1. Config hash - only output-affecting parameters
+        config = {
+            "encoder_channels": list(self.encoder_channels),
+            "decoder_channels": list(self.decoder_channels),
+            "decoder_dilations": list(self.decoder_dilations),
+            "refine_levels": self.refine_levels,
+            "search_range": self.search_range,
+            "padding_mode": self.padding_mode,
+            "activation_slope": self.activation_slope,
+            "use_temporal_propagation": self.use_temporal_propagation,
+        }
+        config_str = json.dumps(config, sort_keys=True)
+        h_config = hashlib.md5(config_str.encode("utf-8")).hexdigest()
+
+        suffix = f"_c{h_config[:8]}"
+
+        # 2. Weights hash
+        if trainable_state is not None:
+            # Compute hash of params
+            leaves = jax.tree_util.tree_leaves(trainable_state.params)
+            if leaves:
+                # Use mean of each leaf to create a small signature
+                # Round to 6 decimals to be robust to GPU reduction jitter
+                means = [jnp.mean(x) for x in leaves]
+                means_arr = jnp.array(means)
+
+                # Pull to host
+                means_np = np.array(means_arr)
+                means_np = np.round(means_np, decimals=6)
+                h_weights = hashlib.md5(means_np.tobytes()).hexdigest()
+                suffix += f"_w{h_weights[:8]}"
+
+        return suffix
 
     def create_train_step(self) -> SupervisedTrainStep:
         """Build the supervised training step (multi-level Jacobian L1 loss).

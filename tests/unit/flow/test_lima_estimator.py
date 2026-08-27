@@ -293,3 +293,88 @@ def test_train_step_rejects_non_divisible_images():
     )
     with pytest.raises(ValueError):
         train_step(ts, exp)
+
+
+# --- caching hooks (library membership) -----------------------------------
+
+
+def _dummy_batch(B=3, H=32, W=32):
+    """A minimal SynthpixBatch with deterministic images and GT flow."""
+    from synthpix.types import SynthpixBatch
+
+    k1, k2, k3 = jax.random.split(jax.random.PRNGKey(7), 3)
+    return SynthpixBatch(
+        images1=jax.random.normal(k1, (B, H, W)) * 40 + 120,
+        images2=jax.random.normal(k2, (B, H, W)) * 40 + 120,
+        flow_fields=jax.random.normal(k3, (B, H, W, 2)),
+    )
+
+
+def test_cache_id_suffix_stable_and_sensitive():
+    """Same config+weights -> same suffix; either changing -> new suffix."""
+    est = _small_estimator()
+    ts = est.create_trainable_state(
+        jnp.zeros((1, 32, 32)), jax.random.PRNGKey(0)
+    )
+    s1 = est.get_cache_id_suffix(ts)
+    s2 = est.get_cache_id_suffix(ts)
+    assert s1 == s2
+    assert "_c" in s1 and "_w" in s1
+
+    # Different weights -> different _w hash, same _c hash.
+    ts_other = est.create_trainable_state(
+        jnp.zeros((1, 32, 32)), jax.random.PRNGKey(1)
+    )
+    s3 = est.get_cache_id_suffix(ts_other)
+    assert s3 != s1
+    assert s3.split("_w")[0] == s1.split("_w")[0]
+
+    # Different output-affecting config -> different _c hash.
+    est_sr = _small_estimator(search_range=3)
+    s4 = est_sr.get_cache_id_suffix(None)
+    assert s4.split("_w")[0] != s1.split("_w")[0]
+
+    # Training-only knobs must NOT split the cache.
+    est_loss = _small_estimator(lambda_u=0.5, lambda_j=0.5)
+    assert est_loss.get_cache_id_suffix(None) == est.get_cache_id_suffix(None)
+
+
+def test_enrich_returns_epe_for_missing_indices():
+    """enrich computes per-sample EPE aligned with miss_idxs."""
+    est = _small_estimator()
+    ts = est.create_trainable_state(
+        jnp.zeros((1, 32, 32)), jax.random.PRNGKey(0)
+    )
+    batch = _dummy_batch()
+    miss = jnp.array([0, 2])
+
+    payload = est.enrich(batch, miss, trainable_state=ts)
+    assert payload is not None
+    assert set(payload) == {"epe", "relative_epe"}
+    assert payload["epe"].shape == (2,)
+    assert payload["relative_epe"].shape == (2,)
+    assert jnp.all(jnp.isfinite(payload["epe"]))
+    assert jnp.all(payload["epe"] >= 0)
+
+    # Without weights there is nothing to compute.
+    assert est.enrich(batch, miss) is None
+
+
+def test_enrich_epe_matches_direct_estimate():
+    """The cached EPE equals the EPE of the deployed forward pass."""
+    est = _small_estimator()
+    ts = est.create_trainable_state(
+        jnp.zeros((1, 32, 32)), jax.random.PRNGKey(0)
+    )
+    batch = _dummy_batch(B=2)
+    miss = jnp.array([0, 1])
+
+    payload = est.enrich(batch, miss, trainable_state=ts)
+    assert payload is not None
+
+    state = {"images": batch.images1[:, None, ...]}
+    flow, _extras, _metrics = est._estimate(batch.images2, state, ts, {})
+    epe = jnp.mean(
+        jnp.linalg.norm(flow - batch.flow_fields, axis=-1), axis=(1, 2)
+    )
+    assert jnp.allclose(payload["epe"], epe, atol=1e-5)
