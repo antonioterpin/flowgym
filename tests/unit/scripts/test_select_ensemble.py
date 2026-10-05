@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -287,3 +288,165 @@ def test_finite_time_limit_without_timing_drops_all(tiny_cache: Path) -> None:
         select_ensemble.main(
             ["--cache-root", str(tiny_cache), "--K", "1", "--time-limit", "1.0"]
         )
+
+
+# ---------------------------------------------------------------------------
+# Tests for --keys-from and --cache-id-prefix
+# ---------------------------------------------------------------------------
+
+
+def _expected_key(filename: str) -> int:
+    """Expected uint64 key for a filename (matches compute_batch_keys)."""
+    h = hashlib.md5(filename.encode()).hexdigest()[:16]
+    return int(np.uint64(int(h, 16)))
+
+
+def test_keys_from_dir_matches_compute_batch_keys_formula(
+    tmp_path: Path,
+) -> None:
+    """_keys_from_dir returns the file-based-formula keys."""
+    names = ["flow_001.mat", "flow_002.mat", "flow_003.mat"]
+    for name in names:
+        (tmp_path / name).write_bytes(b"")
+
+    result = select_ensemble._keys_from_dir(tmp_path)
+    expected = {_expected_key(n) for n in names}
+    assert result == expected
+
+
+def test_keys_from_dir_recursive(tmp_path: Path) -> None:
+    """_keys_from_dir recurses into subdirectories."""
+    sub = tmp_path / "subdir"
+    sub.mkdir()
+    (tmp_path / "a.mat").write_bytes(b"")
+    (sub / "b.mat").write_bytes(b"")
+
+    result = select_ensemble._keys_from_dir(tmp_path)
+    assert result == {_expected_key("a.mat"), _expected_key("b.mat")}
+
+
+def test_restrict_candidate_keeps_requested_subset() -> None:
+    """_restrict_candidate_to_keys filters to the requested key subset."""
+    keys = np.array([10, 20, 30, 40], dtype=np.uint64)
+    errors = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32)
+    requested = {10, 30}
+
+    result = select_ensemble._restrict_candidate_to_keys(
+        keys, errors, requested
+    )
+    assert result is not None
+    rk, re = result
+    assert set(rk.tolist()) == requested
+    assert re.tolist() == pytest.approx([1.0, 3.0])
+
+
+def test_restrict_candidate_drops_when_key_missing() -> None:
+    """_restrict_candidate_to_keys returns None on a missing key."""
+    keys = np.array([10, 20], dtype=np.uint64)
+    errors = np.array([1.0, 2.0], dtype=np.float32)
+    requested = {10, 20, 99}  # 99 not in candidate
+
+    result = select_ensemble._restrict_candidate_to_keys(
+        keys, errors, requested
+    )
+    assert result is None
+
+
+def test_restrict_candidate_dedups_duplicate_keys() -> None:
+    """Duplicate keys (e.g. a twice-collected cache) yield one row per key.
+
+    Without de-duplication the restricted array length would vary across
+    candidates and break the stack into the algorithm x image matrix.
+    """
+    keys = np.array([10, 10, 20, 30, 30], dtype=np.uint64)  # sorted, dups
+    errors = np.array([1.0, 9.0, 2.0, 3.0, 9.0], dtype=np.float32)
+    requested = {10, 20, 30}
+
+    result = select_ensemble._restrict_candidate_to_keys(
+        keys, errors, requested
+    )
+    assert result is not None
+    rk, re = result
+    assert rk.tolist() == [10, 20, 30]  # exactly one row per requested key
+    assert re.tolist() == pytest.approx([1.0, 2.0, 3.0])  # first occurrence
+
+
+def test_keys_from_restricts_selection(tmp_path: Path) -> None:
+    """--keys-from scopes selection to the named split's keys only."""
+    # Build a 3-candidate cache with keys [10, 20, 30, 40].
+    all_keys = [10, 20, 30, 40]
+    _write_candidate(
+        tmp_path / "cache", "cand_a", all_keys, [1.0, 9.0, 9.0, 9.0]
+    )
+    _write_candidate(
+        tmp_path / "cache", "cand_b", all_keys, [9.0, 1.0, 9.0, 9.0]
+    )
+    _write_candidate(
+        tmp_path / "cache", "cand_c", all_keys, [5.0, 5.0, 1.0, 1.0]
+    )
+
+    # Split dir: two .mat files mapping to cache keys 10 and 20.
+    # We need filenames whose md5 hashes produce those exact uint64 values, so
+    # instead we use _keys_from_dir indirectly: write the actual split dir and
+    # compare what _load_cache produces with what _keys_from_dir computes.
+    split_dir = tmp_path / "split"
+    split_dir.mkdir()
+    # Use filename strings that we can verify independently.
+    mat_a = "img_001.mat"
+    mat_b = "img_002.mat"
+    (split_dir / mat_a).write_bytes(b"")
+    (split_dir / mat_b).write_bytes(b"")
+
+    split_keys = select_ensemble._keys_from_dir(split_dir)
+    assert len(split_keys) == 2
+
+    # Build a cache where only split_keys are valid image keys.
+    sk_sorted = sorted(split_keys)
+    cache2 = tmp_path / "cache2"
+    _write_candidate(cache2, "cand_x", sk_sorted, [1.0, 2.0])
+    _write_candidate(cache2, "cand_y", sk_sorted, [2.0, 1.0])
+
+    E, cache_ids, _ = select_ensemble._load_cache(
+        cache2, "epe", verbose=False, keys_from=split_dir
+    )
+    # Both candidates have all requested keys; E should have shape (2, 2).
+    assert E.shape == (2, 2)
+    assert set(cache_ids) == {"cand_x", "cand_y"}
+
+
+def test_keys_from_drops_candidate_missing_keys(tmp_path: Path) -> None:
+    """A candidate missing some requested keys is dropped with a warning."""
+    split_dir = tmp_path / "split"
+    split_dir.mkdir()
+    (split_dir / "a.mat").write_bytes(b"")
+    (split_dir / "b.mat").write_bytes(b"")
+
+    split_keys = sorted(select_ensemble._keys_from_dir(split_dir))
+    assert len(split_keys) == 2
+
+    cache = tmp_path / "cache"
+    # cand_full has both keys; cand_partial has only one.
+    _write_candidate(cache, "cand_full", split_keys, [1.0, 2.0])
+    _write_candidate(cache, "cand_partial", [split_keys[0]], [1.0])
+
+    E, cache_ids, _ = select_ensemble._load_cache(
+        cache, "epe", verbose=False, keys_from=split_dir
+    )
+    assert "cand_partial" not in cache_ids
+    assert "cand_full" in cache_ids
+    assert E.shape == (1, 2)
+
+
+def test_cache_id_prefix_filters_subdirs(tmp_path: Path) -> None:
+    """--cache-id-prefix excludes subdirs not starting with the prefix."""
+    keys = [1, 2, 3]
+    _write_candidate(tmp_path, "dis_alpha", keys, [1.0, 2.0, 3.0])
+    _write_candidate(tmp_path, "dis_beta", keys, [4.0, 5.0, 6.0])
+    _write_candidate(tmp_path, "raft_gamma", keys, [7.0, 8.0, 9.0])
+
+    E, cache_ids, _ = select_ensemble._load_cache(
+        tmp_path, "epe", verbose=False, cache_id_prefix="dis_"
+    )
+    assert set(cache_ids) == {"dis_alpha", "dis_beta"}
+    assert "raft_gamma" not in cache_ids
+    assert E.shape == (2, 3)

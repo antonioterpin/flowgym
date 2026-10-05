@@ -145,6 +145,7 @@ def preload_caches(
     sub_model_states: Sequence[EstimatorTrainableState],
     estimator_configs: Sequence[Mapping[str, Any]],
     sub_cache_managers: dict[str, SubCacheManager],
+    cache_id_base: str | None = None,
 ) -> None:
     """Load all sub-model caches into memory for fast aggregation.
 
@@ -158,6 +159,11 @@ def preload_caches(
         sub_model_states: Tuple of sub-model trainable states.
         estimator_configs: List of sub-model configurations.
         sub_cache_managers: Dictionary to populate with cache managers.
+        cache_id_base: Optional fixed string to use as the cache-id base
+            instead of the sub-model class name. When set, cache dirs are
+            expected to be named ``<cache_id_base><suffix>`` (where suffix
+            comes from ``model.get_cache_id_suffix``). Defaults to None,
+            which preserves the original ``<ClassName><suffix>`` behaviour.
     """
     root_path = Path(root_dir)
 
@@ -171,9 +177,13 @@ def preload_caches(
         cfg = estimator_configs[i]
         model_name = cfg.get("name", cfg.get("estimator", f"SubModel_{i}"))
 
-        # Standard cache ID: {ClassName}{suffix}
         suffix = model.get_cache_id_suffix(t_state)
-        cache_id = f"{model.__class__.__name__}{suffix}"
+        base = (
+            cache_id_base
+            if cache_id_base is not None
+            else model.__class__.__name__
+        )
+        cache_id = f"{base}{suffix}"
 
         cache_dir = root_path / cache_id
         if not cache_dir.exists():
@@ -216,6 +226,7 @@ def build_unified_index(
     sub_models: Sequence[FlowFieldEstimator],
     sub_model_states: Sequence[EstimatorTrainableState],
     sub_cache_managers: Mapping[str, SubCacheManager],
+    cache_id_base: str | None = None,
 ) -> dict[int, tuple[np.ndarray, np.ndarray]]:
     """Build a unified hash-based index for O(1) lookups.
 
@@ -231,6 +242,10 @@ def build_unified_index(
         sub_models: Tuple of sub-model estimator instances.
         sub_model_states: Tuple of sub-model trainable states.
         sub_cache_managers: Dictionary of cache managers for sub-models.
+        cache_id_base: Optional fixed string used as the cache-id base when
+            resolving each sub-model's manager from ``sub_cache_managers``.
+            Must match the value passed to ``preload_caches``. Defaults to
+            None, which uses the sub-model class name.
 
     Returns:
         Dictionary mapping key -> (epe_array, mask).
@@ -250,7 +265,12 @@ def build_unified_index(
         zip(sub_models, sub_model_states, strict=True)
     ):
         suffix = model.get_cache_id_suffix(t_state)
-        cache_id = f"{model.__class__.__name__}{suffix}"
+        base = (
+            cache_id_base
+            if cache_id_base is not None
+            else model.__class__.__name__
+        )
+        cache_id = f"{base}{suffix}"
         cm = sub_cache_managers.get(cache_id)
 
         if cm is None or cm.all_data is None:
@@ -313,6 +333,7 @@ def enrich_from_sub_caches(
     *,
     root_dir: str | None = None,
     allow_create_missing: bool = False,
+    cache_id_base: str | None = None,
 ) -> dict[str, np.ndarray]:
     """Aggregate EPEs from pre-loaded sub-model caches using unified index.
 
@@ -331,6 +352,9 @@ def enrich_from_sub_caches(
         root_dir: Root directory used when lazily creating missing sub-caches.
         allow_create_missing: Whether to create missing sub-cache managers from
             the first computed payload.
+        cache_id_base: Optional fixed base for sub-cache ids; when set, the
+            write-back path uses ``<cache_id_base><suffix>`` to match
+            ``preload_caches`` (defaults to the sub-model class name).
 
     Returns:
         Dictionary with "epe_all" (B, num_estimators) and
@@ -406,7 +430,12 @@ def enrich_from_sub_caches(
 
             # Best-effort write-back to cache
             suffix = model.get_cache_id_suffix(t_state)
-            cache_id = f"{model.__class__.__name__}{suffix}"
+            base = (
+                cache_id_base
+                if cache_id_base is not None
+                else model.__class__.__name__
+            )
+            cache_id = f"{base}{suffix}"
             cm = sub_cache_managers.get(cache_id)
 
             if cm is None and allow_create_missing:

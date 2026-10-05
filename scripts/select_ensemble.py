@@ -97,6 +97,58 @@ def _export_models(
     return len(entries), skipped
 
 
+def _keys_from_dir(directory: Path) -> set[int]:
+    """Compute the uint64 cache key for every ``*.mat`` file in a directory.
+
+    Recursively globs ``directory`` for ``*.mat`` files and applies the
+    file-based key formula from :func:`compute_batch_keys`:
+    ``np.uint64(int(md5(basename(f))[:16], 16))``.
+
+    Args:
+        directory: Directory to search for ``*.mat`` files.
+
+    Returns:
+        Set of uint64 keys (as Python ints) for all found files.
+    """
+    keys: set[int] = set()
+    for f in directory.rglob("*.mat"):
+        h = hashlib.md5(f.name.encode()).hexdigest()[:16]
+        keys.add(int(np.uint64(int(h, 16))))
+    return keys
+
+
+def _restrict_candidate_to_keys(
+    keys: np.ndarray,
+    errors: np.ndarray,
+    requested: set[int],
+) -> tuple[np.ndarray, np.ndarray] | None:
+    """Keep only rows whose key is in ``requested``; return None if incomplete.
+
+    Args:
+        keys: Sorted uint64 key array for one candidate (already argsorted).
+        errors: Error array aligned with ``keys``.
+        requested: Set of uint64 keys (as ints) that must all be present.
+
+    Returns:
+        ``(requested_keys, errors)`` with exactly one row per requested key,
+        ordered by ascending key, or ``None`` if any requested key is absent.
+        Duplicate keys in the candidate (e.g. a cache collected twice) are
+        de-duplicated by taking the first occurrence, so every candidate
+        yields the same fixed-length, identically-ordered rows (required for
+        stacking into the algorithm x image matrix).
+    """
+    req = np.array(sorted(requested), dtype=np.uint64)
+    # keys is sorted ascending; searchsorted finds the first occurrence of
+    # each requested key (duplicates, if any, are adjacent -> first wins).
+    idx = np.searchsorted(keys, req)
+    in_range = idx < keys.size
+    present = np.zeros(req.size, dtype=bool)
+    present[in_range] = keys[idx[in_range]] == req[in_range]
+    if not present.all():
+        return None
+    return req, errors[idx]
+
+
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse command-line arguments.
 
@@ -191,6 +243,22 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="`estimate_type` field for --export-models entries.",
     )
     parser.add_argument(
+        "--keys-from",
+        type=Path,
+        default=None,
+        help="Directory to glob for *.mat files whose filenames define the "
+        "requested key set. Only keys from this split are used for selection; "
+        "candidates missing any key are dropped. Unset → use all keys found "
+        "in the cache (current behaviour).",
+    )
+    parser.add_argument(
+        "--cache-id-prefix",
+        type=str,
+        default=None,
+        help="Only consider cache-root subdirs whose name starts with this "
+        "prefix. Unset → all subdirs (current behaviour).",
+    )
+    parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",
@@ -250,6 +318,8 @@ def _load_cache(
     cache_root: Path,
     metric: str,
     verbose: bool,
+    keys_from: Path | None = None,
+    cache_id_prefix: str | None = None,
 ) -> tuple[np.ndarray, list[str], list[dict[str, Any]]]:
     """Load the entire sweep cache into aligned arrays.
 
@@ -261,6 +331,11 @@ def _load_cache(
         cache_root: Root directory of the sweep cache.
         metric: Parquet column holding the per-image scalar error.
         verbose: Whether to print per-candidate progress.
+        keys_from: Optional directory whose ``*.mat`` filenames define the
+            requested key set. When set, each candidate is restricted to
+            those keys; candidates missing any requested key are dropped.
+        cache_id_prefix: Optional prefix; only subdirs whose name starts
+            with this string are considered.
 
     Returns:
         A tuple ``(E, cache_ids, records)`` where ``E`` has shape
@@ -272,7 +347,20 @@ def _load_cache(
     Raises:
         RuntimeError: If no candidates with data shards were found.
     """
+    requested_keys: set[int] | None = None
+    if keys_from is not None:
+        requested_keys = _keys_from_dir(keys_from)
+        if verbose:
+            print(
+                f"keys-from: {len(requested_keys)} keys from {keys_from}",
+                flush=True,
+            )
+
     all_subdirs = sorted(p for p in cache_root.iterdir() if p.is_dir())
+    if cache_id_prefix is not None:
+        all_subdirs = [
+            p for p in all_subdirs if p.name.startswith(cache_id_prefix)
+        ]
     subdirs = [p for p in all_subdirs if list((p / "data").glob("part-*"))]
     skipped = [p for p in all_subdirs if p not in subdirs]
     if skipped:
@@ -304,28 +392,59 @@ def _load_cache(
         if verbose and (idx + 1) % 100 == 0:
             print(f"loaded {idx + 1}/{len(subdirs)} candidates", flush=True)
 
-    majority_sig = Counter(sigs).most_common(1)[0][0]
-    dropped = [
-        (sd, sk)
-        for (sd, _, sk, _), sig in zip(loaded, sigs, strict=True)
-        if sig != majority_sig
-    ]
-    kept = [
-        item
-        for item, sig in zip(loaded, sigs, strict=True)
-        if sig == majority_sig
-    ]
-    if dropped:
-        print(
-            f"warning: dropped {len(dropped)} candidate(s) whose key set "
-            f"differs from the majority ({len(kept)} share it); likely "
-            "incomplete caches:",
-            file=sys.stderr,
-        )
-        for sd, sk in dropped[:20]:
-            print(f"  - {sd.name} ({sk.size} keys)", file=sys.stderr)
-        if len(dropped) > 20:
-            print(f"  ... ({len(dropped) - 20} more)", file=sys.stderr)
+    if requested_keys is not None:
+        # Restrict every candidate to exactly the requested keys. Survivors
+        # are key-consistent by construction, so the majority-key filter
+        # (used only when no split is given) is skipped. A candidate missing
+        # any requested key is dropped. This must run BEFORE any majority
+        # filter so full-coverage caches (a superset of the split) are
+        # restricted-and-kept rather than dropped for having extra keys.
+        kept = []
+        dropped_missing: list[Path] = []
+        for sd, rec, sk, er in loaded:
+            result = _restrict_candidate_to_keys(sk, er, requested_keys)
+            if result is None:
+                dropped_missing.append(sd)
+            else:
+                rk, re = result
+                kept.append((sd, rec, rk, re))
+        if dropped_missing:
+            print(
+                f"warning: dropped {len(dropped_missing)} candidate(s) missing "
+                "some requested keys (--keys-from):",
+                file=sys.stderr,
+            )
+            for sd in dropped_missing[:20]:
+                print(f"  - {sd.name}", file=sys.stderr)
+            if len(dropped_missing) > 20:
+                print(
+                    f"  ... ({len(dropped_missing) - 20} more)", file=sys.stderr
+                )
+    else:
+        # No split filter: keep candidates sharing the majority key set
+        # (drop partial/interrupted caches with a warning).
+        majority_sig = Counter(sigs).most_common(1)[0][0]
+        dropped = [
+            (sd, sk)
+            for (sd, _, sk, _), sig in zip(loaded, sigs, strict=True)
+            if sig != majority_sig
+        ]
+        kept = [
+            item
+            for item, sig in zip(loaded, sigs, strict=True)
+            if sig == majority_sig
+        ]
+        if dropped:
+            print(
+                f"warning: dropped {len(dropped)} candidate(s) whose key set "
+                f"differs from the majority ({len(kept)} share it); likely "
+                "incomplete caches:",
+                file=sys.stderr,
+            )
+            for sd, sk in dropped[:20]:
+                print(f"  - {sd.name} ({sk.size} keys)", file=sys.stderr)
+            if len(dropped) > 20:
+                print(f"  ... ({len(dropped) - 20} more)", file=sys.stderr)
 
     cache_ids = [rec.get("cache_id", sd.name) for (sd, rec, _, _) in kept]
     records = [rec for (_, rec, _, _) in kept]
@@ -644,6 +763,8 @@ def main(argv: list[str] | None = None) -> int:
         args.cache_root,
         args.metric,
         args.verbose,
+        keys_from=args.keys_from,
+        cache_id_prefix=args.cache_id_prefix,
     )
 
     # Pick the requested time stat per candidate.

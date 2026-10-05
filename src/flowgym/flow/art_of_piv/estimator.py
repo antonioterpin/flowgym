@@ -197,6 +197,9 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
 
         # Extract estimator configs and set basic attributes
         self.estimator_configs = estimators_list_config["estimators"]
+        self._cache_id_base: str | None = estimators_list_config.get(
+            "cache_id_base"
+        )
         self.image_shape = image_shape
 
         # Validate training mode and loss compatibility
@@ -399,6 +402,7 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
             sub_model_states=self.sub_model_states,
             estimator_configs=self.estimator_configs,
             sub_cache_managers=self._sub_cache_managers,
+            cache_id_base=self._cache_id_base,
         )
 
         # Mark cache bootstrap context for cold-start lazy creation/write-back.
@@ -420,6 +424,7 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
                 sub_models=self.sub_models,
                 sub_model_states=self.sub_model_states,
                 sub_cache_managers=self._sub_cache_managers,
+                cache_id_base=self._cache_id_base,
             )
             or {}
         )
@@ -466,6 +471,7 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
             unified_epe_index=self._unified_epe_index,
             root_dir=self._cache_root_dir,
             allow_create_missing=self._allow_create_missing_sub_caches,
+            cache_id_base=self._cache_id_base,
         )
         # Filter to miss_idxs only (enrich_batch expects data for misses)
         return {k: v[miss_idxs] for k, v in payload.items()}
