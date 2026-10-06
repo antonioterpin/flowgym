@@ -6,6 +6,7 @@ import argparse
 import copy
 import os
 import shutil
+from datetime import datetime
 from pathlib import Path
 
 import goggles as gg
@@ -252,9 +253,14 @@ def prepare_configs(
 
     if args.mode in {"train", "train-supervised"} and study_logged is None:
         out_dir = estimator_config.get("out_dir", "output")
+        # One directory per run, so reruns never mix their checkpoints
         out_dir = os.path.join(
-            out_dir, estimator_config["estimator"], str(dataset_config["seed"])
+            out_dir,
+            estimator_config["estimator"],
+            str(dataset_config["seed"]),
+            datetime.now().strftime("%Y-%m-%d_%H-%M-%S"),
         )
+        os.makedirs(out_dir)
         _create_run_outputs(
             args, out_dir, estimator_config, dataset_config, validation_settings
         )
