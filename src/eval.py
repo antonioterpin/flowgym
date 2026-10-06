@@ -1,9 +1,12 @@
 """Evaluation script for the different estimators."""
 
 import contextlib
+import json
+import math
 import time
 from collections.abc import Callable
 from dataclasses import replace
+from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -438,6 +441,7 @@ def eval_full_dataset(
     print_files: bool = False,
     num_batches: int | None = None,
     cache_manager: CacheManager | None = None,
+    summary_out: str | Path | None = None,
 ) -> None:
     """Run the full evaluation of the estimator.
 
@@ -453,6 +457,8 @@ def eval_full_dataset(
         print_files: Whether to print the files being evaluated.
         num_batches: Number of batches to evaluate. Must be positive.
         cache_manager: Optional CacheManager for read-through caching.
+        summary_out: Optional JSON path for the final flow summary
+            (mean/max/min EPE and relative error).
 
     Raises:
         RuntimeError: If evaluation sampler yields no batches.
@@ -635,16 +641,24 @@ def eval_full_dataset(
                 f"Min Relative EPE over {batches_processed} batches: "
                 f"{min_relative_errors:.5f}"
             )
-            estimator.record_eval_summary(
-                {
-                    "mean_epe": float(mean_errors),
-                    "max_epe": float(max_errors),
-                    "min_epe": float(min_errors),
-                    "mean_relative_error": float(mean_relative_errors),
-                    "max_relative_error": float(max_relative_errors),
-                    "min_relative_error": float(min_relative_errors),
+            summary = {
+                "mean_epe": float(mean_errors),
+                "max_epe": float(max_errors),
+                "min_epe": float(min_errors),
+            }
+            # Cached evals may report errors without relative errors
+            if relative_errors_array.size > 0:
+                summary["mean_relative_error"] = float(mean_relative_errors)
+                summary["max_relative_error"] = float(max_relative_errors)
+                summary["min_relative_error"] = float(min_relative_errors)
+            estimator.record_eval_summary(summary)
+            if summary_out is not None:
+                # NaN/inf are not valid JSON; write them as null
+                finite = {
+                    k: v if math.isfinite(v) else None
+                    for k, v in summary.items()
                 }
-            )
+                Path(summary_out).write_text(json.dumps(finite, indent=2))
         else:
             logger.info(
                 f"Mean Density Error over {batches_processed} batches: "

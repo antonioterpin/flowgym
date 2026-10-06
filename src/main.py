@@ -87,6 +87,14 @@ def parse_args():
         "The estimator-specific suffix is still appended.",
     )
 
+    parser.add_argument(
+        "--summary-out",
+        type=str,
+        default=None,
+        help="In eval mode, write the final summary (mean EPE etc.) to "
+        "this JSON file.",
+    )
+
     return parser.parse_args()
 
 
@@ -253,6 +261,7 @@ if __name__ == "__main__":
                 print_files=dataset_config.get("print_files", False),
                 num_batches=dataset_config.get("num_batches", None),
                 cache_manager=cache_manager,
+                summary_out=args.summary_out,
             )
         finally:
             sampler.shutdown()

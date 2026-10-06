@@ -3,6 +3,7 @@
 Covers evaluate_batches and eval_full_dataset with real CacheManager instances.
 """
 
+import json
 import tempfile
 from unittest.mock import MagicMock
 
@@ -171,6 +172,34 @@ def test_eval_full_dataset_caching_robust():
         np.testing.assert_allclose(
             mock_estimator._processed_metrics[0]["errors"], [0.1, 0.5]
         )
+
+
+@pytest.mark.parametrize(
+    ("errors", "mean_epe"), [([0.1, 0.5], 0.3), ([0.1, np.nan], None)]
+)
+def test_eval_full_dataset_writes_summary(tmp_path, errors, mean_epe):
+    """``summary_out`` gets valid JSON with only the measured metrics."""
+
+    def compute_estimate_fn(img2, state, trained_state, cache_payload=None):
+        return state, {"errors": np.array(errors)}
+
+    sampler = MagicMock()
+    sampler.__iter__.return_value = iter([MockEvalBatch(keys=[0, 1])])
+    summary_out = tmp_path / "summary.json"
+    eval_full_dataset(
+        estimator=MockEvalEstimator(),
+        sampler=sampler,
+        create_state_fn=lambda img, key: {
+            "estimates": jnp.zeros((len(img), 1, 32, 32, 2))
+        },
+        compute_estimate_fn=compute_estimate_fn,
+        trainable_state=None,
+        summary_out=summary_out,
+    )
+
+    summary = json.loads(summary_out.read_text())
+    assert summary["mean_epe"] == pytest.approx(mean_epe)
+    assert "mean_relative_error" not in summary
 
 
 if __name__ == "__main__":
