@@ -398,6 +398,7 @@ if __name__ == "__main__":
                     dataset_config.get("prefetch_replay_size", 0),
                 ),
                 cache_manager=cache_manager,
+                log_timing=dataset_config.get("log_timing", False),
             )
         finally:
             sampler.shutdown()

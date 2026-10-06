@@ -50,6 +50,7 @@ def train_supervised(
     prefetch_replay_size: int = 0,
     cache_manager: CacheManager | None = None,
     checkpoint_config: CheckpointConfig | None = None,
+    log_timing: bool = False,
 ) -> None:
     """Train the flow estimator.
 
@@ -80,6 +81,8 @@ def train_supervised(
             tracking, save cadence). When omitted, a default is built
             from ``save_only_best`` and the trainer routes all saves
             through ``Checkpointer``.
+        log_timing: Whether to log per-batch times. Blocks on every train
+            step so the times include device compute.
 
     Raises:
         ValueError: If estimate_type is not "flow" or "density", or if
@@ -264,7 +267,17 @@ def train_supervised(
                     trainable_state=trainable_state,
                     experience=experience,
                 )
-                t_train = time.time() - t
+                if log_timing:
+                    # JAX dispatches asynchronously; wait for the device
+                    jax.block_until_ready(trainable_state)
+                    t_train = time.time() - t
+                    logger.info(
+                        f"Batch {batch_idx} timing: "
+                        f"Sample={t_sample:.4f}s, "
+                        f"Enrich={t_enrich:.4f}s, "
+                        f"Train={t_train:.4f}s. "
+                        f"Total={t_sample + t_enrich + t_train:.4f}s"
+                    )
 
                 # Log filenames for debugging coverage/randomization
                 batch_files = getattr(batch, "files", [])
@@ -274,14 +287,6 @@ def train_supervised(
                         [str(f).split("/")[-1] for f in batch_files[:4]]
                     )
                     logger.info(f"Batch {batch_idx} files: {files_str}")
-
-                logger.info(
-                    f"Batch {batch_idx} timing: "
-                    f"Sample={t_sample:.4f}s, "
-                    f"Enrich={t_enrich:.4f}s, "
-                    f"Train={t_train:.4f}s. "
-                    f"Total={t_sample + t_enrich + t_train:.4f}s"
-                )
 
                 # Store experience in the replay buffer
                 if replay_buffer is not None:
