@@ -4,9 +4,12 @@ from collections.abc import Callable
 from functools import partial
 from typing import Any, ClassVar
 
+import jax
 import jax.numpy as jnp
+import numpy as np
 from goggles import get_logger
 from goggles.history.types import History
+from synthpix.types import SynthpixBatch
 
 from flowgym.common.base import (
     Estimator,
@@ -72,6 +75,114 @@ class FlowFieldEstimator(Estimator):
         self._estimate = self._add_postprocessing(self._estimate)
 
         super().__init__(**kwargs)
+
+    def enrich(
+        self,
+        batch: SynthpixBatch,
+        miss_idxs: np.ndarray,
+        trainable_state: EstimatorTrainableState | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any] | None:
+        """Compute the per-sample EPE cache payload for missing keys.
+
+        Runs the estimator on the missing samples and returns their mean
+        endpoint error and mean relative error against the ground truth.
+
+        Args:
+            batch: The batch of data as returned by the `SynthpixBatch` sampler.
+            miss_idxs: Indices of samples in the batch that are missing from
+                cache.
+            trainable_state: State used for inference; when None a fresh
+                trainable state is created.
+            **kwargs: Unused cache context (e.g. ``cache_manager``).
+
+        Returns:
+            Dict with per-sample ``"epe"`` and ``"relative_epe"`` for
+            ``miss_idxs``, or None if the batch carries no ground-truth flow.
+        """
+        if batch.flow_fields is None:
+            return None
+        images1 = batch.images1[miss_idxs]
+        images2 = batch.images2[miss_idxs]
+        gt_flow = batch.flow_fields[miss_idxs]
+
+        del kwargs
+        # Fixed key: cached estimators must be deterministic.
+        # TODO(#11): derive per-sample keys from the cache keys.
+        key = jax.random.PRNGKey(0)
+        if trainable_state is None:
+            trainable_state = self.create_trainable_state(images1, key)
+
+        compute = (
+            self._compute_epe_payload_jit
+            if self.supports_jit()
+            else self._compute_epe_payload
+        )
+        epe_mean, rel_mean = compute(
+            images1, images2, gt_flow, trainable_state, key
+        )
+        return {"epe": epe_mean, "relative_epe": rel_mean}
+
+    def _compute_epe_payload(
+        self,
+        images1: jnp.ndarray,
+        images2: jnp.ndarray,
+        gt_flow: jnp.ndarray,
+        trainable_state: EstimatorTrainableState,
+        rng: jax.Array,
+    ) -> tuple[jnp.ndarray, jnp.ndarray]:
+        """Per-sample mean EPE and mean relative error of one estimate.
+
+        Args:
+            images1: First frame images (B, H, W).
+            images2: Second frame images (B, H, W).
+            gt_flow: Ground truth flow fields (B, H, W, 2).
+            trainable_state: Trainable state used for inference.
+            rng: Random key for state creation.
+
+        Returns:
+            Tuple of (epe_mean, relative_epe_mean), both shape (B,).
+        """
+        B, H, W = images1.shape
+        init_flow = jnp.zeros((B, H, W, 2), dtype=jnp.float32)
+        state = self.create_state(
+            images1, init_flow, image_history_size=2, rng=rng
+        )
+        state, _ = self(images2, state, trainable_state)
+        est_flow = state["estimates"][:, -1]
+
+        epe = jnp.linalg.norm(est_flow - gt_flow, axis=-1)
+        epe_mean = jnp.mean(epe, axis=(1, 2))
+
+        gt_norm = jnp.linalg.norm(gt_flow, axis=-1)
+        rel = (epe**2) / (jnp.maximum(gt_norm, 0.01) ** 2)
+        rel_mean = jnp.mean(rel, axis=(1, 2))
+        return epe_mean, rel_mean
+
+    @partial(jax.jit, static_argnums=0)
+    def _compute_epe_payload_jit(
+        self,
+        images1: jnp.ndarray,
+        images2: jnp.ndarray,
+        gt_flow: jnp.ndarray,
+        trainable_state: EstimatorTrainableState,
+        rng: jax.Array,
+    ) -> tuple[jnp.ndarray, jnp.ndarray]:
+        """JIT-compiled :meth:`_compute_epe_payload`.
+
+        Args:
+            images1: First frame images (B, H, W).
+            images2: Second frame images (B, H, W).
+            gt_flow: Ground truth flow fields (B, H, W, 2).
+            trainable_state: Trainable state used for inference.
+            rng: Random key for state creation.
+
+        Returns:
+            Tuple of (epe_mean, relative_epe_mean), both shape (B,).
+        """
+        return self._compute_epe_payload(
+            images1, images2, gt_flow, trainable_state, rng
+        )
 
     def _add_postprocessing(
         self,

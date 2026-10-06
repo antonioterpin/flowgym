@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-from functools import partial
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import jax
@@ -557,89 +556,27 @@ class RaftJaxEstimator(FlowFieldEstimator):
     def enrich(
         self,
         batch: SynthpixBatch,
-        miss_idxs: jnp.ndarray,
+        miss_idxs: np.ndarray,
+        trainable_state: NNEstimatorTrainableState | None = None,
         **kwargs: Any,
     ) -> dict[str, jnp.ndarray] | None:
-        """Compute the cache payload for missing keys (EPE).
+        """Compute the EPE cache payload, which requires trained weights.
 
         Args:
             batch: The batch of data (SynthpixBatch).
             miss_idxs: Indices of samples in the batch that are missing
                 from cache.
-            **kwargs: Additional arguments, must include 'trainable_state'.
+            trainable_state: The trained weights.
+            **kwargs: Unused cache context (e.g. ``cache_manager``).
 
         Returns:
-            Dictionary with "epe" values for the missing indices.
+            Dictionary with "epe" and "relative_epe" for the missing indices,
+            or None when no trainable state is given.
         """
-        trainable_state = kwargs.get("trainable_state")
         if trainable_state is None:
             # Cannot compute without weights
             return None
-
-        if batch.flow_fields is None:
-            return None
-
-        # Slice batch for missing indices (eager, host-side)
-        images1 = batch.images1[miss_idxs]
-        images2 = batch.images2[miss_idxs]
-        gt_flow = batch.flow_fields[miss_idxs]
-
-        # Check if empty (should not happen if check np.all(hit) before)
-        if images1.shape[0] == 0:
-            return {}
-
-        key = jax.random.PRNGKey(0)
-
-        # JIT-compiled computation
-        epe_mean, rel_mean = self._compute_cache_payload(
-            images1, images2, gt_flow, trainable_state, key
-        )
-
-        return {"epe": epe_mean, "relative_epe": rel_mean}
-
-    @partial(jax.jit, static_argnums=0)
-    def _compute_cache_payload(
-        self,
-        images1: jnp.ndarray,
-        images2: jnp.ndarray,
-        gt_flow: jnp.ndarray,
-        t_state: NNEstimatorTrainableState,
-        rng: jax.Array,
-    ) -> tuple[jnp.ndarray, jnp.ndarray]:
-        """Pure JAX computation of EPE metrics (JIT-compiled).
-
-        Args:
-            images1: First frame images (B, H, W).
-            images2: Second frame images (B, H, W).
-            gt_flow: Ground truth flow fields (B, H, W, 2).
-            t_state: Trainable state.
-            rng: Random key for state creation.
-
-        Returns:
-            Tuple of (epe_mean, relative_epe_mean), both shape (B,).
-        """
-        B, H, W = images1.shape
-        init_flow = jnp.zeros((B, H, W, 2), dtype=jnp.float32)
-
-        # Create state
-        state = self.create_state(
-            images1, init_flow, image_history_size=2, rng=rng
-        )
-
-        # Inference
-        state, _ = self(images2, state, t_state)
-        est_flow = state["estimates"][:, -1]
-
-        # Metrics
-        diff = est_flow - gt_flow
-        epe = jnp.linalg.norm(diff, axis=-1)
-        epe_mean = jnp.mean(epe, axis=(1, 2))
-
-        gt_norm = jnp.linalg.norm(gt_flow, axis=-1)
-        rel_err = (epe**2) / (jnp.maximum(gt_norm, 0.01) ** 2)
-        rel_epe_mean = jnp.mean(rel_err, axis=(1, 2))
-
-        return epe_mean, rel_epe_mean
+        return super().enrich(batch, miss_idxs, trainable_state, **kwargs)
 
     def get_cache_id_suffix(
         self,

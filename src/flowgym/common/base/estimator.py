@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import abc
+import copy
+import hashlib
 import inspect
+import json
 from functools import partial
 from typing import TYPE_CHECKING, Any
 
@@ -89,6 +92,8 @@ class Estimator(abc.ABC):
         if not isinstance(oracle, bool):
             raise ValueError(f"`oracle` must be a boolean, got {type(oracle)}.")
         self._oracle = oracle
+        # Constructor parameters, recorded by from_config for get_config.
+        self._config: dict[str, Any] | None = None
 
         param_log = {
             k: v for k, v in self.__dict__.items() if not k.startswith("_")
@@ -497,17 +502,22 @@ class Estimator(abc.ABC):
 
         Stored as ``self._eval_summary_metrics`` for ``finalize_metrics``
         consumers that emit per-run summary rows.
+
+        Args:
+            summary: Aggregated evaluation metrics.
         """
         self._eval_summary_metrics = dict(summary)
 
     def checkpoint_metric(self) -> tuple[str, bool]:
         """Validation metric used to select the best checkpoint.
 
-        Returns the ``(metric_key, higher_is_better)`` pair that
-        ``train_supervised`` feeds into the default ``CheckpointConfig``.
-        Defaults to ranking by lowest ``mean_error``. Override to checkpoint
-        on a different metric (e.g. a classification estimator may prefer a
-        higher F1).
+        ``train_supervised`` feeds this pair into the default
+        ``CheckpointConfig``. Defaults to ranking by lowest ``mean_error``.
+        Override to checkpoint on a different metric (e.g. a classification
+        estimator may prefer a higher F1).
+
+        Returns:
+            The ``(metric_key, higher_is_better)`` pair.
         """
         return ("mean_error", False)
 
@@ -557,6 +567,7 @@ class Estimator(abc.ABC):
         self,
         batch: SynthpixBatch,
         miss_idxs: np.ndarray,
+        trainable_state: EstimatorTrainableState | None = None,
         **kwargs: Any,
     ) -> dict[str, Any] | None:
         """Compute the cache payload for missing keys.
@@ -576,8 +587,9 @@ class Estimator(abc.ABC):
             batch: The batch of data as returned by the `SynthpixBatch` sampler.
             miss_idxs: Indices of samples in the batch that are missing from
                 cache.
-            **kwargs: Additional context, potentially including
-                `"trainable_state"` for weight-dependent computations.
+            trainable_state: Current trainable state, for weight-dependent
+                computations.
+            **kwargs: Additional cache context (e.g. ``cache_manager``).
 
         Returns:
             A dictionary containing the computed payload for missing samples, or
@@ -586,6 +598,7 @@ class Estimator(abc.ABC):
             (e.g., `"epe"`). Values should be numpy-compatible arrays or lists
             aligned with `miss_idxs`.
         """
+        del trainable_state, kwargs
         return None
 
     def preload_caches(
@@ -608,6 +621,33 @@ class Estimator(abc.ABC):
         # Intentionally empty - subclasses override to preload their caches
         return None
 
+    def get_config(self) -> dict[str, Any]:
+        """Return the parameters that affect this estimator's output.
+
+        :meth:`get_cache_id_suffix` hashes this dict to name the cache, so
+        two instances share a cache only if they return the same dict.
+
+        By default this is every constructor parameter given to
+        :meth:`from_config`. Override it to choose the parameters
+        explicitly. Renaming a key or changing
+        how a value is written renames the cache, and existing caches no
+        longer match.
+
+        Returns:
+            A dict of parameter names to values.
+
+        Raises:
+            NotImplementedError: If the estimator was not built with
+                :meth:`from_config`, so its parameters are unknown.
+        """
+        if self._config is None:
+            raise NotImplementedError(
+                f"{type(self).__name__} was not built with from_config, so "
+                "its parameters are unknown; build it with from_config or "
+                "override get_config."
+            )
+        return self._config
+
     def get_cache_id_suffix(
         self,
         trainable_state: EstimatorTrainableState | None,
@@ -618,8 +658,9 @@ class Estimator(abc.ABC):
         specific weights or configuration of the estimator. The returned string
         is appended to the base class name to form a unique `cache_id`.
 
-        Standard practice is to hash the `trainable_state.params` and the
-        estimator's internal configuration.
+        The default hashes :meth:`get_config` into ``"_c<8 hex>"`` (or returns
+        ``""`` when the config is empty). Estimators whose output depends on
+        learned weights override this to hash ``trainable_state.params``.
 
         Args:
             trainable_state: The current trainable state, or None if the
@@ -627,9 +668,17 @@ class Estimator(abc.ABC):
                 initialized.
 
         Returns:
-            A string suffix (e.g., "_v1_hash123") or empty string.
+            A string suffix (e.g., "_c1a2b3c4d") or empty string.
         """
-        return ""
+        del trainable_state
+        # TODO(#13): hash the pre/post-processing steps here, for every
+        # estimator, instead of relying on get_config (renames caches).
+        config = self.get_config()
+        if not config:
+            return ""
+        config_str = json.dumps(config, sort_keys=True, default=str)
+        digest = hashlib.md5(config_str.encode("utf-8")).hexdigest()
+        return f"_c{digest[:8]}"
 
     def is_oracle(self) -> bool:
         """Check if the estimator is an oracle.
@@ -645,6 +694,9 @@ class Estimator(abc.ABC):
         Estimators implemented with NumPy/OpenCV/PyTorch code paths should
         override this and return ``False`` so callers can disable JIT and
         avoid tracing errors.
+
+        Returns:
+            True if the estimator can be JIT-compiled.
         """
         return True
 
@@ -654,6 +706,9 @@ class Estimator(abc.ABC):
         Defaults to :meth:`supports_jit`, but subclasses may override this
         when model forward/eval paths are non-jittable while training can be
         kept jittable by precomputing host-side data.
+
+        Returns:
+            True if the supervised train step can be JIT-compiled.
         """
         return self.supports_jit()
 
@@ -736,4 +791,6 @@ class Estimator(abc.ABC):
 
         # Filter the config to only include valid keys
         filtered = {k: v for k, v in config.items() if k in valid_keys}
-        return cls(**filtered)
+        estimator = cls(**filtered)
+        estimator._config = copy.deepcopy(filtered)
+        return estimator

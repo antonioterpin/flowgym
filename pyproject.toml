@@ -131,7 +131,6 @@ filterwarnings = [
 # Ruff configuration for linting and modern typing enforcement
 [tool.ruff]
 line-length = 80
-target-version = "py310"
 extend-exclude = [
     "src/flowgym/nn/raft_torch_nn/",
     "src/flowgym/flow/raft/raft_piv_pytorch.py",
@@ -184,7 +183,6 @@ skip-checking-raises = false
 # reads this configuration
 [tool.pyright]
 typeCheckingMode = "basic"
-pythonVersion = "3.10"
 include = ["src", "tests", "examples"]
 exclude = [
     "tests",
