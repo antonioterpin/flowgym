@@ -264,15 +264,27 @@ class ArtOfPIVOracleEstimator(FlowFieldEstimator):
         )
         return extras_spec
 
-    def process_metrics(self, metrics: dict) -> Metrics:
+    def process_metrics(
+        self,
+        metrics: dict,
+        *,
+        flow_field: jnp.ndarray | None = None,
+        flow_field_gt: jnp.ndarray | None = None,
+    ) -> Metrics:
         """Process and format the metrics for logging.
 
         Args:
             metrics: Raw metrics dictionary.
+            flow_field: Final flow field estimate (unused by this override,
+                kept for signature compatibility).
+            flow_field_gt: Ground-truth flow field (unused by this override).
 
         Returns:
             Metrics: Formatted metrics for logging.
         """
+        # eval_flow passes these to every estimator; this override does not
+        # need them, and del marks them as intentionally unused for linters.
+        del flow_field, flow_field_gt
         processed_metrics: dict = {}
 
         if "q_values" in metrics:
