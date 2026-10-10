@@ -29,7 +29,11 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 
 
 def parse_args() -> argparse.Namespace:
-    """Parse command-line arguments for the experiment launcher."""
+    """Parse command-line arguments for the experiment launcher.
+
+    Returns:
+        The parsed arguments.
+    """
     p = argparse.ArgumentParser()
     p.add_argument("--exp", required=True)
     p.add_argument("--exp-root", default="experiments")
@@ -42,7 +46,12 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    """Expand the experiment matrix and shell out to the entrypoint per cell."""
+    """Expand the experiment matrix and shell out to the entrypoint per cell.
+
+    Raises:
+        ValueError: If ``exp.yaml`` or a dataset entry is malformed.
+        FileNotFoundError: If a dataset, model or the entrypoint is missing.
+    """
     args = parse_args()
     exp_dir = (Path(args.exp_root) / args.exp).resolve()
     spec_path = exp_dir / "exp.yaml"
@@ -111,6 +120,7 @@ def main() -> None:
 
     patched_models: list[tuple[Path, Path]] = []
     model_dataset_overrides: dict[Path, str] = {}
+    model_modes: dict[Path, str] = {}
     for model_rel_path, model_path in zip(
         model_rel_paths, model_paths, strict=True
     ):
@@ -120,6 +130,7 @@ def main() -> None:
 
         if "dataset" in model_cfg:
             model_dataset_overrides[model_rel_path] = model_cfg.pop("dataset")
+        model_modes[model_rel_path] = model_cfg.pop("mode", mode)
 
         out_model_path = generated_models / model_rel_path
         dump_yaml(out_model_path, model_cfg)
@@ -178,7 +189,7 @@ def main() -> None:
                     sys.executable,
                     str(entry_path),
                     "--mode",
-                    mode,
+                    model_modes[model_rel_path],
                     "--estimator",
                     str(model_path),
                     "--dataset",

@@ -27,3 +27,9 @@ This expands the matrix and calls `src/main.py` once per `(seed, model)`
 pair. Run names are composed from `study.tags` plus seed; the W&B run
 records the commit and `diff.patch` (untracked-but-not-ignored files
 are included via a temporary git index).
+
+## Per-model overrides
+
+A model config may set `dataset:` (a path relative to the experiment
+folder) or `mode:` (e.g. `eval`) to override the `exp.yaml` value for
+that model's runs, e.g. to evaluate baselines in a training experiment.

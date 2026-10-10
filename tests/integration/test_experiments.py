@@ -279,6 +279,44 @@ def test_experiment_launcher_preserves_relative_model_paths(
     )
 
 
+def test_experiment_launcher_applies_per_model_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """A model's ``mode:`` overrides the experiment mode for its runs."""
+    exp_dir = tmp_path / "modes"
+    exp_dir.mkdir()
+    (exp_dir / "dataset.yaml").write_text("seed: 0\n", encoding="utf-8")
+    (exp_dir / "exp.yaml").write_text(
+        "mode: train-supervised\ndataset: dataset.yaml\n"
+        "models: [trained.yaml, evaluated.yaml]\n",
+        encoding="utf-8",
+    )
+    model = "estimator: dummy\nstudy:\n  name: modes\n  tags: {{v: {v}}}\n"
+    (exp_dir / "trained.yaml").write_text(model.format(v="a"), encoding="utf-8")
+    (exp_dir / "evaluated.yaml").write_text(
+        "mode: eval\n" + model.format(v="b"), encoding="utf-8"
+    )
+
+    calls: list[list[str]] = []
+    monkeypatch.setattr(run_script.subprocess, "check_call", calls.append)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["run.py", "--exp", "modes", "--exp-root", str(tmp_path)],
+    )
+    run_script.main()
+
+    modes = {}
+    for cmd in calls:
+        model = Path(cmd[cmd.index("--estimator") + 1]).name
+        modes[model] = cmd[cmd.index("--mode") + 1]
+    assert modes == {
+        "trained.yaml": "train-supervised",
+        "evaluated.yaml": "eval",
+    }
+    generated = exp_dir / "_generated" / "models" / "evaluated.yaml"
+    assert "mode" not in yaml.safe_load(generated.read_text())
+
+
 def test_setup_study_run_collects_git_state_once_around_wandb_init(
     monkeypatch: pytest.MonkeyPatch,
 ):
