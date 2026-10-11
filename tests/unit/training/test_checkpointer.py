@@ -213,9 +213,7 @@ def test_on_validation_rolls_back_best_when_orbax_rejects_save(tmp_path):
     """A rejected save in ``on_validation`` must not advance best trackers.
 
     If orbax rejects the write (duplicate / backward step), nothing
-    lands on disk, so ``best_metric`` must stay at its prior value and
-    the unsaved-best latch must not be left set (which would otherwise
-    trip a spurious later ``save_periodic`` write).
+    lands on disk, so ``best_metric`` must stay at its prior value.
     """
     cfg = CheckpointConfig(wandb_upload="best", save_only_best=True)
     for ckpt, _fake, _ in _make(tmp_path, cfg=cfg):
@@ -225,10 +223,8 @@ def test_on_validation_rolls_back_best_when_orbax_rejects_save(tmp_path):
         # A "better" metric at a backward step is rejected by orbax.
         out = ckpt.on_validation(MagicMock(), 10, {"mean_error": 0.2})
         assert out is None
-        # No new on-disk checkpoint, so the tracker stays at 0.5 and the
-        # latch is not left armed.
+        # No new on-disk checkpoint, so the tracker stays at 0.5.
         assert ckpt.best_metric == pytest.approx(0.5)
-        assert ckpt.save_periodic(MagicMock(), step=5) is None
 
 
 # ---------------------------------------------------------------------------
@@ -236,12 +232,12 @@ def test_on_validation_rolls_back_best_when_orbax_rejects_save(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_on_validation_never_does_not_save_or_upload(tmp_path):
+def test_on_validation_never_saves_best_without_upload(tmp_path):
     cfg = CheckpointConfig(wandb_upload="never")
     for ckpt, fake, logger_mock in _make(tmp_path, cfg=cfg):
-        out = ckpt.on_validation(MagicMock(), 5, {"mean_error": 0.3})
-        assert out is None
-        assert fake.save_args == []
+        assert ckpt.on_validation(MagicMock(), 5, {"mean_error": 0.3})
+        assert ckpt.on_validation(MagicMock(), 10, {"mean_error": 0.4}) is None
+        assert [a["step"] for a in fake.save_args] == [5]
         logger_mock.artifact.assert_not_called()
 
 
@@ -302,79 +298,29 @@ def test_save_periodic_unconditional(tmp_path):
         logger_mock.artifact.assert_not_called()
 
 
-def test_save_periodic_only_after_new_best(tmp_path):
-    cfg = CheckpointConfig(save_only_best=True)
-    for ckpt, fake, _ in _make(tmp_path, cfg=cfg):
-        # No validation yet → skip.
-        assert ckpt.save_periodic(MagicMock(), step=10) is None
-        assert fake.save_args == []
-        # First validation flips the latch (no save here because
-        # wandb_upload=never).
-        ckpt.on_validation(
-            MagicMock(), step=15, val_metrics={"mean_error": 0.5}
-        )
-        assert ckpt.save_periodic(MagicMock(), step=20) is not None
-        assert len(fake.save_args) == 1
-        # Second periodic call without a new best → skip.
-        assert ckpt.save_periodic(MagicMock(), step=30) is None
-        assert len(fake.save_args) == 1
-        # New best → next periodic save fires.
-        ckpt.on_validation(
-            MagicMock(), step=35, val_metrics={"mean_error": 0.3}
-        )
-        assert ckpt.save_periodic(MagicMock(), step=40) is not None
-        assert len(fake.save_args) == 2
-
-
-def test_save_only_best_with_wandb_never_skips_regressions(tmp_path):
-    """Regression for codex P1 on #158.
-
-    With ``wandb_upload="never"`` and ``save_only_best=True``,
-    validation events don't reach orbax (no save → no metrics on
-    disk). Without a local best-metric tracker, every subsequent
-    validation would compare against ``None``, register as a "new
-    best", and trip the latch — so periodic saves would fire on
-    every cycle instead of only on real improvements.
-
-    Sequence: first observation 0.5 (best), regression 0.6, regression
-    0.7 — only the first periodic save should fire.
-    """
+def test_save_only_best_saves_only_at_validation(tmp_path):
+    """Under ``save_only_best`` periodic saves are no-ops; bests are
+    saved when validated, regressions are not saved."""
     cfg = CheckpointConfig(save_only_best=True, wandb_upload="never")
     for ckpt, fake, _ in _make(tmp_path, cfg=cfg):
         ckpt.on_validation(MagicMock(), 5, {"mean_error": 0.5})
-        assert ckpt.save_periodic(MagicMock(), 10) is not None
-        assert len(fake.save_args) == 1
-
-        # Regression: no new best, latch must stay down.
         ckpt.on_validation(MagicMock(), 15, {"mean_error": 0.6})
-        assert ckpt.save_periodic(MagicMock(), 20) is None
-        assert len(fake.save_args) == 1
-
-        # Another regression: still no save.
-        ckpt.on_validation(MagicMock(), 25, {"mean_error": 0.7})
+        ckpt.on_validation(MagicMock(), 25, {"mean_error": 0.4})
         assert ckpt.save_periodic(MagicMock(), 30) is None
-        assert len(fake.save_args) == 1
-
-        # Genuine improvement: save fires again.
-        ckpt.on_validation(MagicMock(), 35, {"mean_error": 0.4})
-        assert ckpt.save_periodic(MagicMock(), 40) is not None
-        assert len(fake.save_args) == 2
+        assert [a["step"] for a in fake.save_args] == [5, 25]
 
 
-def test_save_periodic_carries_latest_observed_metrics(tmp_path):
-    """Periodic saves attach the most recent validation metrics.
-
-    Without this, orbax's on-disk best tracking would diverge from
-    our local tracker (the in-memory ``_seen_best`` would say
-    "metric=0.3 is the best" while ``best_step`` would point at a
-    metricless save and the stored ``metrics`` for it would be
-    empty).
-    """
+def test_best_step_is_the_validated_state(tmp_path):
+    """Regression for the Codex P1 on #22: a later periodic save must not
+    inherit an earlier validation's metric, else ``restore_best`` loads
+    weights that were never validated."""
     cfg = CheckpointConfig(save_only_best=False)
     for ckpt, fake, _ in _make(tmp_path, cfg=cfg):
-        ckpt.on_validation(MagicMock(), 5, {"mean_error": 0.3})
+        ckpt.on_validation(MagicMock(), 0, {"mean_error": 0.3})
+        ckpt.on_validation(MagicMock(), 5, {"mean_error": 0.4})
         ckpt.save_periodic(MagicMock(), 10)
-        assert fake.save_args[-1]["metrics"] == {"mean_error": 0.3}
+        assert fake.save_args[-1]["metrics"] is None
+        assert ckpt.best_step == 0
 
 
 def test_best_metric_survives_resume(tmp_path):
@@ -415,20 +361,6 @@ def test_best_metric_survives_resume(tmp_path):
     assert ckpt2.best_metric == pytest.approx(0.2)
 
 
-def test_on_validation_save_clears_unsaved_best_latch(tmp_path):
-    """A save through ``on_validation`` must clear the unsaved-best flag.
-
-    Same-step ``save_periodic`` right after would otherwise re-fire and
-    orbax would reject the duplicate-step write.
-    """
-    cfg = CheckpointConfig(wandb_upload="best", save_only_best=True)
-    for ckpt, fake, _ in _make(tmp_path, cfg=cfg):
-        ckpt.on_validation(MagicMock(), 100, {"mean_error": 0.5})
-        assert len(fake.save_args) == 1
-        assert ckpt.save_periodic(MagicMock(), 100) is None
-        assert len(fake.save_args) == 1
-
-
 def test_save_final_always_writes_and_uploads_when_enabled(tmp_path):
     cfg = CheckpointConfig(wandb_upload="best")
     for ckpt, fake, logger_mock in _make(tmp_path, cfg=cfg):
@@ -465,15 +397,14 @@ def test_save_final_forwards_val_metrics_to_orbax(tmp_path):
         assert ckpt.best_metric == pytest.approx(0.2)
 
 
-def test_save_final_falls_back_to_last_observed(tmp_path):
-    """When no val_metrics is passed, save_final reuses the most
-    recent validation observation so orbax's best tracker stays
-    consistent with the in-memory tracker."""
+def test_save_final_without_val_metrics_carries_none(tmp_path):
+    """The final state was not validated, so it must not become best."""
     cfg = CheckpointConfig(wandb_upload="never")
     for ckpt, fake, _ in _make(tmp_path, cfg=cfg):
         ckpt.on_validation(MagicMock(), 10, {"mean_error": 0.3})
         ckpt.save_final(MagicMock(), step=99)
-        assert fake.save_args[-1]["metrics"] == {"mean_error": 0.3}
+        assert fake.save_args[-1]["metrics"] is None
+        assert ckpt.best_step == 10
 
 
 def test_orbax_rejects_backward_unsaved_step_returns_none(tmp_path):

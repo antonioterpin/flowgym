@@ -110,6 +110,7 @@ if __name__ == "__main__":
         estimator_config,
         out_dir,
         validation_settings,
+        test_settings,
         caching_config,
         wandb_setup,
     ) = prepare_configs(args)
@@ -211,6 +212,8 @@ if __name__ == "__main__":
     val_sampler = None
     val_interval = None
     val_num_batches = 1
+    test_sampler = None
+    test_num_batches = 1
     if (
         args.mode in ["train", "train-supervised"]
         and validation_settings is not None
@@ -222,6 +225,12 @@ if __name__ == "__main__":
             val_dataset_config, load_from=val_dataset_config.get("load_from")
         )
         logger.info("Validation sampler created successfully.")
+    if args.mode == "train-supervised" and test_settings is not None:
+        test_dataset_config = test_settings["dataset_config"]
+        test_num_batches = test_settings["num_batches"]
+        test_sampler = synthpix.make(
+            test_dataset_config, load_from=test_dataset_config.get("load_from")
+        )
 
     if args.mode == "eval":
         if create_state_fn is None or compute_estimate_fn is None:
@@ -385,6 +394,8 @@ if __name__ == "__main__":
                 val_sampler=val_sampler,
                 val_interval=val_interval,
                 val_num_batches=val_num_batches,
+                test_sampler=test_sampler,
+                test_num_batches=test_num_batches,
                 num_batches=dataset_config.get("num_batches", 1000),
                 estimate_type=estimator_config["estimate_type"],
                 save_every=dataset_config.get("save_every", 100),
@@ -413,6 +424,8 @@ if __name__ == "__main__":
             sampler.shutdown()
             if val_sampler is not None:
                 val_sampler.shutdown()
+            if test_sampler is not None:
+                test_sampler.shutdown()
             if cache_manager is not None:
                 cache_manager.close()
             time.sleep(5)  # wait for the sampler to shutdown properly

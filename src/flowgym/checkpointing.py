@@ -13,13 +13,16 @@ import goggles as gg
 import orbax.checkpoint as ocp
 from orbax.checkpoint import checkpoint_managers as ocp_cm
 
-from flowgym.make import build_save_args
+from flowgym.make import build_save_args, load_model
 
 if TYPE_CHECKING:
     from synthpix.sampler import Sampler
 
     from flowgym.common.base import Estimator
-    from flowgym.common.base.trainable_state import NNEstimatorTrainableState
+    from flowgym.common.base.trainable_state import (
+        EstimatorTrainableState,
+        NNEstimatorTrainableState,
+    )
 
 logger = gg.get_logger(__name__, with_metrics=True)
 
@@ -33,8 +36,9 @@ class CheckpointConfig:
     """Per-run checkpoint policy.
 
     Attributes:
-        save_only_best: When True, ``save_periodic`` only saves if the
-            most recent validation produced a new best metric.
+        save_only_best: When True, ``save_periodic`` is a no-op, so the
+            only checkpoints are the validation-time saves of new bests
+            (plus the final one).
         wandb_upload: Controls W&B uploads triggered from validation
             events. ``"never"`` (default) skips uploads; ``"best"``
             uploads only when a new best is observed (alias ``best``);
@@ -204,12 +208,9 @@ class Checkpointer:
         self._artifact_name = (
             self._cfg.artifact_name or f"{type(model).__name__}_checkpoint"
         )
-        # Local best-metric tracker. Authoritative for the
-        # "is this a new best?" comparison in every mode — including
-        # ``wandb_upload="never"``, where validation metrics are
-        # observed but no save (and therefore no orbax metrics) happens
-        # until the next periodic event. Bootstrap from any persisted
-        # best so resumes pick up where they left off.
+        # Local best-metric tracker for the "is this a new best?"
+        # comparison. Bootstrap from any persisted best so resumes pick
+        # up where they left off.
         self._seen_best: float | None = None
         seeded = self._mngr.best_step()
         if seeded is not None:
@@ -219,15 +220,6 @@ class Checkpointer:
                     self._seen_best = float(recorded[metric_key])
                 except (KeyError, TypeError, ValueError):
                     pass
-        # Metrics from the most recent validation event. Passed to
-        # orbax on the next ``save_periodic`` so the on-disk best
-        # tracker stays consistent with the observed best even when
-        # the save is deferred to a periodic event.
-        self._last_observed: dict[str, float] = {}
-        # Latch consumed by ``save_periodic`` when ``save_only_best``
-        # is set: ``on_validation`` flips it on a real improvement; the
-        # next periodic save consumes it.
-        self._has_unsaved_best = False
         self._closed = False
 
     # ------------------------------------------------------------------
@@ -239,14 +231,26 @@ class Checkpointer:
         """Step of the best checkpoint seen so far (queries orbax)."""
         return self._mngr.best_step()
 
+    def restore_best(
+        self, template: NNEstimatorTrainableState
+    ) -> EstimatorTrainableState | None:
+        """Load the best checkpoint's parameters into ``template``.
+
+        Args:
+            template: State with the target structure (e.g. the current one).
+
+        Returns:
+            The restored state, or ``None`` if no checkpoint has a metric.
+        """
+        step = self.best_step
+        if step is None:
+            return None
+        self._mngr.wait_until_finished()
+        return load_model(self._ckpt_root / str(step), template)
+
     @property
     def best_metric(self) -> float | None:
-        """Best metric value seen so far across all validations.
-
-        May be more recent than ``best_step`` when validations happen
-        without an accompanying save (the typical
-        ``wandb_upload="never"`` + ``save_only_best=True`` shape).
-        """
+        """Best metric value seen so far across all validations."""
         return self._seen_best
 
     def on_validation(
@@ -255,7 +259,12 @@ class Checkpointer:
         step: int,
         val_metrics: Mapping[str, Any],
     ) -> str | None:
-        """Record a validation event and act per ``wandb_upload`` mode.
+        """Record a validation event; save on a new best or in ``every`` mode.
+
+        A new best is always saved to disk at this step, so the metric
+        orbax records belongs to the exact state that was validated
+        (``restore_best`` relies on this). Uploads follow
+        ``wandb_upload``.
 
         Args:
             state: The trainable state to checkpoint, if needed.
@@ -265,9 +274,8 @@ class Checkpointer:
 
         Returns:
             The on-disk checkpoint directory path when a save happened,
-            ``None`` when validation was purely observational (current
-            mode does not save at this event, or ``"best"`` mode saw no
-            improvement / no extractable metric).
+            ``None`` when validation was purely observational (no
+            improvement / no extractable metric outside ``every`` mode).
         """
         metric_value = self._extract_metric(val_metrics)
         mode = self._cfg.wandb_upload
@@ -276,13 +284,10 @@ class Checkpointer:
         # ``every`` snapshots the latest model after *every* validation,
         # including one whose metric is missing or non-finite (e.g. a
         # NaN-out near the end) — that run state is exactly what a
-        # post-mortem wants. ``best`` only acts on a genuine
-        # improvement, so a non-extractable metric is observational
-        # there and never saves.
-        will_save = mode == "every" or (mode == "best" and is_new_best)
+        # post-mortem wants.
+        if not (is_new_best or mode == "every"):
+            return None
 
-        prev_seen_best = self._seen_best
-        prev_has_unsaved_best = self._has_unsaved_best
         # Attach only *this* event's metric to the save. A non-finite
         # event saves with no metrics (in ``every`` mode) so it can
         # never be mistaken for a best checkpoint.
@@ -291,27 +296,15 @@ class Checkpointer:
             if metric_value is not None
             else None
         )
-        if current_metrics is not None:
-            self._last_observed = current_metrics
-        if is_new_best:
-            self._seen_best = metric_value
-            self._has_unsaved_best = True
-
-        if not will_save:
-            return None
-
         path = self._save(state, step, current_metrics)
         if path is None:
             # Orbax rejected the write (duplicate / backward step), so
-            # nothing landed on disk. Roll back the best trackers we
-            # advanced above; otherwise ``best_metric`` would report a
-            # value with no backing checkpoint and the stale
-            # ``_has_unsaved_best`` latch could trip a spurious later
-            # ``save_periodic`` write.
-            self._seen_best = prev_seen_best
-            self._has_unsaved_best = prev_has_unsaved_best
+            # nothing landed on disk; don't advance the best tracker.
             return None
-        self._has_unsaved_best = False
+        if is_new_best:
+            self._seen_best = metric_value
+        if mode == "never":
+            return path
         # Orbax may have moved the best step now; re-confirm.
         is_best_now = self._mngr.best_step() == step
         aliases = ["best"] if is_best_now else ["latest"]
@@ -331,11 +324,11 @@ class Checkpointer:
     def save_periodic(
         self, state: NNEstimatorTrainableState, step: int
     ) -> str | None:
-        """Disk-only save at a periodic ``save_every`` event.
+        """Disk-only save at a periodic ``save_every`` event, for resume.
 
-        Honors ``save_only_best``: skips when no unsaved improvement is
-        pending. Does not upload (W&B uploads are tied to validation
-        events via ``on_validation``).
+        Saves without metrics, since this state was not validated (best
+        checkpoints are written by ``on_validation``). A no-op under
+        ``save_only_best``. Does not upload.
 
         Args:
             state: The trainable state to checkpoint.
@@ -345,7 +338,7 @@ class Checkpointer:
             The on-disk checkpoint path when a save happened, otherwise
             ``None``.
         """
-        if self._cfg.save_only_best and not self._has_unsaved_best:
+        if self._cfg.save_only_best:
             return None
         # Same-step guard: when ``val_interval == save_every`` (a common
         # 100/100 shape), ``on_validation`` may have already saved this
@@ -355,8 +348,7 @@ class Checkpointer:
         latest = self._mngr.latest_step()
         if latest is not None and step <= latest:
             return None
-        self._has_unsaved_best = False
-        return self._save(state, step, self._last_observed or None)
+        return self._save(state, step, None)
 
     def save_final(
         self,
@@ -380,15 +372,14 @@ class Checkpointer:
             state: The final trainable state to checkpoint.
             step: Final training step.
             val_metrics: Validation metrics from the final evaluation,
-                if available. ``None`` falls back to the most recent
-                observed validation metrics.
+                if available. Without them the save carries no metrics.
 
         Returns:
             The on-disk checkpoint path (the freshly written step, or an
             already-persisted one at the same step), or ``None`` when
             orbax rejected a genuinely backward save.
         """
-        metrics: Mapping[str, float] | None
+        metrics: Mapping[str, float] | None = None
         if val_metrics is not None:
             metric_value = self._extract_metric(val_metrics)
             if metric_value is not None:
@@ -397,10 +388,6 @@ class Checkpointer:
                 # query of ``best_metric`` reports the latest.
                 if self._is_better(metric_value):
                     self._seen_best = metric_value
-            else:
-                metrics = self._last_observed or None
-        else:
-            metrics = self._last_observed or None
         # The final step may already be on disk when training ends on a
         # ``save_every`` boundary that ``save_periodic`` just wrote.
         # Orbax would reject the duplicate write (``_save`` -> ``None``),

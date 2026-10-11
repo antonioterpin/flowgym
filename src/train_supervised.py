@@ -2,15 +2,17 @@
 
 import contextlib
 import itertools
+import json
+import math
 import time
+from pathlib import Path
 from typing import Literal
 
 import goggles as gg
 import jax
-import numpy as np
 from synthpix.sampler import Sampler
 
-from eval import evaluate_batches
+from eval import evaluate_batches, log_eval_metrics, scalar_metrics
 from flowgym.checkpointing import CheckpointConfig, Checkpointer
 from flowgym.common.base import Estimator, NNEstimatorTrainableState
 from flowgym.training.caching import CacheManager, enrich_batch
@@ -39,6 +41,8 @@ def train_supervised(
     val_sampler: Sampler | None = None,
     val_interval: int | None = None,
     val_num_batches: int = 1,
+    test_sampler: Sampler | None = None,
+    test_num_batches: int = 1,
     num_batches: int = 1000,
     estimate_type: Literal["flow", "density"] = "flow",
     save_every: int = 10000,
@@ -65,6 +69,11 @@ def train_supervised(
         val_sampler: The sampler to use to generate images for validation.
         val_interval: Frequency to validate the estimator.
         val_num_batches: Number of batches to validate for.
+        test_sampler: If given, evaluated after training on the
+            best-on-validation checkpoint (the final state without
+            validation); results are logged under ``test/`` and written to
+            ``out_dir/test_summary.json``.
+        test_num_batches: Number of batches to test on.
         num_batches: Number of batches to train for.
         estimate_type: Type of estimate to compute.
         save_every: Frequency to save the estimator.
@@ -169,38 +178,12 @@ def train_supervised(
                     num_batches=val_num_batches,
                     cache_manager=cache_manager,
                 )
-                # Log all validation metrics generically
-                for metric_name, value in val_metrics.items():
-                    if metric_name == "errors":
-                        continue
-                    scalar = None
-                    if isinstance(value, (int, float)):
-                        scalar = float(value)
-                    elif isinstance(value, np.ndarray) and value.ndim == 0:
-                        scalar = float(value)
-                    if scalar is not None:
-                        logger.scalar(f"val/{metric_name}", scalar, step=0)
-
-                # Build validation message with all scalar metrics
-                mean_error = float(val_metrics.get("mean_error", float("nan")))
-                init_val_msg = (
-                    f"Initial validation (before training): "
-                    f"mean_error={mean_error:.5f}"
+                log_eval_metrics(
+                    val_metrics,
+                    prefix="val",
+                    step=0,
+                    title="Initial validation (before training)",
                 )
-                # Append all other scalar metrics
-                for k, v in val_metrics.items():
-                    if k in (
-                        "errors",
-                        "mean_error",
-                        "num_batches",
-                        "num_samples",
-                    ):
-                        continue
-                    if isinstance(v, (int, float)):
-                        init_val_msg += f", {k}={float(v):.5f}"
-                    elif isinstance(v, np.ndarray) and v.ndim == 0:
-                        init_val_msg += f", {k}={float(v):.5f}"
-                logger.info(init_val_msg)
                 # Route the baseline through on_validation so it establishes
                 # the best-metric reference (and uploads when wandb_upload is
                 # enabled).
@@ -379,42 +362,12 @@ def train_supervised(
                         logger.error(f"Validation failed: {e}")
                         continue
 
-                    # Log all validation metrics generically
-                    for metric_name, value in val_metrics.items():
-                        if metric_name == "errors":
-                            continue
-                        scalar = None
-                        if isinstance(value, (int, float)):
-                            scalar = float(value)
-                        elif isinstance(value, np.ndarray) and value.ndim == 0:
-                            scalar = float(value)
-                        if scalar is not None:
-                            logger.scalar(
-                                f"val/{metric_name}", scalar, step=batch_idx
-                            )
-
-                    # Build validation message with all scalar metrics
-                    mean_error = float(
-                        val_metrics.get("mean_error", float("nan"))
+                    log_eval_metrics(
+                        val_metrics,
+                        prefix="val",
+                        step=batch_idx,
+                        title=f"Validation after batch {batch_idx}",
                     )
-                    val_msg = (
-                        f"Validation after batch {batch_idx}: "
-                        f"mean_error={mean_error:.5f}"
-                    )
-                    # Append all other scalar metrics
-                    for k, v in val_metrics.items():
-                        if k in (
-                            "errors",
-                            "mean_error",
-                            "num_batches",
-                            "num_samples",
-                        ):
-                            continue
-                        if isinstance(v, (int, float)):
-                            val_msg += f", {k}={float(v):.5f}"
-                        elif isinstance(v, np.ndarray) and v.ndim == 0:
-                            val_msg += f", {k}={float(v):.5f}"
-                    logger.info(val_msg)
                     saved_path = checkpointer.on_validation(
                         trainable_state, batch_idx, val_metrics
                     )
@@ -480,42 +433,12 @@ def train_supervised(
                 # to appear after the last training batch
                 final_step = last_batch_idx + 1
 
-                # Log all validation metrics generically
-                for metric_name, value in final_val_metrics.items():
-                    if metric_name == "errors":
-                        continue
-                    scalar = None
-                    if isinstance(value, (int, float)):
-                        scalar = float(value)
-                    elif isinstance(value, np.ndarray) and value.ndim == 0:
-                        scalar = float(value)
-                    if scalar is not None:
-                        logger.scalar(
-                            f"val/{metric_name}", scalar, step=final_step
-                        )
-
-                # Build validation message with all scalar metrics
-                mean_error = float(
-                    final_val_metrics.get("mean_error", float("nan"))
+                log_eval_metrics(
+                    final_val_metrics,
+                    prefix="val",
+                    step=final_step,
+                    title=f"Final validation (step {final_step})",
                 )
-                final_val_msg = (
-                    f"Final validation (step {final_step}): "
-                    f"mean_error={mean_error:.5f}"
-                )
-                # Append all other scalar metrics
-                for k, v in final_val_metrics.items():
-                    if k in (
-                        "errors",
-                        "mean_error",
-                        "num_batches",
-                        "num_samples",
-                    ):
-                        continue
-                    if isinstance(v, (int, float)):
-                        final_val_msg += f", {k}={float(v):.5f}"
-                    elif isinstance(v, np.ndarray) and v.ndim == 0:
-                        final_val_msg += f", {k}={float(v):.5f}"
-                logger.info(final_val_msg)
                 final_path = checkpointer.save_final(
                     trainable_state,
                     final_step,
@@ -531,6 +454,47 @@ def train_supervised(
                     logger.info(f"Final checkpoint saved -> {final_path}")
             except Exception as e:
                 logger.error(f"Final validation failed: {e}")
+
+        if test_sampler is not None and last_batch_idx >= 0:
+            # Best-on-validation checkpoint if validated, else the final state
+            test_step, test_state = last_batch_idx + 1, trainable_state
+            best_step = checkpointer.best_step
+            if val_sampler is not None and best_step is not None:
+                best_state = checkpointer.restore_best(trainable_state)
+                if best_state is not None:
+                    test_step, test_state = best_step, best_state
+            assert key is not None
+            key, test_key = jax.random.split(key)
+            test_metrics = scalar_metrics(
+                evaluate_batches(
+                    estimator=estimator,
+                    sampler=test_sampler,
+                    create_state_fn=create_state_fn,
+                    compute_estimate_fn=compute_estimate_fn,
+                    trainable_state=test_state,
+                    estimate_type=estimate_type,
+                    key=test_key,
+                    num_batches=test_num_batches,
+                    cache_manager=cache_manager,
+                )
+            )
+            test_metrics["step"] = float(test_step)
+            log_eval_metrics(
+                test_metrics,
+                prefix="test",
+                step=last_batch_idx + 1,
+                title=f"Test (checkpoint step {test_step})",
+            )
+            # NaN/inf are not valid JSON; write them as null
+            Path(out_dir, "test_summary.json").write_text(
+                json.dumps(
+                    {
+                        k: v if math.isfinite(v) else None
+                        for k, v in test_metrics.items()
+                    },
+                    indent=2,
+                )
+            )
 
         # Final cache flush (inside context while cache_manager is still active)
         if cache_manager is not None:

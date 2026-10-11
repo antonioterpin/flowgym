@@ -429,6 +429,46 @@ def evaluate_batches(
     return dict(summary)
 
 
+def scalar_metrics(metrics: Metrics) -> dict[str, float]:
+    """Scalar entries of evaluation metrics (per-sample ``errors`` dropped).
+
+    Args:
+        metrics: Metrics returned by ``evaluate_batches``.
+
+    Returns:
+        Metric name to float.
+    """
+    return {
+        name: float(value)
+        for name, value in metrics.items()
+        if name != "errors"
+        and isinstance(value, (int, float, np.generic, np.ndarray, jax.Array))
+        and np.ndim(value) == 0
+    }
+
+
+def log_eval_metrics(
+    metrics: Metrics, *, prefix: str, step: int, title: str
+) -> None:
+    """Log scalar metrics under ``<prefix>/`` and as one info line.
+
+    Args:
+        metrics: Metrics returned by ``evaluate_batches``.
+        prefix: Metric namespace (e.g. ``val`` or ``test``).
+        step: Step to log the metrics at.
+        title: Start of the info line (e.g. ``Validation after batch 10``).
+    """
+    scalars = scalar_metrics(metrics)
+    for name, value in scalars.items():
+        logger.scalar(f"{prefix}/{name}", value, step=step)
+    shown = ", ".join(
+        f"{name}={value:.5f}"
+        for name, value in scalars.items()
+        if name not in ("num_batches", "num_samples")
+    )
+    logger.info(f"{title}: {shown}")
+
+
 def eval_full_dataset(
     estimator: Estimator,
     *,

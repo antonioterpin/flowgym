@@ -99,6 +99,22 @@ validation:
 hands it to the training loop, which calls into `src/eval.py` on the
 configured cadence.
 
+### Test evaluation after training
+
+An optional `test:` block evaluates the trained model once training
+ends: the best-on-validation checkpoint when `validation:` is set,
+otherwise the final weights.
+
+```yaml
+test:
+    dataset: path/to/test_dataset.yaml  # or an inline dict
+    num_batches: 30                     # batches in the test pass
+```
+
+The results are logged under `test/` (with `test/step`, the checkpoint
+used) and written to `<run dir>/test_summary.json`. The test batch size
+may differ from the training one.
+
 ## What's in `flowgym.training`
 
 The training-side helpers that the workflows above pull on:

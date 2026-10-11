@@ -110,9 +110,12 @@ def compile_model(
     if estimates is not None:
 
         def create_state_fn_impl(images: jnp.ndarray, rng: PRNGKey) -> History:
+            # Size the state from the images so any batch size works
             return model.create_state(
                 images,
-                estimates=estimates,
+                estimates=jnp.zeros(
+                    (images.shape[0], *estimates.shape[1:]), estimates.dtype
+                ),
                 image_history_size=history_size,
                 estimate_history_size=history_size,
                 rng=rng,

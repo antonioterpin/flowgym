@@ -8,12 +8,15 @@ These tests exercise all training features using DummyEstimator:
 - Metrics processing
 """
 
+import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import optax
+import pytest
 from flax.core import FrozenDict
 
 from flowgym.common.base.trainable_state import NNEstimatorTrainableState
@@ -68,6 +71,9 @@ class _FakeCheckpointer:
     @property
     def best_metric(self):
         return None
+
+    def restore_best(self, template):
+        return "best_state" if self.save_calls else None
 
     def close(self):
         pass
@@ -548,6 +554,46 @@ def test_train_supervised_validation_runs(
         assert mock_eval.call_count >= 2, (
             f"Expected at least 2 validation calls, got {mock_eval.call_count}"
         )
+
+
+@pytest.mark.parametrize("validate", [True, False])
+def test_train_supervised_evaluates_on_test(
+    tmp_path, mock_sampler, dummy_trainable_state, validate
+):
+    """Test eval uses the best-on-val checkpoint, else the final state."""
+    val_sampler = MagicMock() if validate else None
+    test_sampler = MagicMock()
+    metrics = {"mean_error": np.float32(0.1), "errors": jnp.array([0.1])}
+
+    with (
+        patch("train_supervised.Checkpointer", side_effect=_FakeCheckpointer),
+        patch("train_supervised.evaluate_batches", return_value=metrics) as ev,
+    ):
+        train_supervised(
+            estimator=DummyEstimator(train_type="supervised"),
+            estimator_config={"config": {"jit": False}},
+            trainable_state=dummy_trainable_state,
+            out_dir=str(tmp_path),
+            create_state_fn=lambda img, key: {
+                "images": img[:, None, ...],
+                "estimates": jnp.zeros((*img.shape, 2))[:, None],
+            },
+            compute_estimate_fn=lambda img, state, ts: (state, {}),
+            sampler=mock_sampler,
+            val_sampler=val_sampler,
+            val_interval=2,
+            test_sampler=test_sampler,
+            test_num_batches=3,
+            num_batches=5,
+            key=jax.random.PRNGKey(0),
+        )
+
+    assert ev.call_args.kwargs["sampler"] is test_sampler
+    assert ev.call_args.kwargs["num_batches"] == 3
+    tested = ev.call_args.kwargs["trainable_state"]
+    assert (tested == "best_state") is validate
+    summary = json.loads((tmp_path / "test_summary.json").read_text())
+    assert summary == {"mean_error": pytest.approx(0.1), "step": 5}
 
 
 def test_train_supervised_save_only_best(
