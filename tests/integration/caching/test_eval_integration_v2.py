@@ -199,6 +199,7 @@ def test_eval_full_dataset_writes_summary(tmp_path, errors, mean_epe):
 
     summary = json.loads(summary_out.read_text())
     assert summary["mean_epe"] == pytest.approx(mean_epe)
+    assert summary["median_epe"] == pytest.approx(mean_epe)
     assert "mean_relative_error" not in summary
 
 

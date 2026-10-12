@@ -12,7 +12,12 @@ import goggles as gg
 import jax
 from synthpix.sampler import Sampler
 
-from eval import evaluate_batches, log_eval_metrics, scalar_metrics
+from eval import (
+    evaluate_batches,
+    log_eval_metrics,
+    metrics_summary,
+    scalar_metrics,
+)
 from flowgym.checkpointing import CheckpointConfig, Checkpointer
 from flowgym.common.base import Estimator, NNEstimatorTrainableState
 from flowgym.training.caching import CacheManager, enrich_batch
@@ -72,7 +77,7 @@ def train_supervised(
         test_sampler: If given, evaluated after training on the
             best-on-validation checkpoint (the final state without
             validation); results are logged under ``test/`` and written to
-            ``out_dir/test_summary.json``.
+            ``out_dir/test_summary.json`` (EPE mean, median, p95, p99).
         test_num_batches: Number of batches to test on.
         num_batches: Number of batches to train for.
         estimate_type: Type of estimate to compute.
@@ -465,19 +470,18 @@ def train_supervised(
                     test_step, test_state = best_step, best_state
             assert key is not None
             key, test_key = jax.random.split(key)
-            test_metrics = scalar_metrics(
-                evaluate_batches(
-                    estimator=estimator,
-                    sampler=test_sampler,
-                    create_state_fn=create_state_fn,
-                    compute_estimate_fn=compute_estimate_fn,
-                    trainable_state=test_state,
-                    estimate_type=estimate_type,
-                    key=test_key,
-                    num_batches=test_num_batches,
-                    cache_manager=cache_manager,
-                )
+            test_results = evaluate_batches(
+                estimator=estimator,
+                sampler=test_sampler,
+                create_state_fn=create_state_fn,
+                compute_estimate_fn=compute_estimate_fn,
+                trainable_state=test_state,
+                estimate_type=estimate_type,
+                key=test_key,
+                num_batches=test_num_batches,
+                cache_manager=cache_manager,
             )
+            test_metrics = scalar_metrics(test_results)
             test_metrics["step"] = float(test_step)
             log_eval_metrics(
                 test_metrics,
@@ -485,12 +489,14 @@ def train_supervised(
                 step=last_batch_idx + 1,
                 title=f"Test (checkpoint step {test_step})",
             )
+            summary = metrics_summary(test_results["errors"], "epe")
+            summary["step"] = float(test_step)
             # NaN/inf are not valid JSON; write them as null
             Path(out_dir, "test_summary.json").write_text(
                 json.dumps(
                     {
                         k: v if math.isfinite(v) else None
-                        for k, v in test_metrics.items()
+                        for k, v in summary.items()
                     },
                     indent=2,
                 )

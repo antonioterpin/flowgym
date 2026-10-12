@@ -7,15 +7,14 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
+import statistics
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
-from flowgym.experiments import (
-    validate_model_study,
-    validate_scalar_tags,
-)
+from flowgym.experiments import validate_model_study
 from flowgym.utils import dump_yaml, load_configuration
 
 DEFAULT_PROJECT = "flowgym"
@@ -26,6 +25,16 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError(f"Expected dict YAML at {path}, got {type(data)!r}.")
     return data
+
+
+def _deep_merge(base: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(base)
+    for key, value in patch.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
 
 
 def parse_args() -> argparse.Namespace:
@@ -46,161 +55,98 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    """Expand the experiment matrix and shell out to the entrypoint per cell.
+    """Run every model of the experiment once per seed, then collect results.
 
     Raises:
-        ValueError: If ``exp.yaml`` or a dataset entry is malformed.
-        FileNotFoundError: If a dataset, model or the entrypoint is missing.
+        ValueError: If ``exp.yaml`` or a model config is malformed.
+        FileNotFoundError: If the entrypoint is missing.
     """
     args = parse_args()
     exp_dir = (Path(args.exp_root) / args.exp).resolve()
-    spec_path = exp_dir / "exp.yaml"
-    spec = _load_yaml(spec_path)
-
+    spec = _load_yaml(exp_dir / "exp.yaml")
     project = spec.get("project", DEFAULT_PROJECT)
-    mode = spec["mode"]
     seeds = [int(seed) for seed in spec.get("seeds", [0])]
-
-    if not isinstance(project, str) or not project:
-        raise ValueError("exp.yaml: project must be a non-empty string.")
-    if not isinstance(mode, str) or not mode:
-        raise ValueError("exp.yaml: mode must be a non-empty string.")
-
-    if "dataset" in spec and "datasets" in spec:
-        raise ValueError(
-            "exp.yaml: Cannot specify both 'dataset' and 'datasets'."
-        )
-    if "dataset" in spec:
-        dataset_specs = [spec["dataset"]]
-    elif "datasets" in spec:
-        dataset_specs = spec["datasets"]
-    else:
-        dataset_specs = None
-
-    dataset_infos: list[tuple[Path, dict[str, Any]]] = []
-    if dataset_specs is not None:
-        for ds_spec in dataset_specs:
-            if isinstance(ds_spec, str):
-                ds_path = (exp_dir / ds_spec).resolve()
-                ds_tags: dict[str, Any] = {}
-            elif isinstance(ds_spec, dict):
-                if "path" not in ds_spec:
-                    raise ValueError("Dataset dict must contain 'path' field.")
-                ds_path = (exp_dir / ds_spec["path"]).resolve()
-                raw_tags = ds_spec.get("tags", {})
-                ds_tags = (
-                    validate_scalar_tags(raw_tags, "dataset.tags")
-                    if raw_tags
-                    else {}
-                )
-            else:
-                raise ValueError(
-                    "Dataset must be a string path or dict with 'path'."
-                )
-
-            if not ds_path.exists():
-                raise FileNotFoundError(ds_path)
-            dataset_infos.append((ds_path, ds_tags))
-
-    base_datasets = {
-        idx: _load_yaml(ds_path)
-        for idx, (ds_path, _) in enumerate(dataset_infos)
-    }
-    dataset_tags = {idx: tags for idx, (_, tags) in enumerate(dataset_infos)}
-
-    model_rel_paths = [Path(path) for path in spec["models"]]
-    model_paths = [(exp_dir / path).resolve() for path in model_rel_paths]
-    for model_path in model_paths:
-        if not model_path.exists():
-            raise FileNotFoundError(model_path)
-
-    generated_dir = exp_dir / "_generated"
-    generated_models = generated_dir / "models"
-    generated_datasets = generated_dir / "datasets"
-
-    patched_models: list[tuple[Path, Path]] = []
-    model_dataset_overrides: dict[Path, str] = {}
-    model_modes: dict[Path, str] = {}
-    for model_rel_path, model_path in zip(
-        model_rel_paths, model_paths, strict=True
-    ):
-        model_cfg = _load_yaml(model_path)
-        validate_model_study(model_cfg, args.exp)
-        model_cfg["project"] = project
-
-        if "dataset" in model_cfg:
-            model_dataset_overrides[model_rel_path] = model_cfg.pop("dataset")
-        model_modes[model_rel_path] = model_cfg.pop("mode", mode)
-
-        out_model_path = generated_models / model_rel_path
-        dump_yaml(out_model_path, model_cfg)
-        patched_models.append((out_model_path, model_rel_path))
-
-    per_seed_datasets: dict[int, dict[int, Path]] = {}
-    if dataset_infos:
-        for seed in seeds:
-            per_seed_datasets[seed] = {}
-            for ds_idx in range(len(dataset_infos)):
-                dataset_cfg = dict(base_datasets[ds_idx])
-                dataset_cfg["seed"] = seed
-                if dataset_tags[ds_idx]:
-                    dataset_cfg["tags"] = dataset_tags[ds_idx]
-                out_dataset_path = (
-                    generated_datasets / f"dataset{ds_idx}_seed{seed}.yaml"
-                )
-                dump_yaml(out_dataset_path, dataset_cfg)
-                per_seed_datasets[seed][ds_idx] = out_dataset_path
-
-    entry = spec.get("entrypoint", "src/main.py")
-    entry_path = Path.cwd() / entry
+    metrics = list(spec.get("metrics", ["mean_epe"]))
+    entry_path = Path.cwd() / spec.get("entrypoint", "src/main.py")
     if not entry_path.exists():
         raise FileNotFoundError(f"Entrypoint not found at {entry_path}")
+    generated_dir = exp_dir / "_generated"
 
-    commands: list[list[str]] = []
+    # Per model: its mode, and its dataset with any overrides applied
+    models: list[tuple[str, str, Path, dict[str, Any]]] = []
+    for model in spec["models"]:
+        model_cfg = _load_yaml(exp_dir / model)
+        validate_model_study(model_cfg, args.exp)
+        model_cfg["project"] = project
+        model_mode = model_cfg.pop("mode", spec["mode"])
+        dataset = model_cfg.pop("dataset", spec.get("dataset"))
+        if dataset is None:
+            raise ValueError(
+                f"{model} sets no dataset and exp.yaml has no default."
+            )
+        dataset_cfg = _deep_merge(
+            _load_yaml(exp_dir / dataset),
+            model_cfg.pop("dataset_overrides", {}),
+        )
+        model_path = generated_dir / "models" / model
+        dump_yaml(model_path, model_cfg)
+        models.append((model, model_mode, model_path, dataset_cfg))
+
+    def summary_path(model: str, seed: int) -> Path:
+        return generated_dir / "summaries" / model / f"seed{seed}.json"
+
+    results_path = exp_dir / "results.json"
+    results_path.unlink(missing_ok=True)
     for seed in seeds:
-        for model_path, model_rel_path in patched_models:
-            if model_rel_path in model_dataset_overrides:
-                override_path = (
-                    exp_dir / model_dataset_overrides[model_rel_path]
-                ).resolve()
-                override_dataset = dict(_load_yaml(override_path))
-                override_dataset["seed"] = seed
-                out_dataset_path = (
-                    generated_datasets
-                    / model_rel_path.parent
-                    / f"{model_rel_path.stem}_seed{seed}.yaml"
-                )
-                dump_yaml(out_dataset_path, override_dataset)
-                datasets_to_use = [out_dataset_path]
-            elif dataset_infos:
-                datasets_to_use = [
-                    per_seed_datasets[seed][idx]
-                    for idx in range(len(dataset_infos))
-                ]
-            else:
-                raise ValueError(
-                    f"Model {model_rel_path} does not specify a "
-                    "'dataset' field, "
-                    "and exp.yaml does not provide a default dataset."
-                )
+        for model, model_mode, model_path, dataset_cfg in models:
+            dataset_path = (
+                generated_dir / "datasets" / model / f"seed{seed}.yaml"
+            )
+            dump_yaml(dataset_path, {**dataset_cfg, "seed": seed})
+            summary = summary_path(model, seed)
+            summary.parent.mkdir(parents=True, exist_ok=True)
+            summary.unlink(missing_ok=True)
+            cmd = [
+                sys.executable,
+                str(entry_path),
+                "--mode",
+                model_mode,
+                "--estimator",
+                str(model_path),
+                "--dataset",
+                str(dataset_path),
+                "--summary-out",
+                str(summary),
+            ]
+            if args.debug:
+                cmd.append("--debug")
+            subprocess.check_call(cmd)
 
-            for dataset_path in datasets_to_use:
-                cmd = [
-                    sys.executable,
-                    str(entry_path),
-                    "--mode",
-                    model_modes[model_rel_path],
-                    "--estimator",
-                    str(model_path),
-                    "--dataset",
-                    str(dataset_path),
-                ]
-                if args.debug:
-                    cmd.append("--debug")
-                commands.append(cmd)
-
-    for command in commands:
-        subprocess.check_call(command)
+    # Mean and population std over seeds of each listed metric
+    results: dict[str, dict[str, Any]] = {}
+    for model, *_ in models:
+        missing = [s for s in seeds if not summary_path(model, s).exists()]
+        if missing:
+            # e.g. a train-supervised run without a ``test:`` block
+            print(f"run.py: no summary for {model} seeds {missing}; skipped.")
+            continue
+        summaries = {
+            str(s): json.loads(summary_path(model, s).read_text())
+            for s in seeds
+        }
+        results[model] = {}
+        for metric in metrics:
+            values = {
+                s: summary.get(metric) for s, summary in summaries.items()
+            }
+            if all(isinstance(v, int | float) for v in values.values()):
+                results[model][metric] = {
+                    "mean": statistics.mean(values.values()),
+                    "std": statistics.pstdev(values.values()),
+                    "seeds": values,
+                }
+    if results:
+        results_path.write_text(json.dumps(results, indent=2) + "\n")
 
 
 if __name__ == "__main__":

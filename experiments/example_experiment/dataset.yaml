@@ -7,6 +7,13 @@ buffer_size: 8
 loop: false
 randomize: false
 include_images: false
+episode_length: 0
+worker_count: 0
+
+scheduler_class: "kinematic"
+num_examples: 8
+filter_sigma_range: [5, 20]
+scale_factor_range: [0, 2]
 
 # Image generation parameters
 image_shape: [128, 128]
@@ -29,9 +36,9 @@ velocities_per_pixel: 1.0
 resolution: 1
 flow_field_size: [128, 128]
 img_offset: [0, 0]
-min_speed_x: -1
-max_speed_x: 1
-min_speed_y: -1
-max_speed_y: 1
+min_speed_x: 0
+max_speed_x: 0
+min_speed_y: 0
+max_speed_y: 0
 output_units: "pixels"
 num_batches: 2

@@ -6,6 +6,7 @@ Covers run naming, tag merging, git-state capture, and launcher behaviour.
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 from contextlib import contextmanager
 from pathlib import Path
@@ -496,3 +497,150 @@ def test_example_experiment_is_well_formed():
         model_cfg = yaml.safe_load(model_path.read_text(encoding="utf-8"))
         study = validate_model_study(model_cfg, "example_experiment")
         assert study["name"] == "example_experiment"
+
+
+def test_experiment_launcher_aggregates_seed_summaries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Per-seed ``--summary-out`` files are collected into results.json."""
+    exp_dir = tmp_path / "agg"
+    exp_dir.mkdir()
+    (exp_dir / "dataset.yaml").write_text("seed: 0\n", encoding="utf-8")
+    (exp_dir / "exp.yaml").write_text(
+        "mode: eval\ndataset: dataset.yaml\nmodels: [m.yaml]\nseeds: [0, 1]\n"
+        "metrics: [mean_epe, p99_epe]\n",
+        encoding="utf-8",
+    )
+    (exp_dir / "m.yaml").write_text(
+        "estimator: dummy\nstudy:\n  name: agg\n  tags: {v: a}\n",
+        encoding="utf-8",
+    )
+
+    def fake_check_call(cmd: list[str]) -> None:
+        dataset = Path(cmd[cmd.index("--dataset") + 1])
+        seed = yaml.safe_load(dataset.read_text())["seed"]
+        out = Path(cmd[cmd.index("--summary-out") + 1])
+        out.write_text(
+            json.dumps({"mean_epe": 0.25 + 0.5 * seed, "max_epe": 2.0})
+        )
+
+    monkeypatch.setattr(run_script.subprocess, "check_call", fake_check_call)
+    monkeypatch.setattr(
+        "sys.argv", ["run.py", "--exp", "agg", "--exp-root", str(tmp_path)]
+    )
+    run_script.main()
+
+    results = json.loads((exp_dir / "results.json").read_text())
+    # Only listed metrics are kept; p99_epe is missing from the summaries
+    assert results == {
+        "m.yaml": {
+            "mean_epe": {
+                "mean": 0.5,
+                "std": 0.25,
+                "seeds": {"0": 0.25, "1": 0.75},
+            }
+        }
+    }
+
+
+def test_experiment_launcher_drops_stale_results_on_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """A failed launch leaves no results.json from an earlier run."""
+    exp_dir = tmp_path / "stale"
+    exp_dir.mkdir()
+    (exp_dir / "dataset.yaml").write_text("seed: 0\n", encoding="utf-8")
+    (exp_dir / "exp.yaml").write_text(
+        "mode: eval\ndataset: dataset.yaml\nmodels: [m.yaml]\n",
+        encoding="utf-8",
+    )
+    (exp_dir / "m.yaml").write_text(
+        "estimator: dummy\nstudy:\n  name: stale\n  tags: {v: a}\n",
+        encoding="utf-8",
+    )
+    (exp_dir / "results.json").write_text("{}", encoding="utf-8")
+
+    def failing_check_call(cmd: list[str]) -> None:
+        raise subprocess.CalledProcessError(1, cmd)
+
+    monkeypatch.setattr(run_script.subprocess, "check_call", failing_check_call)
+    monkeypatch.setattr(
+        "sys.argv", ["run.py", "--exp", "stale", "--exp-root", str(tmp_path)]
+    )
+    with pytest.raises(subprocess.CalledProcessError):
+        run_script.main()
+    assert not (exp_dir / "results.json").exists()
+
+
+def test_experiment_launcher_skips_models_with_missing_seeds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """A model with only some seed summaries is left out of results.json."""
+    exp_dir = tmp_path / "partial"
+    exp_dir.mkdir()
+    (exp_dir / "dataset.yaml").write_text("seed: 0\n", encoding="utf-8")
+    (exp_dir / "exp.yaml").write_text(
+        "mode: eval\ndataset: dataset.yaml\nmodels: [a.yaml, b.yaml]\n"
+        "seeds: [0, 1]\n",
+        encoding="utf-8",
+    )
+    for name in ("a", "b"):
+        (exp_dir / f"{name}.yaml").write_text(
+            "estimator: dummy\nstudy:\n  name: partial\n"
+            f"  tags: {{v: {name}}}\n",
+            encoding="utf-8",
+        )
+
+    def fake_check_call(cmd: list[str]) -> None:
+        out = Path(cmd[cmd.index("--summary-out") + 1])
+        if not (out.parent.name == "b.yaml" and out.name == "seed1.json"):
+            out.write_text(json.dumps({"mean_epe": 0.5}))
+
+    monkeypatch.setattr(run_script.subprocess, "check_call", fake_check_call)
+    monkeypatch.setattr(
+        "sys.argv", ["run.py", "--exp", "partial", "--exp-root", str(tmp_path)]
+    )
+    run_script.main()
+
+    results = json.loads((exp_dir / "results.json").read_text())
+    assert list(results) == ["a.yaml"]
+
+
+def test_experiment_launcher_applies_dataset_overrides(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """A model's ``dataset_overrides`` are deep-merged into its dataset."""
+    exp_dir = tmp_path / "ovr"
+    exp_dir.mkdir()
+    (exp_dir / "dataset.yaml").write_text(
+        "batch_size: 16\n"
+        "validation: {interval: 5, dataset: {batch_size: 16}}\n",
+        encoding="utf-8",
+    )
+    (exp_dir / "exp.yaml").write_text(
+        "mode: eval\ndataset: dataset.yaml\nmodels: [m.yaml]\n",
+        encoding="utf-8",
+    )
+    (exp_dir / "m.yaml").write_text(
+        "estimator: dummy\nstudy:\n  name: ovr\n  tags: {v: a}\n"
+        "dataset_overrides:\n  batch_size: 64\n"
+        "  validation: {dataset: {batch_size: 64}}\n",
+        encoding="utf-8",
+    )
+
+    calls: list[list[str]] = []
+    monkeypatch.setattr(run_script.subprocess, "check_call", calls.append)
+    monkeypatch.setattr(
+        "sys.argv", ["run.py", "--exp", "ovr", "--exp-root", str(tmp_path)]
+    )
+    run_script.main()
+
+    [cmd] = calls
+    dataset = yaml.safe_load(Path(cmd[cmd.index("--dataset") + 1]).read_text())
+    assert dataset["batch_size"] == 64
+    assert dataset["validation"] == {
+        "interval": 5,
+        "dataset": {"batch_size": 64},
+    }
+    model = yaml.safe_load(Path(cmd[cmd.index("--estimator") + 1]).read_text())
+    assert "dataset_overrides" not in model

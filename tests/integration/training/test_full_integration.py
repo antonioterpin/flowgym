@@ -593,7 +593,9 @@ def test_train_supervised_evaluates_on_test(
     tested = ev.call_args.kwargs["trainable_state"]
     assert (tested == "best_state") is validate
     summary = json.loads((tmp_path / "test_summary.json").read_text())
-    assert summary == {"mean_error": pytest.approx(0.1), "step": 5}
+    assert summary["mean_epe"] == pytest.approx(0.1)
+    assert summary["p99_epe"] == pytest.approx(0.1)
+    assert summary["step"] == 5
 
 
 def test_train_supervised_save_only_best(

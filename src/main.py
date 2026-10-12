@@ -1,7 +1,9 @@
 """Training and evaluation script for the different estimators."""
 
 import argparse
+import shutil
 import time
+from pathlib import Path
 
 import goggles as gg
 import jax
@@ -91,8 +93,8 @@ def parse_args():
         "--summary-out",
         type=str,
         default=None,
-        help="In eval mode, write the final summary (mean EPE etc.) to "
-        "this JSON file.",
+        help="Write the final summary to this JSON file: the eval summary "
+        "(mean EPE etc.) in eval mode, the test summary in train-supervised.",
     )
 
     return parser.parse_args()
@@ -420,6 +422,9 @@ if __name__ == "__main__":
                 cache_manager=cache_manager,
                 log_timing=dataset_config.get("log_timing", False),
             )
+            test_summary = Path(out_dir, "test_summary.json")
+            if args.summary_out is not None and test_summary.exists():
+                shutil.copyfile(test_summary, args.summary_out)
         finally:
             sampler.shutdown()
             if val_sampler is not None:

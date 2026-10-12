@@ -11,6 +11,7 @@ from pathlib import Path
 import jax
 import jax.numpy as jnp
 import numpy as np
+import numpy.typing as npt
 
 # Utils
 from goggles import Metrics, get_logger
@@ -429,6 +430,28 @@ def evaluate_batches(
     return dict(summary)
 
 
+def metrics_summary(values: npt.ArrayLike, name: str) -> dict[str, float]:
+    """Mean, median, tail quantiles and extremes of a per-frame metric.
+
+    Args:
+        values: The metric of each frame.
+        name: Metric name used in the keys, e.g. ``"epe"``.
+
+    Returns:
+        ``mean_<name>``, ``median_<name>``, ``p95_<name>``, ``p99_<name>``,
+        ``max_<name>`` and ``min_<name>``.
+    """
+    values = np.asarray(values, dtype=np.float32)
+    return {
+        f"mean_{name}": float(values.mean()),
+        f"median_{name}": float(np.median(values)),
+        f"p95_{name}": float(np.percentile(values, 95)),
+        f"p99_{name}": float(np.percentile(values, 99)),
+        f"max_{name}": float(values.max()),
+        f"min_{name}": float(values.min()),
+    }
+
+
 def scalar_metrics(metrics: Metrics) -> dict[str, float]:
     """Scalar entries of evaluation metrics (per-sample ``errors`` dropped).
 
@@ -681,11 +704,7 @@ def eval_full_dataset(
                 f"Min Relative EPE over {batches_processed} batches: "
                 f"{min_relative_errors:.5f}"
             )
-            summary = {
-                "mean_epe": float(mean_errors),
-                "max_epe": float(max_errors),
-                "min_epe": float(min_errors),
-            }
+            summary = metrics_summary(errors_array, "epe")
             # Cached evals may report errors without relative errors
             if relative_errors_array.size > 0:
                 summary["mean_relative_error"] = float(mean_relative_errors)
