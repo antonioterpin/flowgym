@@ -1,4 +1,4 @@
-"""Tests for Art of PIV meta-model caching functionality."""
+"""Tests for ART of PIV meta-model caching functionality."""
 
 import jax.numpy as jnp
 import numpy as np
@@ -15,7 +15,7 @@ from tests.unit.flow.art_of_piv.mocks import (
 # Tests for compute_cache_miss
 # ──────────────────────────────────────────────────────────────────────────────
 class TestArtOfPIVComputeCacheMiss:
-    """Tests for Art of PIV compute_cache_miss functionality."""
+    """Tests for ART of PIV compute_cache_miss functionality."""
 
     def test_returns_epe_all_and_mask(self):
         """Test that compute_cache_miss returns epe_all and epe_mask."""
@@ -258,10 +258,10 @@ class TestArtOfPIVComputeCacheMiss:
 # Tests for sub-model cache discovery
 # ──────────────────────────────────────────────────────────────────────────────
 class TestArtOfPIVCacheDiscovery:
-    """Tests for Art of PIV sub-model cache discovery from root_dir."""
+    """Tests for ART of PIV sub-model cache discovery from root_dir."""
 
     def test_discovers_sub_model_cache(self, mock_cache_dir):
-        """Test that Art of PIV discovers existing sub-model caches."""
+        """Test that ART of PIV discovers existing sub-model caches."""
         # Pre-populate a sub-model cache
         cache_id = "MockSubModel_mock_m1"
         spec = {"epe": (np.dtype("float32"), ())}
@@ -326,7 +326,7 @@ class TestArtOfPIVCacheDiscovery:
 # Tests for get_cache_id_suffix
 # ──────────────────────────────────────────────────────────────────────────────
 class TestArtOfPIVCacheIdSuffix:
-    """Tests for Art of PIV cache ID suffix generation."""
+    """Tests for ART of PIV cache ID suffix generation."""
 
     def test_suffix_includes_art_of_piv_prefix(self):
         """Suffix should use ``_art_of_piv`` prefix and an 8-char hash."""
@@ -345,7 +345,7 @@ class TestArtOfPIVCacheIdSuffix:
 # Integration tests
 # ──────────────────────────────────────────────────────────────────────────────
 class TestArtOfPIVCacheIntegration:
-    """Integration tests for Art of PIV caching with CacheManager."""
+    """Integration tests for ART of PIV caching with CacheManager."""
 
     def test_meta_model_aggregates_from_multiple_sub_models(
         self, mock_cache_dir

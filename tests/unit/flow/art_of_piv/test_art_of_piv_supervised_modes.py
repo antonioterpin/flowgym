@@ -1,4 +1,4 @@
-"""Tests for Art of PIV supervised training modes."""
+"""Tests for ART of PIV supervised training modes."""
 
 from typing import Any
 
@@ -46,7 +46,7 @@ class MockSubModel:
 
 
 class MockArtOfPIVForTraining(ArtOfPIVEstimator):
-    """Mock Art of PIV specifically for testing supervised_train_step."""
+    """Mock ART of PIV specifically for testing supervised_train_step."""
 
     def __init__(self, sub_models, training_mode="bandits"):
         # Intentionally bypass ArtOfPIVEstimator.__init__ in this test double;

@@ -28,7 +28,7 @@ order most readers will want to follow.
   `collect_timing.py`, and `select_ensemble.py` together over a small
   synthetic sweep: error cache, per-config timing, and a `K`-subset
   selection that exports a collect-ready config list.
-- [Art of PIV examples](art-of-piv.md) —
+- [ART of PIV examples](art-of-piv.md) —
   `examples/12_caching_art_of_piv.py` and
   `examples/13_caching_art_of_piv_mixed.py`. Same two-pass caching
   pattern, but the meta-estimator routes between several

@@ -1,4 +1,4 @@
-"""Tests for Art of PIV classification training mode."""
+"""Tests for ART of PIV classification training mode."""
 
 import jax
 import jax.numpy as jnp
@@ -36,7 +36,7 @@ class MockSubModel:
 
 
 class MockArtOfPIVForClassification(ArtOfPIVEstimator):
-    """Mock Art of PIV specifically for testing supervised_train_step."""
+    """Mock ART of PIV specifically for testing supervised_train_step."""
 
     def __init__(self, sub_models, training_mode="classification"):
         # Intentionally bypass ArtOfPIVEstimator.__init__ in this test double;

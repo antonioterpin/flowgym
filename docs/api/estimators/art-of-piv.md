@@ -1,4 +1,4 @@
-# 🎨 Art of PIV estimator
+# 🎨 ART of PIV estimator
 
 ```{include} ../../../src/flowgym/flow/art_of_piv/README.md
 :start-line: 2
@@ -7,10 +7,10 @@
 
 ## Minimal estimator config
 
-A complete Art of PIV configuration touches three YAML files: a model
+A complete ART of PIV configuration touches three YAML files: a model
 config, an *estimators list* (the pool of sub-estimators the router
 chooses between), and a dataset config with a `caching:` block. The
-fragments below show the Art of PIV-specific fields; for the dataset
+fragments below show the ART of PIV-specific fields; for the dataset
 side see
 [Configuration and data flow](../../user-guide/configuration-and-data.md)
 and [the caching examples](../../examples/caching.md).

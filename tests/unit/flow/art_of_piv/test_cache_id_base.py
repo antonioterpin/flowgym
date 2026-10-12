@@ -1,4 +1,4 @@
-"""Tests for the cache_id_base parameter in Art of PIV caching.
+"""Tests for the cache_id_base parameter in ART of PIV caching.
 
 Verifies that preload_caches and build_unified_index use a configurable
 base string instead of the sub-model class name when cache_id_base is set,

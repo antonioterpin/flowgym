@@ -1,4 +1,4 @@
-"""Run a two-pass Art of PIV caching demo with generated temporary data.
+"""Run a two-pass ART of PIV caching demo with generated temporary data.
 
 This example creates synthetic `.mat` flow samples and runs `src.main` twice:
 the first pass computes and stores estimator-wise EPEs, while the second pass
@@ -72,7 +72,7 @@ def setup_configs(temp_dir: str) -> tuple[Path, Path, Path]:
         dataset_config = yaml.safe_load(f)
 
     # 2. Override for example
-    dataset_config["batch_size"] = 3  # Smaller batch for Art of PIV
+    dataset_config["batch_size"] = 3  # Smaller batch for ART of PIV
     dataset_config["num_batches"] = 4
     dataset_config["loop"] = False
     dataset_config["randomize"] = False
@@ -87,7 +87,7 @@ def setup_configs(temp_dir: str) -> tuple[Path, Path, Path]:
     dataset_config["scheduler_class"] = ".mat"
 
     # Caching configuration
-    # For Art of PIV, the cache aggregates EPEs from all estimators.
+    # For ART of PIV, the cache aggregates EPEs from all estimators.
     dataset_config["caching"] = {
         "root_dir": str(temp_dir),
         "cache_id": "art_of_piv_example_cache",
@@ -103,7 +103,7 @@ def setup_configs(temp_dir: str) -> tuple[Path, Path, Path]:
         yaml.dump(dataset_config, f)
 
     # 2. Create estimator list
-    # Art of PIV requires a list of estimators to choose from.
+    # ART of PIV requires a list of estimators to choose from.
     estimators_list = {
         "estimators": [
             {
@@ -255,9 +255,9 @@ def run_main(dataset_path: Path, model_path: Path, description: str):
 
 
 def run_example():
-    print("=== Art of PIV Meta-Estimator Caching Example ===")
+    print("=== ART of PIV Meta-Estimator Caching Example ===")
     print(
-        "This example demonstrates caching for Art of PIV, which aggregates "
+        "This example demonstrates caching for ART of PIV, which aggregates "
         "EPEs from multiple estimators."
     )
 
@@ -266,7 +266,7 @@ def run_example():
         dataset_path, model_path, estimators_list_path = setup_configs(temp_dir)
 
         print(f"Estimators list created at: {estimators_list_path}")
-        print("Art of PIV will use 3 DIS estimators with different configs.")
+        print("ART of PIV will use 3 DIS estimators with different configs.")
 
         # Run 1: Cold Start
         # This run will:
@@ -299,7 +299,7 @@ def run_example():
             speedup = duration_1 / duration_2
             print(f"SUCCESS: Run 2 was {speedup:.2f}x faster!")
             print(
-                "Caching effectiveness for Art of PIV meta-estimator:\n"
+                "Caching effectiveness for ART of PIV meta-estimator:\n"
                 f"  - Cold start: {duration_1:.2f}s "
                 f"(computed EPEs for 3 sub-models)\n"
                 f"  - Warm start: {duration_2:.2f}s (loaded from cache)\n"

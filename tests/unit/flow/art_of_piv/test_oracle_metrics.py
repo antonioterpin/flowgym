@@ -1,4 +1,4 @@
-"""Tests for oracle EPE metrics in Art of PIV.
+"""Tests for oracle EPE metrics in ART of PIV.
 
 This test verifies that oracle EPE (best possible EPE if router was perfect)
 is correctly computed and included in validation metrics using actual batches.

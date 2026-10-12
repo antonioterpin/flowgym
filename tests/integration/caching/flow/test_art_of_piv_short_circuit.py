@@ -1,7 +1,7 @@
-"""Test for Art of PIV cache short-circuit.
+"""Test for ART of PIV cache short-circuit.
 
 This test ensures that when cached EPEs are available via CachePayload,
-the Art of PIV estimator skips expensive sub-estimator computation during
+the ART of PIV estimator skips expensive sub-estimator computation during
 both training and evaluation.
 """
 
@@ -12,7 +12,7 @@ from flowgym.types import CachePayload
 
 
 def test_art_of_piv_short_circuits_with_cached_epe():
-    """Test that Art of PIV uses cached EPEs and skips sub-estimator inference.
+    """Test that ART of PIV uses cached EPEs and skips sub-estimator inference.
 
     This is a regression test for the bug where evaluation time didn't improve
     on the second run despite having cached EPEs available.
@@ -164,7 +164,7 @@ def test_art_of_piv_short_circuits_with_cached_epe():
 
 
 def test_art_of_piv_short_circuits_during_evaluation():
-    """Test that Art of PIV uses cached EPEs during evaluation (train=False).
+    """Test that ART of PIV uses cached EPEs during evaluation (train=False).
 
     This test verifies that the cache optimization works during evaluation,
     not just training, which provides significant speedup benefits.

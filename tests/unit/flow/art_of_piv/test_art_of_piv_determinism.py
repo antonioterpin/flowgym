@@ -1,4 +1,4 @@
-"""Tests for Art of PIV validation determinism (zero exploration)."""
+"""Tests for ART of PIV validation determinism (zero exploration)."""
 
 import os
 

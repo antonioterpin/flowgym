@@ -1,6 +1,6 @@
-"""Example of Art of PIV caching with mixed RAFT and DIS sub-estimators.
+"""Example of ART of PIV caching with mixed RAFT and DIS sub-estimators.
 
-This example demonstrates Art of PIV's ability to learn which estimator
+This example demonstrates ART of PIV's ability to learn which estimator
 (RAFT or DIS) works best for different flow scenarios, while using
 caching to avoid redundant computation across sub-models.
 """
@@ -286,9 +286,9 @@ def run_main(dataset_path: Path, model_path: Path, description: str):
 
 
 def run_example():
-    print("=== Art of PIV Mixed RAFT+DIS Caching Example ===")
+    print("=== ART of PIV Mixed RAFT+DIS Caching Example ===")
     print(
-        "\nThis example demonstrates Art of PIV with heterogeneous "
+        "\nThis example demonstrates ART of PIV with heterogeneous "
         "sub-estimators:\n"
         "  - 2 DIS variants (fast, lightweight dense inverse "
         "search)\n"

@@ -1,4 +1,4 @@
-"""Art of PIV Estimator class."""
+"""ART of PIV Estimator class."""
 
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ logger = gg.get_logger(__name__)
 
 
 class ArtOfPIVEstimator(FlowFieldEstimator):
-    """Art of PIV flow field estimator.
+    """ART of PIV flow field estimator.
 
     Attributes:
         train_type: Training paradigm ("supervised" or "rl").
@@ -102,7 +102,7 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
         # Base class arguments
         **kwargs: Any,
     ) -> None:
-        """Initialize the Art of PIV estimator.
+        """Initialize the ART of PIV estimator.
 
         Args:
             router_config: Router architecture configuration dict. Two
@@ -440,7 +440,7 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
 
         Uses the unified index for O(1) lookups. If called through
         `enrich_batch(...)`, cache context is provided to bootstrap
-        Art of PIV on cold-start automatically.
+        ART of PIV on cold-start automatically.
 
         Args:
             batch: The batch of data from the sampler.
@@ -547,7 +547,7 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
         """Enrich experience with computed estimates before storing in
         replay buffer.
 
-        For Art of PIV, the initial state in the experience usually contains
+        For ART of PIV, the initial state in the experience usually contains
         zeros as estimates. By running the inference here (on the training
         device), we can store much better states in the replay buffer.
 

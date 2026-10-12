@@ -1,4 +1,4 @@
-"""Tests for Art of PIV caching module.
+"""Tests for ART of PIV caching module.
 
 Unit tests for cache management, aggregation, and unified index building.
 """

@@ -1,4 +1,4 @@
-"""Tests for Art of PIV inference sub-estimator state routing."""
+"""Tests for ART of PIV inference sub-estimator state routing."""
 
 from types import SimpleNamespace
 

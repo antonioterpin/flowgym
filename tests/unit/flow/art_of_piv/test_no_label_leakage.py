@@ -1,4 +1,4 @@
-"""Tests to verify there is no label leakage in Art of PIV classification mode.
+"""Tests to verify there is no label leakage in ART of PIV classification mode.
 
 This test suite verifies that the router network only receives images as input
 and does not have access to the labels (epe_all) during the forward pass.
@@ -23,7 +23,7 @@ def create_dummy_estimator(
     image_shape: tuple[int, int] = (64, 64),
     seed: int = 42,
 ) -> tuple[ArtOfPIVEstimator, NNEstimatorTrainableState]:
-    """Create a minimal Art of PIV estimator for testing.
+    """Create a minimal ART of PIV estimator for testing.
 
     Args:
         num_estimators: Number of sub-estimators (output classes).

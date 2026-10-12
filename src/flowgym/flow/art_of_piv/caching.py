@@ -1,4 +1,4 @@
-"""Caching utilities for Art of PIV meta-estimator.
+"""Caching utilities for ART of PIV meta-estimator.
 
 Handles aggregation of EPEs from multiple sub-model caches using
 unified indexing for O(1) lookups.
@@ -25,7 +25,7 @@ logger = gg.get_logger(__name__)
 
 
 class SubCacheManager(Protocol):
-    """Minimal cache-manager contract used by Art of PIV caching helpers.
+    """Minimal cache-manager contract used by ART of PIV caching helpers.
 
     Attributes:
         all_data: In-memory cache table keyed by payload field names.
@@ -117,7 +117,7 @@ def _get_or_create_sub_cache_manager(
     if root_dir is None:
         return None
 
-    # Keep this local import so importing Art of PIV does not eagerly import
+    # Keep this local import so importing ART of PIV does not eagerly import
     # training.caching (which imports pyarrow at module import time).
     # pyarrow is a caching/runtime-extra dependency, not required for base use.
     from flowgym.training.caching import CacheManager  # noqa: PLC0415
@@ -203,7 +203,7 @@ def preload_caches(
                 for k, v in meta["spec"].items()
             }
 
-            # Keep this local import so Art of PIV modules stay importable
+            # Keep this local import so ART of PIV modules stay importable
             # without eagerly importing training.caching/pyarrow.
             from flowgym.training.caching import CacheManager  # noqa: PLC0415
 

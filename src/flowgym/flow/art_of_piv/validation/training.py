@@ -1,4 +1,4 @@
-"""Training-related validation helpers for Art of PIV."""
+"""Training-related validation helpers for ART of PIV."""
 
 import goggles as gg
 

@@ -1,4 +1,4 @@
-"""Tests for configuration-loading Art of PIV validation helpers."""
+"""Tests for configuration-loading ART of PIV validation helpers."""
 
 import pytest
 

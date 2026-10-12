@@ -1,4 +1,4 @@
-"""Shared validation types and constants for Art of PIV."""
+"""Shared validation types and constants for ART of PIV."""
 
 from typing import Literal, TypeAlias
 

@@ -1,4 +1,4 @@
-"""Training step factories for Art of PIV."""
+"""Training step factories for ART of PIV."""
 
 from __future__ import annotations
 

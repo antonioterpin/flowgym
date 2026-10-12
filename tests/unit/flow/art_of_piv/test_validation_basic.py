@@ -1,4 +1,4 @@
-"""Tests for basic Art of PIV validation helpers."""
+"""Tests for basic ART of PIV validation helpers."""
 
 import jax
 import jax.numpy as jnp

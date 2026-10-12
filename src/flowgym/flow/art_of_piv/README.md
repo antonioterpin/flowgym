@@ -1,4 +1,4 @@
-# 🎨 Art of PIV
+# 🎨 ART of PIV
 
 ## Goal
 
@@ -9,7 +9,7 @@ inputs. Picking a single estimator up front and applying it
 everywhere leaves accuracy on the table whenever the data drifts
 outside that estimator's comfort zone.
 
-**Art of PIV learns how to dynamically select the best estimator for
+**ART of PIV learns how to dynamically select the best estimator for
 the current image pair.** Given a pool of sub-estimators (any
 combination of correlation, optical-flow, and neural methods) and an
 image pair, a small *router* network predicts which sub-estimator is
@@ -23,7 +23,7 @@ The router is intentionally cheap: it operates on the raw image pair
 and emits a Q-value per estimator. The expensive part — running a
 flow estimator — happens only for the selected one(s).
 
-![Schematic overview of Art of PIV: image pair feeds the router, which selects one sub-estimator from the configured pool.](art_of_piv_graphics.png)
+![Schematic overview of ART of PIV: image pair feeds the router, which selects one sub-estimator from the configured pool.](art_of_piv_graphics.png)
 
 ## How it works
 

@@ -1,4 +1,4 @@
-"""Tests for router-oriented Art of PIV validation helpers."""
+"""Tests for router-oriented ART of PIV validation helpers."""
 
 import pytest
 

@@ -1,4 +1,4 @@
-"""Router and postprocess validation helpers for Art of PIV."""
+"""Router and postprocess validation helpers for ART of PIV."""
 
 from collections.abc import Sequence
 from typing import cast

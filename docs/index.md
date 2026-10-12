@@ -28,7 +28,7 @@ understand the estimator interface, or navigate the repository.
 
 ## Featured methods
 
-- [**Art of PIV**](api/estimators/art-of-piv.md) — a meta-estimator
+- [**ART of PIV**](api/estimators/art-of-piv.md) — a meta-estimator
   that learns to dynamically pick the best flow estimator for each
   image pair from a configurable pool. Conceptual overview, module
   layout, training-objective math, and runnable

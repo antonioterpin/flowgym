@@ -1,4 +1,4 @@
-"""Typed callable protocols used across Art of PIV internals."""
+"""Typed callable protocols used across ART of PIV internals."""
 
 from typing import Any, NamedTuple, Protocol
 
@@ -12,7 +12,7 @@ from flowgym.types import CachePayload, History
 
 
 class RouterOutputs(NamedTuple):
-    """Structured outputs returned by Art of PIV router execution.
+    """Structured outputs returned by ART of PIV router execution.
 
     Attributes:
         actions: Selected estimator indices for each batch element, shape (B,).
@@ -53,7 +53,7 @@ class QEstimateFn(Protocol):
 
 
 class EstimateFn(Protocol):
-    """Estimate flow and extras from images/state for Art of PIV internals."""
+    """Estimate flow and extras from images/state for ART of PIV internals."""
 
     def __call__(
         self,
@@ -129,9 +129,9 @@ class RunRouterFn(Protocol):
 
 
 class RunSubEstimatorsFn(Protocol):
-    """Protocol for sub-estimator dispatch in Art of PIV inference.
+    """Protocol for sub-estimator dispatch in ART of PIV inference.
 
-    Note: trainable_state is the main Art of PIV model's state
+    Note: trainable_state is the main ART of PIV model's state
     (NNEstimatorTrainableState), while sub-estimator states
     are passed separately and can be EstimatorTrainableState.
     """
@@ -150,7 +150,7 @@ class RunSubEstimatorsFn(Protocol):
 
         Args:
             state: Estimator history/state for the batch.
-            trainable_state: Main Art of PIV trainable state.
+            trainable_state: Main ART of PIV trainable state.
             curr: Current frame batch, shape ``(B, H, W)``.
             choices: Selected estimator indices, shape ``(B,)``.
             extras: Mutable extras dictionary propagated through inference.

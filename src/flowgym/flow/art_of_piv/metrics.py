@@ -1,4 +1,4 @@
-"""Metrics processing for the Art of PIV estimator.
+"""Metrics processing for the ART of PIV estimator.
 
 Handles conversion of raw JAX metric dictionaries produced during inference
 and training into the formatted ``Metrics`` objects consumed by the logging
@@ -203,7 +203,7 @@ def process_art_of_piv_metrics(
     metrics: dict,
     choice_tracker: ChoiceTracker,
 ) -> Metrics:
-    """Process raw Art of PIV metrics into formatted ``Metrics`` for logging.
+    """Process raw ART of PIV metrics into formatted ``Metrics`` for logging.
 
     This is a stateless transformation except for the *choice_tracker* which
     accumulates running and windowed selection rates.

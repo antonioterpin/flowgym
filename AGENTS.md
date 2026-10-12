@@ -27,6 +27,8 @@ full version lives at `docs/contribute/contributing.md`.
   told otherwise.
 - Allowed uppercase variable names for tensor dimensions: `H`, `W`,
   `B`, `N`, `T`.
+- In prose, write the method as "ART of PIV" (Agentic Real-Time PIV);
+  code identifiers stay `ArtOfPIV*` / `art_of_piv`.
 
 ## Agent-only operating notes
 

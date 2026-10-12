@@ -1,4 +1,4 @@
-"""Router: Q-value estimation and action selection for Art of PIV."""
+"""Router: Q-value estimation and action selection for ART of PIV."""
 
 from collections.abc import Callable
 from typing import Any

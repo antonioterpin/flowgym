@@ -1,4 +1,4 @@
-"""Art of PIV oracle selector estimator."""
+"""ART of PIV oracle selector estimator."""
 
 from collections.abc import Callable
 
@@ -22,7 +22,7 @@ NORM_KINDS: tuple[str, ...] = ("batch", "group", "instance", "none")
 
 
 class ArtOfPIVOracleEstimator(FlowFieldEstimator):
-    """Oracle-selector estimator for the Art of PIV estimator set."""
+    """Oracle-selector estimator for the ART of PIV estimator set."""
 
     def __init__(
         self,
@@ -63,7 +63,7 @@ class ArtOfPIVOracleEstimator(FlowFieldEstimator):
             use_last_estimate=use_last_estimate,
         )
 
-        # Load and validate constructor inputs via shared Art of PIV validators.
+        # Load and validate constructor inputs via shared ART of PIV validators.
         estimators_list_config = (
             art_of_piv_validation.validate_and_load_estimators_config(
                 estimators_list_path

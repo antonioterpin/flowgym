@@ -1,4 +1,4 @@
-"""Integration tests for Art of PIV target transformations."""
+"""Integration tests for ART of PIV target transformations."""
 
 from unittest.mock import MagicMock
 

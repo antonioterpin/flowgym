@@ -1,4 +1,4 @@
-"""Basic scalar and flag validation helpers for Art of PIV."""
+"""Basic scalar and flag validation helpers for ART of PIV."""
 
 from typing import cast
 

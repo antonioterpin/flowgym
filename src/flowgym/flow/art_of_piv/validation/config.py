@@ -1,4 +1,4 @@
-"""Configuration loading helpers for Art of PIV validation."""
+"""Configuration loading helpers for ART of PIV validation."""
 
 from typing import Any
 

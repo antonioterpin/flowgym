@@ -1,4 +1,4 @@
-"""Shared test doubles for Art of PIV caching tests."""
+"""Shared test doubles for ART of PIV caching tests."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Tests for training-related Art of PIV validation helpers."""
+"""Tests for training-related ART of PIV validation helpers."""
 
 import pytest
 

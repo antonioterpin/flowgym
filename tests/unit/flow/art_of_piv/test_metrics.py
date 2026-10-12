@@ -1,4 +1,4 @@
-"""Tests for the Art of PIV metrics processing module."""
+"""Tests for the ART of PIV metrics processing module."""
 
 import jax.numpy as jnp
 import numpy as np

@@ -1,4 +1,4 @@
-"""Inference logic: estimation and sub-estimator dispatch for Art of PIV."""
+"""Inference logic: estimation and sub-estimator dispatch for ART of PIV."""
 
 from logging import getLogger
 from typing import Any
