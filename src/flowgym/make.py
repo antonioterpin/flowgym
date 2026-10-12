@@ -23,7 +23,6 @@ from goggles import get_logger
 from goggles.history.types import History
 
 # Models
-from flowgym._synthpix_compat import install_restore_state_shim
 from flowgym.checkpoint_source import resolve_checkpoint_source
 from flowgym.common.base import Estimator
 from flowgym.common.base.trainable_state import (
@@ -40,11 +39,6 @@ from flowgym.types import (
 from flowgym.utils import DEBUG, MissingDependency
 
 logger = get_logger(__name__)
-
-# Patch synthpix's restore_state once at import time: it substitutes a
-# NaN-shape ShapeDtypeStruct placeholder that orbax 0.11+ chokes on.
-# See ``flowgym._synthpix_compat`` for the full rationale.
-install_restore_state_shim()
 
 
 def make_manager(ckpt_dir: Path, keep: int = 3) -> ocp.CheckpointManager:

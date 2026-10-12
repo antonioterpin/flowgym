@@ -74,6 +74,11 @@ dev-cuda12 = [
     {include-group = "synthpix-cuda12"},
 ]
 
+[tool.uv.sources]
+# Track synthpix dev for antonioterpin/synthpix#270 (sampler restore on
+# orbax >= 0.11.33) until it is released; see issue #21. uv.lock pins the commit.
+synthpix = { git = "https://github.com/antonioterpin/synthpix", branch = "dev" }
+
 # Optional dependencies
 [project.optional-dependencies]
 docs = [
