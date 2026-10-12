@@ -87,7 +87,8 @@ class CacheManager:
         """Initialize the cache manager.
 
         Args:
-            root_dir: The root directory for all caches.
+            root_dir: The root directory for all caches, or an
+                ``hf://`` dataset URI.
             cache_id: Unique identifier for this cache.
             spec: Specification of the data to be cached.
             warm_start: How to warm start the cache.
@@ -99,6 +100,10 @@ class CacheManager:
                 meta cache whose results already live in the sub-caches), so
                 lookups still drive computation but nothing is flushed to disk.
         """
+        if root_dir.startswith("hf://"):
+            from synthpix.data_sources import hf_resolver  # noqa: PLC0415
+
+            root_dir = str(hf_resolver.resolve_to_directory(root_dir))
         self.root_dir = Path(root_dir)
         self.cache_id = cache_id
 
