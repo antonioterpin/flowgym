@@ -445,9 +445,6 @@ class RaftJaxEstimator(FlowFieldEstimator):
         prev = state["images"][:, -1, ...]
         curr = image
 
-        # Create the 2d window
-        window_spline_2d = window_2d(self.patch_size, power=2)
-
         # Stack the images along the last dimension
         images = jnp.stack([prev, curr], axis=-1)  # (B, H, W, 2)
 
@@ -521,6 +518,16 @@ class RaftJaxEstimator(FlowFieldEstimator):
             -1, self.patch_size, self.patch_size, 2
         )
         flows_patches = flows_patches[:total_patches]
+
+        # A single patch needs no blending: the window would cancel out, and
+        # its float16 corner weights underflow to 0 for 256 px patches
+        # (0/0 = NaN). Tiling larger images with 256 px patches still hits
+        # this; the window stays float16 so RAFT32 caches stay identical.
+        if (H, W) == (self.patch_size, self.patch_size):
+            return flows_patches.reshape(B, H, W, 2), {}, {}
+
+        # Create the 2d window
+        window_spline_2d = window_2d(self.patch_size, power=2)
 
         # Reshape back to (B, Ny, Nx, patch_size, patch_size, 2)
         flows_patches = flows_patches.reshape(
