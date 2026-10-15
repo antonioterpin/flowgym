@@ -97,6 +97,36 @@ def _log(x: jax.Array, eps: float = 1e-8) -> jax.Array:
     return jnp.log(jnp.maximum(x, 0.0) + eps)
 
 
+def _per_frame_mean(x: jax.Array, eps: float = 1e-8) -> jax.Array:
+    """Normalize each frame's estimator-error vector by its own mean.
+
+    For a regression target of shape ``(batch, num_estimators)``, divides each
+    row by its per-frame mean error, putting every frame on a comparable
+    scale so the regression loss weights frames equally regardless of flow
+    difficulty. The per-frame argmin is unchanged, so the selection target is
+    preserved; only the training signal's dynamic range is normalized. Errors
+    are clamped to be non-negative, so in a pipeline it goes before ``log``.
+
+    Args:
+        x: Input array; the last axis indexes estimators.
+        eps: Small constant guarding against a zero per-frame mean.
+
+    Returns:
+        ``max(x, 0)`` divided by its mean over the last axis.
+
+    Raises:
+        ValueError: If ``x`` has no estimator axis, as the bandit's
+            selected-error targets of shape ``(batch,)``.
+    """
+    if x.ndim < 2:
+        raise ValueError(
+            "per_frame_mean needs every estimator's error, shape (batch, "
+            f"num_estimators); got shape {x.shape}"
+        )
+    x = jnp.maximum(x, 0.0)
+    return x / (jnp.mean(x, axis=-1, keepdims=True) + eps)
+
+
 TransformFn = Callable[..., jax.Array]
 
 TRANSFORM_REGISTRY: dict[str, TransformFn] = {
@@ -106,6 +136,7 @@ TRANSFORM_REGISTRY: dict[str, TransformFn] = {
     "clip": _clip,
     "scale": _scale,
     "log": _log,
+    "per_frame_mean": _per_frame_mean,
 }
 
 
