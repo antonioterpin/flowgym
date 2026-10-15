@@ -13,6 +13,7 @@ estimator under the same latency budget.
 | `openpiv_1khz_large` | `openpivOneKHzLarge` | same, standard router | 0.1956 (0.2544) |
 | `openpiv_4khz` | `openpivFourKHz` | 10 OpenPIV configs | 0.1975 (0.2544) |
 | `openpiv_4khz_large` | `openpivFourKHzLarge` | same, standard router | 0.1956 (0.2544) |
+| `raft32` | `raftThirtyTwo` | 6 per-class RAFT32 specialists | 0.0096 (0.0120) |
 
 ## Layout
 

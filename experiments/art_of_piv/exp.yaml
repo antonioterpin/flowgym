@@ -13,6 +13,8 @@ models:
   - models/router_openpiv_4khz.yaml
   - models/router_openpiv_4khz_large.yaml
   - models/openpiv/ws16_ss16_np3_circ_para_s2n.yaml
+  - models/router_raft32.yaml
+  - models/raft32/pretrained.yaml
 seeds: [0, 1, 2]
 metrics: [mean_epe, median_epe, p95_epe, p99_epe]
 entrypoint: src/main.py
