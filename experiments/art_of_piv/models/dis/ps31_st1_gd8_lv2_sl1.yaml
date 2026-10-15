@@ -1,0 +1,3 @@
+# Skips the finest pyramid level (start_level 1).
+extends: experiments/art_of_piv/models/dis/base.yaml
+config: {patch_size: 31, patch_stride: 1, grad_desc_iters: 8, levels: 2, start_level: 1}

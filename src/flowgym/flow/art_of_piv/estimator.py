@@ -169,10 +169,6 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
 
         # VALIDATION PHASE
 
-        router_config = art_of_piv_validation.normalize_router_config(
-            router_config
-        )
-
         # Validate boolean control flags
         (
             self.output_full_res,
@@ -202,6 +198,74 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
         )
         self.image_shape = image_shape
 
+        # Initialize estimator and caching containers.
+        self.num_estimators = len(self.estimator_configs)
+        self._sub_cache_managers = {}
+        self._unified_epe_index = {}
+        self._cache_bootstrapped = False
+        self._cache_root_dir: str | None = None
+        self._allow_create_missing_sub_caches = False
+
+        self._init_router(
+            router_config,
+            training_mode=training_mode,
+            loss_config=loss_config,
+            gamma=gamma,
+            target_transform_config=target_transform_config,
+            exploration_config=exploration_config,
+            postprocess=postprocess,
+        )
+
+        if initialize_estimators:
+            # Eagerly initialize sub-estimators for clearer object contracts.
+            (
+                self.estimator_fns,
+                self.sub_models,
+                self.sub_model_states,
+            ) = self._create_estimators(
+                self.estimator_configs,
+                image_shape=self.image_shape,
+                rng=self._rng,
+            )
+        else:
+            self.estimator_fns = ()
+            self.sub_models = ()
+            self.sub_model_states = ()
+
+        # Call parent constructor
+        super().__init__(**kwargs)
+
+        self._choice_tracker = ChoiceTracker(
+            num_estimators=self.num_estimators,
+            window_size=getattr(self, "choices_window_size", 100),
+        )
+
+    def _init_router(
+        self,
+        router_config: dict,
+        *,
+        training_mode: Literal["bandits", "regression", "classification"],
+        loss_config: dict,
+        gamma: float,
+        target_transform_config: dict | None,
+        exploration_config: dict | None,
+        postprocess: PostProcess | Sequence[str],
+    ) -> None:
+        """Validate and build the router network, its loss and exploration.
+
+        Args:
+            router_config: Router architecture configuration.
+            training_mode: Supervised training mode.
+            loss_config: Loss configuration.
+            gamma: Discount factor.
+            target_transform_config: Target transform configuration.
+            exploration_config: Exploration strategy configuration.
+            postprocess: Postprocessing applied to the router output.
+        """
+        router_config = art_of_piv_validation.normalize_router_config(
+            router_config
+        )
+
         # Validate training mode and loss compatibility
         self.training_mode = (
             art_of_piv_validation.validate_training_mode_and_loss(
@@ -229,16 +293,6 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
         # Validate gamma
         self.gamma = art_of_piv_validation.validate_gamma(gamma)
 
-        # INITIALIZATION PHASE
-
-        # Initialize estimator and caching containers.
-        self.num_estimators = len(self.estimator_configs)
-        self._sub_cache_managers = {}
-        self._unified_epe_index = {}
-        self._cache_bootstrapped = False
-        self._cache_root_dir: str | None = None
-        self._allow_create_missing_sub_caches = False
-
         # Build exploration and schedule
         self.explore = build_exploration_from_config(exploration_config)
         self.schedule = build_schedule_from_config(
@@ -259,30 +313,6 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
         self.target_transform_config = target_transform_config
         self.target_transform = build_target_transform_from_config(
             target_transform_config
-        )
-
-        if initialize_estimators:
-            # Eagerly initialize sub-estimators for clearer object contracts.
-            (
-                self.estimator_fns,
-                self.sub_models,
-                self.sub_model_states,
-            ) = self._create_estimators(
-                self.estimator_configs,
-                image_shape=self.image_shape,
-                rng=self._rng,
-            )
-        else:
-            self.estimator_fns = ()
-            self.sub_models = ()
-            self.sub_model_states = ()
-
-        # Call parent constructor
-        super().__init__(**kwargs)
-
-        self._choice_tracker = ChoiceTracker(
-            num_estimators=self.num_estimators,
-            window_size=getattr(self, "choices_window_size", 100),
         )
 
     def _create_estimators(

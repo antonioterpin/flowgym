@@ -1,0 +1,12 @@
+# Bandit router (DQN, discount 0): learns only the error of the member it ran.
+# Files models/n<K>/bandit.yaml extend this one and set the library.
+extends: experiments/art_of_piv/models/router/bandit.yaml
+study:
+  name: art_of_piv/appendix/A.1_learning_signal
+  tags:
+    signal: bandit
+# Score the best checkpoint on the val split instead of test.
+dataset_overrides:
+  test:
+    num_batches: 66
+    dataset: experiments/art_of_piv/datasets/val_bs20.yaml

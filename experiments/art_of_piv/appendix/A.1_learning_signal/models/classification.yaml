@@ -1,0 +1,13 @@
+# Classification router: the label is the library member with the lowest
+# cached EPE on the frame.
+# Files models/n<K>/classification.yaml extend this one and set the library.
+extends: experiments/art_of_piv/models/router/standard.yaml
+study:
+  name: art_of_piv/appendix/A.1_learning_signal
+  tags:
+    signal: classification
+# Score the best checkpoint on the val split instead of test.
+dataset_overrides:
+  test:
+    num_batches: 66
+    dataset: experiments/art_of_piv/datasets/val_bs20.yaml

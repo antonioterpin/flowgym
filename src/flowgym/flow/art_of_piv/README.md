@@ -127,8 +127,9 @@ size, so each module owns one concern.
 - `metrics.py` — inference and training metrics (Q-value summaries,
   per-estimator selection counts, etc.).
 - `oracle_selector.py` — `ArtOfPIVOracleEstimator`: a non-learned
-  reference that picks the lowest-EPE sub-estimator using ground
-  truth. Useful as an upper bound on what a perfect router could
+  `ArtOfPIVEstimator` that picks the lowest-EPE sub-estimator, from the
+  cached errors when the batch has them and from the ground truth
+  otherwise. Useful as an upper bound on what a perfect router could
   achieve.
 - `types.py` — protocol types (`RouterQEstimateFn`,
   `RouterOutputs`, `EstimateFn`, …) that keep module boundaries

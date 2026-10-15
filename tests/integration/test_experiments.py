@@ -723,9 +723,22 @@ def test_experiment_launcher_applies_dataset_overrides(
     assert "dataset_overrides" not in model
 
 
+# Greedy DIS libraries of appendix A.1; abl_n<K> is the first K of these.
+ABL_HASHES = (
+    "fe074ef0 e48f5064 ab441c2c 259d75c5 830a7b7d "
+    "322009ba f6cef0e8 551175b8 60471ef2 c036e3c6 "
+    "8b9c3640 b68adbad 919d720b b67b6d2a 99cf63bf "
+    "7ae7658d cb42e3a5 ded331fe 1f2e4378 845842bb"
+).split()
+
+
 @pytest.mark.parametrize(
     ("row", "hashes"),
     [
+        *(
+            (f"abl_n{k}", " ".join(ABL_HASHES[:k]))
+            for k in (1, 2, 3, 4, 5, 10, 15, 20)
+        ),
         (
             "dis_20hz",
             "007d9a94 86725532 9f485cd6 ad340132 b68adbad "
