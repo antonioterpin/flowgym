@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import statistics
 import subprocess
 import sys
@@ -61,6 +62,11 @@ def main() -> None:
     if not entry_path.exists():
         raise FileNotFoundError(f"Entrypoint not found at {entry_path}")
     generated_dir = exp_dir / "_generated"
+    # Runs are separate processes: let them reuse compiled XLA programs
+    os.environ.setdefault(
+        "JAX_COMPILATION_CACHE_DIR", str(Path.home() / ".cache/flowgym/jax")
+    )
+    os.environ.setdefault("JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS", "0")
 
     # Per model: its mode, and its dataset with any overrides applied
     models: list[tuple[str, str, Path, dict[str, Any]]] = []
