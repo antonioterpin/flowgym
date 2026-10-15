@@ -1,0 +1,39 @@
+# ART of PIV router for the dis_20hz row: per frame, pick one of the 10 DIS
+# configs in the library.
+estimator: art_of_piv
+estimate_type: flow
+study:
+  name: art_of_piv
+  tags:
+    row: dis_20hz
+config:
+  jit: true
+  estimators_list_path: experiments/art_of_piv/libraries/dis_20hz.yaml
+  # Supervised classification: the label is the library member with the
+  # lowest cached EPE on the frame.
+  train_type: supervised
+  training_mode: classification
+  loss_config:
+    name: softmax_cross_entropy_with_integer_labels
+    reduction: mean
+  # Router network: a small CNN encoder and an MLP head over the library.
+  router_config:
+    encoder:
+      features_list: [32, 64, 64]
+      output_dim: 64
+      use_residual: false
+      norm_fn: none
+    head:
+      hidden_dims: [512]
+      activation: relu
+  # Adam, learning rate decaying from 1e-3 to 1e-4 over 4000 steps.
+  optimizer_config:
+    name: adam
+    hyperparams:
+      learning_rate:
+        schedule:
+          name: exponential_decay
+          init_value: 0.001
+          decay_rate: 0.1
+          end_value: 0.0001
+          transition_steps: 4000

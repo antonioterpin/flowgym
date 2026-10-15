@@ -1,0 +1,10 @@
+# In the dis_20hz library, and run on its own as that row's best single
+# estimator (on the test split).
+extends: base.yaml
+mode: eval
+dataset: datasets/test.yaml
+study:
+  name: art_of_piv
+  tags:
+    model: dis_ps9_st2_gd4_lv3
+config: {patch_size: 9, patch_stride: 2, grad_desc_iters: 4, levels: 3}

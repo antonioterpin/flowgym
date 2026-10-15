@@ -350,6 +350,17 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
             states.append(trainable_state)
         return tuple(estimators), tuple(models), tuple(states)
 
+    def cache_spec(self) -> dict[str, tuple[str, tuple[int, ...]]]:
+        """One cached EPE (and its validity mask) per library member.
+
+        Returns:
+            ``epe_all`` and ``epe_mask``, each of shape ``(num_estimators,)``.
+        """
+        return {
+            "epe_all": ("float32", (self.num_estimators,)),
+            "epe_mask": ("bool", (self.num_estimators,)),
+        }
+
     def get_cache_id_suffix(
         self,
         trainable_state: NNEstimatorTrainableState,

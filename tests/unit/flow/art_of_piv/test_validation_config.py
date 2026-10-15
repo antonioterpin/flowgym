@@ -40,3 +40,18 @@ class TestEstimatorsConfigValidation:
             art_of_piv_validation.validate_and_load_estimators_config(
                 "config.yml"
             )
+
+
+def test_library_entries_can_be_model_file_paths(tmp_path):
+    """A path entry is loaded from its file and named after it."""
+    model = tmp_path / "dis_a.yaml"
+    model.write_text("estimator: dis_jax\nconfig: {patch_size: 9}\n")
+    library = tmp_path / "library.yaml"
+    library.write_text(f"estimators:\n  - {model}\n")
+
+    config = art_of_piv_validation.validate_and_load_estimators_config(
+        str(library)
+    )
+    assert config["estimators"] == [
+        {"name": "dis_a", "estimator": "dis_jax", "config": {"patch_size": 9}}
+    ]

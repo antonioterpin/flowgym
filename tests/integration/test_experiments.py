@@ -15,13 +15,14 @@ import pytest
 import yaml
 
 import experiments.run as run_script
-from flowgym import run_setup
+from flowgym import ALL_ESTIMATORS, run_setup
 from flowgym.experiments import (
     build_study_run_name,
     validate_model_study,
     wandb_git_diff_capture,
     wandb_run_tags,
 )
+from flowgym.utils import load_configuration
 
 
 def _git(cwd: Path, *args: str) -> None:
@@ -644,3 +645,24 @@ def test_experiment_launcher_applies_dataset_overrides(
     }
     model = yaml.safe_load(Path(cmd[cmd.index("--estimator") + 1]).read_text())
     assert "dataset_overrides" not in model
+
+
+def test_art_of_piv_dis_20hz_library_hits_the_paper_caches():
+    """The merged library configs hash to the cache ids the paper used."""
+    library = load_configuration(
+        "experiments/art_of_piv/libraries/dis_20hz.yaml"
+    )
+    cache_ids = []
+    for path in library["estimators"]:
+        cfg = load_configuration(path)
+        estimator = ALL_ESTIMATORS[cfg["estimator"]].from_config(cfg["config"])
+        cache_ids.append(
+            library["cache_id_base"] + estimator.get_cache_id_suffix(None)
+        )
+    assert cache_ids == [
+        f"piv-class1-dis_c{h}"
+        for h in (
+            "007d9a94 86725532 9f485cd6 ad340132 b68adbad "
+            "c072b2f2 c83b3862 cc366684 f37adac3 f581f19f"
+        ).split()
+    ]

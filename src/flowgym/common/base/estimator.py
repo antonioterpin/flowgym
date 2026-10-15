@@ -648,6 +648,15 @@ class Estimator(abc.ABC):
             )
         return self._config
 
+    def cache_spec(self) -> dict[str, tuple[str, tuple[int, ...]]] | None:
+        """Cache spec for a dataset ``caching:`` block that sets none.
+
+        Returns:
+            Field name to ``(dtype, shape)``, or None when the dataset config
+            must give the spec.
+        """
+        return None
+
     def get_cache_id_suffix(
         self,
         trainable_state: EstimatorTrainableState | None,

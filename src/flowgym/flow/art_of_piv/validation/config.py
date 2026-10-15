@@ -1,5 +1,6 @@
 """Configuration loading helpers for ART of PIV validation."""
 
+from pathlib import Path
 from typing import Any
 
 from flowgym.utils import load_configuration
@@ -32,4 +33,12 @@ def validate_and_load_estimators_config(
             f"got {estimators_list_path}."
         )
 
-    return load_configuration(estimators_list_path)
+    config = load_configuration(estimators_list_path)
+    # An entry may be the path of a model config, named after its file
+    config["estimators"] = [
+        {"name": Path(entry).stem, **load_configuration(entry)}
+        if isinstance(entry, str)
+        else entry
+        for entry in config["estimators"]
+    ]
+    return config

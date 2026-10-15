@@ -248,6 +248,8 @@ if __name__ == "__main__":
                 "Initializing CacheManager from dataset config: "
                 f"{caching_config}"
             )
+            if "spec" not in caching_config:
+                caching_config["spec"] = estimator.cache_spec()
             # Append estimator-specific suffix to cache_id (e.g. weight hash)
             if "cache_id" in caching_config:
                 suffix = estimator.get_cache_id_suffix(trainable_state)
@@ -369,6 +371,8 @@ if __name__ == "__main__":
                 "Initializing CacheManager from dataset config: "
                 f"{caching_config}"
             )
+            if "spec" not in caching_config:
+                caching_config["spec"] = estimator.cache_spec()
             # Append estimator-specific suffix to cache_id (e.g. weight hash)
             if "cache_id" in caching_config:
                 suffix = estimator.get_cache_id_suffix(trainable_state)

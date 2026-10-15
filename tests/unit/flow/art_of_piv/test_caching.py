@@ -9,6 +9,10 @@ import numpy as np
 import pytest
 
 from flowgym.flow.art_of_piv import caching
+from tests.unit.flow.art_of_piv.mocks import (
+    MockSubModel,
+    build_testable_art_of_piv_estimator,
+)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Fixtures
@@ -376,3 +380,14 @@ def test_enrich_from_sub_caches_skips_misses_when_disabled(
     # Should NOT have computed misses
     mock_sub_model.enrich.assert_not_called()
     assert not payload["epe_mask"][3, 0]  # Key 4 should still be missing
+
+
+def test_cache_spec_matches_library_size():
+    """The router's cache spec has one EPE slot per library member."""
+    estimator = build_testable_art_of_piv_estimator(
+        [MockSubModel(name=f"m{i}") for i in range(3)]
+    )
+    assert estimator.cache_spec() == {
+        "epe_all": ("float32", (3,)),
+        "epe_mask": ("bool", (3,)),
+    }

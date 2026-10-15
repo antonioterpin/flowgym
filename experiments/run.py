@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from flowgym.experiments import validate_model_study
-from flowgym.utils import dump_yaml, load_configuration
+from flowgym.utils import deep_merge, dump_yaml, load_configuration
 
 DEFAULT_PROJECT = "flowgym"
 
@@ -25,16 +25,6 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError(f"Expected dict YAML at {path}, got {type(data)!r}.")
     return data
-
-
-def _deep_merge(base: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
-    merged = dict(base)
-    for key, value in patch.items():
-        if isinstance(value, dict) and isinstance(merged.get(key), dict):
-            merged[key] = _deep_merge(merged[key], value)
-        else:
-            merged[key] = value
-    return merged
 
 
 def parse_args() -> argparse.Namespace:
@@ -84,7 +74,7 @@ def main() -> None:
             raise ValueError(
                 f"{model} sets no dataset and exp.yaml has no default."
             )
-        dataset_cfg = _deep_merge(
+        dataset_cfg = deep_merge(
             _load_yaml(exp_dir / dataset),
             model_cfg.pop("dataset_overrides", {}),
         )
