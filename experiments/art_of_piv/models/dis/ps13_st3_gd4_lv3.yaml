@@ -1,2 +1,2 @@
-extends: base.yaml
+extends: experiments/art_of_piv/models/dis/base.yaml
 config: {patch_size: 13, patch_stride: 3, grad_desc_iters: 4, levels: 3}

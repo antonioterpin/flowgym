@@ -1,8 +1,8 @@
 # ART of PIV router for the raft32 row: per frame, pick one of the 6 per-class
 # RAFT32 specialists.
-extends: router/standard.yaml
+extends: experiments/art_of_piv/models/router/standard.yaml
 study:
-  name: art_of_piv
+  name: art_of_piv/table_1
   tags:
     row: raft32
 config:

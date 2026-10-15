@@ -1,10 +1,4 @@
-# Pretrained RAFT32-PIV: the raft32 row's best single estimator, run on its own
-# on the test split.
-extends: base.yaml
+# Pretrained RAFT32-PIV: the raft32 row's best single estimator
+# (table_1/models/best_single_raft32.yaml).
+extends: experiments/art_of_piv/models/raft32/base.yaml
 load_from: wandb://artofpiv/RAFT32_finetuning/raft32_piv_pretrained:v0/jax/checkpoints/0
-mode: eval
-dataset: datasets/test.yaml
-study:
-  name: art_of_piv
-  tags:
-    model: raft32_pretrained

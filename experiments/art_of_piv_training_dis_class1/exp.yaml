@@ -3,7 +3,7 @@ project: Art_of_PIV
 mode: train-supervised
 
 # Local dataset settings (copied from infra_smoke_v0).
-dataset: dataset.yaml
+dataset: experiments/art_of_piv_training_dis_class1/dataset.yaml
 
 # Compare training modes with matching sub-estimators.
 models:

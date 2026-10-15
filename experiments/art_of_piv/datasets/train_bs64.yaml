@@ -1,5 +1,5 @@
 # train.yaml with batches of 64 for training and validation (the 1 kHz rows).
-extends: train.yaml
+extends: experiments/art_of_piv/datasets/train.yaml
 batch_size: 64
 flow_fields_per_batch: 64
 validation:

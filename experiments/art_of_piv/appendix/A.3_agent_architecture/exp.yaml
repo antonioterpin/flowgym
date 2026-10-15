@@ -1,0 +1,10 @@
+# uv run --extra cuda12 --extra wandb --extra hf python experiments/run.py --exp art_of_piv/appendix/A.3_agent_architecture
+project: Art_of_PIV
+mode: train-supervised
+models:
+  - models/router_dis_1khz_large.yaml
+  - models/router_openpiv_1khz_large.yaml
+  - models/router_openpiv_4khz_large.yaml
+seeds: [0, 1, 2]
+metrics: [mean_epe, median_epe, p95_epe, p99_epe]
+entrypoint: src/main.py

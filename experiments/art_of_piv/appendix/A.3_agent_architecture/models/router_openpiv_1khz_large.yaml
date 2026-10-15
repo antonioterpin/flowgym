@@ -1,8 +1,8 @@
 # openpiv_1khz with the standard router (paper ablation "Large", batch 64).
-extends: router/standard.yaml
-dataset: datasets/train_bs64.yaml
+extends: experiments/art_of_piv/models/router/standard.yaml
+dataset: experiments/art_of_piv/datasets/train_bs64.yaml
 study:
-  name: art_of_piv
+  name: art_of_piv/appendix/A.3_agent_architecture
   tags:
     row: openpiv_1khz_large
 config:

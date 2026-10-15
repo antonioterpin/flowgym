@@ -1,4 +1,4 @@
-extends: base.yaml
+extends: experiments/art_of_piv/models/openpiv/base.yaml
 config:
   window_size: 20
   overlap: 10

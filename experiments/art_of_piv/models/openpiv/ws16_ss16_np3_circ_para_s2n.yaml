@@ -1,12 +1,6 @@
-# Best single estimator of the openpiv_1khz and openpiv_4khz rows, run on its
-# own on the test split; also in the openpiv_4khz library.
-extends: base.yaml
-mode: eval
-dataset: datasets/test.yaml
-study:
-  name: art_of_piv
-  tags:
-    model: openpiv_ws16_ss16_np3_circ_para_s2n
+# In the openpiv_4khz library; also the best single estimator of both OpenPIV
+# rows (table_1/models/best_single_openpiv.yaml).
+extends: experiments/art_of_piv/models/openpiv/base.yaml
 config:
   window_size: 16
   overlap: 8

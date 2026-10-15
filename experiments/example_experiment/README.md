@@ -38,8 +38,8 @@ mean and population std over seeds.
 
 ## Per-model overrides
 
-A model config may set `dataset:` (a path relative to the experiment
-folder) or `mode:` (e.g. `eval`) to override the `exp.yaml` value for
+A model config may set `dataset:` (a path from the repository root, like
+every path inside a config) or `mode:` (e.g. `eval`) to override the `exp.yaml` value for
 that model's runs, e.g. to evaluate baselines in a training experiment.
 `dataset_overrides:` is deep-merged into the model's dataset config, e.g.
 `{batch_size: 64, validation: {dataset: {batch_size: 64}}}`.

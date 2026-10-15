@@ -216,7 +216,7 @@ def test_experiment_launcher_preserves_relative_model_paths(
             [
                 "project: flowgym",
                 "mode: eval",
-                "dataset: dataset.yaml",
+                f"dataset: {exp_dir / 'dataset.yaml'}",
                 "models:",
                 "  - group_a/model.yaml",
                 "  - group_b/model.yaml",
@@ -289,7 +289,7 @@ def test_experiment_launcher_applies_per_model_mode(
     exp_dir.mkdir()
     (exp_dir / "dataset.yaml").write_text("seed: 0\n", encoding="utf-8")
     (exp_dir / "exp.yaml").write_text(
-        "mode: train-supervised\ndataset: dataset.yaml\n"
+        f"mode: train-supervised\ndataset: {exp_dir / 'dataset.yaml'}\n"
         "models: [trained.yaml, evaluated.yaml]\n",
         encoding="utf-8",
     )
@@ -490,7 +490,7 @@ def test_example_experiment_is_well_formed():
     spec = yaml.safe_load((exp_dir / "exp.yaml").read_text(encoding="utf-8"))
 
     assert spec["mode"] == "eval"
-    assert (exp_dir / spec["dataset"]).exists()
+    assert Path(spec["dataset"]).exists()
 
     for model_rel_path in spec["models"]:
         model_path = exp_dir / model_rel_path
@@ -508,7 +508,8 @@ def test_experiment_launcher_aggregates_seed_summaries(
     exp_dir.mkdir()
     (exp_dir / "dataset.yaml").write_text("seed: 0\n", encoding="utf-8")
     (exp_dir / "exp.yaml").write_text(
-        "mode: eval\ndataset: dataset.yaml\nmodels: [m.yaml]\nseeds: [0, 1]\n"
+        f"mode: eval\ndataset: {exp_dir / 'dataset.yaml'}\n"
+        "models: [m.yaml]\nseeds: [0, 1]\n"
         "metrics: [mean_epe, p99_epe]\n",
         encoding="utf-8",
     )
@@ -552,7 +553,7 @@ def test_experiment_launcher_drops_stale_results_on_failure(
     exp_dir.mkdir()
     (exp_dir / "dataset.yaml").write_text("seed: 0\n", encoding="utf-8")
     (exp_dir / "exp.yaml").write_text(
-        "mode: eval\ndataset: dataset.yaml\nmodels: [m.yaml]\n",
+        f"mode: eval\ndataset: {exp_dir / 'dataset.yaml'}\nmodels: [m.yaml]\n",
         encoding="utf-8",
     )
     (exp_dir / "m.yaml").write_text(
@@ -581,7 +582,8 @@ def test_experiment_launcher_skips_models_with_missing_seeds(
     exp_dir.mkdir()
     (exp_dir / "dataset.yaml").write_text("seed: 0\n", encoding="utf-8")
     (exp_dir / "exp.yaml").write_text(
-        "mode: eval\ndataset: dataset.yaml\nmodels: [a.yaml, b.yaml]\n"
+        f"mode: eval\ndataset: {exp_dir / 'dataset.yaml'}\n"
+        "models: [a.yaml, b.yaml]\n"
         "seeds: [0, 1]\n",
         encoding="utf-8",
     )
@@ -619,7 +621,7 @@ def test_experiment_launcher_applies_dataset_overrides(
         encoding="utf-8",
     )
     (exp_dir / "exp.yaml").write_text(
-        "mode: eval\ndataset: dataset.yaml\nmodels: [m.yaml]\n",
+        f"mode: eval\ndataset: {exp_dir / 'dataset.yaml'}\nmodels: [m.yaml]\n",
         encoding="utf-8",
     )
     (exp_dir / "m.yaml").write_text(

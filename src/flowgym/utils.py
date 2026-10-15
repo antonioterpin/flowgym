@@ -119,8 +119,9 @@ def deep_merge(base: Mapping[str, Any], override: Mapping[str, Any]) -> dict:
 def load_configuration(file_path: str | Path) -> gg.PrettyConfig:
     """Load a YAML config; ``extends: <path>`` builds on another config.
 
-    The extended config (path relative to this file) is loaded the same way
-    and this file's values are deep-merged over it.
+    The extended config (path from the repository root, like every path in a
+    config) is loaded the same way and this file's values are deep-merged
+    over it.
 
     Args:
         file_path: The YAML file.
@@ -132,7 +133,7 @@ def load_configuration(file_path: str | Path) -> gg.PrettyConfig:
     parent = config.pop("extends", None)
     if parent is None:
         return config
-    base = load_configuration(Path(file_path).parent / parent)
+    base = load_configuration(parent)
     return gg.PrettyConfig(deep_merge(base, config))
 
 

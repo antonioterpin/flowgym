@@ -1,8 +1,8 @@
 # ART of PIV router for the dis_1khz row (batch 64).
-extends: router/fast.yaml
-dataset: datasets/train_bs64.yaml
+extends: experiments/art_of_piv/models/router/fast.yaml
+dataset: experiments/art_of_piv/datasets/train_bs64.yaml
 study:
-  name: art_of_piv
+  name: art_of_piv/table_1
   tags:
     row: dis_1khz
 config:

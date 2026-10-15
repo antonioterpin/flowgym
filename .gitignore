@@ -207,8 +207,8 @@ results/**/checkpoints/**
 *.parquet
 
 # Experiment outputs
-experiments/*/runs/
-experiments/*/_generated/
+experiments/**/runs/
+experiments/**/_generated/
 experiments/lima/output/
 experiments/lima/output_kinematic/
 experiments/lima/.runport

@@ -68,7 +68,8 @@ def main() -> None:
     )
     os.environ.setdefault("JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS", "0")
 
-    # Per model: its mode, and its dataset with any overrides applied
+    # Per model: its mode, and its dataset (path from the repository root)
+    # with any overrides applied
     models: list[tuple[str, str, Path, dict[str, Any]]] = []
     for model in spec["models"]:
         model_cfg = _load_yaml(exp_dir / model)
@@ -81,7 +82,7 @@ def main() -> None:
                 f"{model} sets no dataset and exp.yaml has no default."
             )
         dataset_cfg = deep_merge(
-            _load_yaml(exp_dir / dataset),
+            _load_yaml(Path(dataset)),
             model_cfg.pop("dataset_overrides", {}),
         )
         model_path = generated_dir / "models" / model
