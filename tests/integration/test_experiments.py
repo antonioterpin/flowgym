@@ -647,11 +647,24 @@ def test_experiment_launcher_applies_dataset_overrides(
     assert "dataset_overrides" not in model
 
 
-def test_art_of_piv_dis_20hz_library_hits_the_paper_caches():
+@pytest.mark.parametrize(
+    ("row", "hashes"),
+    [
+        (
+            "dis_20hz",
+            "007d9a94 86725532 9f485cd6 ad340132 b68adbad "
+            "c072b2f2 c83b3862 cc366684 f37adac3 f581f19f",
+        ),
+        (
+            "dis_1khz",
+            "121533ae 37c4290e 555d463e 65957b24 6aec2a81 "
+            "9215fc07 dae3d3ef dc377309 dcbc9026 ea3880db",
+        ),
+    ],
+)
+def test_art_of_piv_libraries_hit_the_paper_caches(row, hashes):
     """The merged library configs hash to the cache ids the paper used."""
-    library = load_configuration(
-        "experiments/art_of_piv/libraries/dis_20hz.yaml"
-    )
+    library = load_configuration(f"experiments/art_of_piv/libraries/{row}.yaml")
     cache_ids = []
     for path in library["estimators"]:
         cfg = load_configuration(path)
@@ -659,10 +672,4 @@ def test_art_of_piv_dis_20hz_library_hits_the_paper_caches():
         cache_ids.append(
             library["cache_id_base"] + estimator.get_cache_id_suffix(None)
         )
-    assert cache_ids == [
-        f"piv-class1-dis_c{h}"
-        for h in (
-            "007d9a94 86725532 9f485cd6 ad340132 b68adbad "
-            "c072b2f2 c83b3862 cc366684 f37adac3 f581f19f"
-        ).split()
-    ]
+    assert cache_ids == [f"piv-class1-dis_c{h}" for h in hashes.split()]

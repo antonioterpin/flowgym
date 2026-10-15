@@ -7,13 +7,16 @@ estimator under the same latency budget.
 | Row | Paper key | Library | Paper AEPE (best single) |
 |---|---|---|---|
 | `dis_20hz` | `disTwentyHz` | 10 DIS configs | 0.1271 (0.1498) |
+| `dis_1khz` | `disOneKHz` | 10 DIS configs | 0.1383 (0.1577) |
+| `dis_1khz_large` | `disOneKHzLarge` | same, standard router | 0.1383 (0.1577) |
 
 ## Layout
 
 - `exp.yaml`: the models to run, the seeds (0, 1, 2) and the metrics kept in
   `results.json`.
 - `models/`: one file per model. `router_<row>.yaml` is a row's ART of PIV
-  router. `dis/base.yaml` holds the settings shared by all DIS models; each
+  router: it extends `router/standard.yaml` or `router/fast.yaml` (the 1 kHz
+  rows) and sets its library. `dis/base.yaml` holds the settings shared by all DIS models; each
   DIS model `extends` it and sets its knobs, named after them
   (`ps9_st2_gd4_lv3.yaml`: patch size 9, stride 2, 4 gradient-descent
   iterations, 3 levels). A row's best single estimator is one of these files,
@@ -24,6 +27,8 @@ estimator under the same latency budget.
   split, recipe, labels (the library's cached per-frame errors), and which
   files to validate (`datasets/val.yaml`) and test (`datasets/test.yaml`) on.
   The best single estimators run on `datasets/test.yaml` directly.
+  `train_bs64.yaml` and `val_bs64.yaml` extend them with batches of 64 (the
+  1 kHz rows).
 - `results.json`: written by `run.py`; per model, the mean, std and per-seed
   values over the test frames of `mean_epe` (AEPE, what the paper reports),
   `median_epe`, `p95_epe` and `p99_epe`.

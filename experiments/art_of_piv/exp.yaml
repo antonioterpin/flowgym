@@ -5,6 +5,9 @@ dataset: datasets/train.yaml
 models:
   - models/router_dis_20hz.yaml
   - models/dis/ps9_st2_gd4_lv3.yaml
+  - models/router_dis_1khz.yaml
+  - models/router_dis_1khz_large.yaml
+  - models/dis/ps11_st3_gd8_lv3.yaml
 seeds: [0, 1, 2]
 metrics: [mean_epe, median_epe, p95_epe, p99_epe]
 entrypoint: src/main.py

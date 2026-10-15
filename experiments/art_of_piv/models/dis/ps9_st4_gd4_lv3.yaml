@@ -1,0 +1,2 @@
+extends: base.yaml
+config: {patch_size: 9, patch_stride: 4, grad_desc_iters: 4, levels: 3}
