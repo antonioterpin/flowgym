@@ -609,6 +609,80 @@ def test_experiment_launcher_skips_models_with_missing_seeds(
     assert list(results) == ["a.yaml"]
 
 
+def test_experiment_launcher_runs_only_selected_models(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """``--models`` runs a subset; results.json covers every finished model."""
+    exp_dir = tmp_path / "subset"
+    exp_dir.mkdir()
+    (exp_dir / "dataset.yaml").write_text("seed: 0\n", encoding="utf-8")
+    (exp_dir / "exp.yaml").write_text(
+        f"mode: eval\ndataset: {exp_dir / 'dataset.yaml'}\n"
+        "models: [a.yaml, b.yaml]\n",
+        encoding="utf-8",
+    )
+    for name in ("a", "b"):
+        (exp_dir / f"{name}.yaml").write_text(
+            "estimator: dummy\nstudy:\n  name: subset\n"
+            f"  tags: {{v: {name}}}\n",
+            encoding="utf-8",
+        )
+    ran: list[str] = []
+
+    def fake_check_call(cmd: list[str]) -> None:
+        out = Path(cmd[cmd.index("--summary-out") + 1])
+        ran.append(out.parent.name)
+        out.write_text(json.dumps({"mean_epe": 0.5}))
+
+    monkeypatch.setattr(run_script.subprocess, "check_call", fake_check_call)
+    argv = ["run.py", "--exp", "subset", "--exp-root", str(tmp_path)]
+    # A concurrent launcher, say, ran b.yaml; this one runs a.yaml only.
+    monkeypatch.setattr("sys.argv", [*argv, "--models", "b.yaml"])
+    run_script.main()
+    monkeypatch.setattr("sys.argv", [*argv, "--models", "a.yaml"])
+    run_script.main()
+
+    assert ran == ["b.yaml", "a.yaml"]
+    results = json.loads((exp_dir / "results.json").read_text())
+    assert list(results) == ["a.yaml", "b.yaml"]
+
+    # Once b.yaml changes, its summaries no longer count
+    (exp_dir / "b.yaml").write_text(
+        "estimator: dummy\nstudy:\n  name: subset\n  tags: {v: c}\n",
+        encoding="utf-8",
+    )
+    run_script.main()
+    results = json.loads((exp_dir / "results.json").read_text())
+    assert list(results) == ["a.yaml"]
+
+
+def test_experiment_launcher_rejects_unknown_models(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """``--models`` must name entries of exp.yaml's models list."""
+    exp_dir = tmp_path / "unknown"
+    exp_dir.mkdir()
+    (exp_dir / "dataset.yaml").write_text("seed: 0\n", encoding="utf-8")
+    (exp_dir / "exp.yaml").write_text(
+        f"mode: eval\ndataset: {exp_dir / 'dataset.yaml'}\nmodels: [a.yaml]\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "run.py",
+            "--exp",
+            "unknown",
+            "--exp-root",
+            str(tmp_path),
+            "--models",
+            "c.yaml",
+        ],
+    )
+    with pytest.raises(ValueError, match=r"c\.yaml"):
+        run_script.main()
+
+
 def test_experiment_launcher_applies_dataset_overrides(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
