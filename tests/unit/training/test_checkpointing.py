@@ -423,3 +423,32 @@ def test_restore_best_loads_best_on_validation_params(clean_tmp_path):
 
     assert restored is not None
     assert float(restored.params["w"]) == 2.0
+
+
+def test_load_model_from_step_dir_with_any_name(clean_tmp_path):
+    """A saved step loads from a directory not named after its step.
+
+    W&B checkpoint artifacts download one step's contents into a directory
+    named after the artifact (e.g. ``model-ckpt:v8``).
+    """
+    params = make_simple_params()
+    with make_manager(clean_tmp_path / "ckpts", keep=1) as mngr:
+        mngr.save(
+            0,
+            args=ocp.args.Composite(
+                state=ocp.args.PyTreeSave({"params": params})
+            ),
+        )
+        mngr.wait_until_finished()
+    artifact = clean_tmp_path / "model-ckpt:v8"
+    (clean_tmp_path / "ckpts" / "0").rename(artifact)
+    template = NNEstimatorTrainableState.create(
+        apply_fn=simple_apply_fn,
+        params=params,
+        tx=optax.sgd(learning_rate=0.1),
+        extras=None,
+    )
+
+    restored = load_model(artifact, template, mode="params_only")
+
+    assert_trees_allclose(restored.params, params)

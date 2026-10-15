@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
+import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
@@ -274,15 +276,26 @@ def load_model(
 
     # If ckpt_dir is a specific step directory (e.g. ends in a number),
     # point the manager to the parent directory and restore that specific step.
+    step_link = None
     if ckpt_dir.name.isdigit():
         mngr_dir = ckpt_dir.parent
         step = int(ckpt_dir.name)
+    elif (ckpt_dir / "_CHECKPOINT_METADATA").exists():
+        # One step saved under another name (e.g. a W&B checkpoint
+        # artifact): expose it to the manager as step 0.
+        step_link = tempfile.TemporaryDirectory()
+        mngr_dir = Path(step_link.name)
+        (mngr_dir / "0").symlink_to(ckpt_dir)
+        step = 0
     else:
         mngr_dir = ckpt_dir
         step = None
 
     # Use a context manager for the manager
-    with make_manager(mngr_dir, keep=1) as mngr:
+    with (
+        step_link or contextlib.nullcontext(),
+        make_manager(mngr_dir, keep=1) as mngr,
+    ):
         if step is None:
             step = mngr.latest_step()
 
