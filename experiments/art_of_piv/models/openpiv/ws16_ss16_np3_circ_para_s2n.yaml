@@ -1,0 +1,17 @@
+# Best single estimator of the openpiv_1khz and openpiv_4khz rows, run on its
+# own on the test split; also in the openpiv_4khz library.
+extends: base.yaml
+mode: eval
+dataset: datasets/test.yaml
+study:
+  name: art_of_piv
+  tags:
+    model: openpiv_ws16_ss16_np3_circ_para_s2n
+config:
+  window_size: 16
+  overlap: 8
+  search_size: 16
+  n_passes: 3
+  correlation_method: circular
+  subpixel_method: parabolic
+  sig2noise_threshold: 1.3

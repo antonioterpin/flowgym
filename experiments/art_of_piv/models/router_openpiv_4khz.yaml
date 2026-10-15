@@ -1,0 +1,9 @@
+# ART of PIV router for the openpiv_4khz row (batch 64).
+extends: router/fast.yaml
+dataset: datasets/train_bs64.yaml
+study:
+  name: art_of_piv
+  tags:
+    row: openpiv_4khz
+config:
+  estimators_list_path: experiments/art_of_piv/libraries/openpiv_4khz.yaml

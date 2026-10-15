@@ -1,0 +1,9 @@
+extends: base.yaml
+config:
+  window_size: 24
+  overlap: 12
+  search_size: 24
+  n_passes: 3
+  correlation_method: circular
+  subpixel_method: parabolic
+  sig2noise_threshold: 1.3

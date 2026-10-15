@@ -9,6 +9,10 @@ estimator under the same latency budget.
 | `dis_20hz` | `disTwentyHz` | 10 DIS configs | 0.1271 (0.1498) |
 | `dis_1khz` | `disOneKHz` | 10 DIS configs | 0.1383 (0.1577) |
 | `dis_1khz_large` | `disOneKHzLarge` | same, standard router | 0.1383 (0.1577) |
+| `openpiv_1khz` | `openpivOneKHz` | 10 OpenPIV configs | 0.1978 (0.2544) |
+| `openpiv_1khz_large` | `openpivOneKHzLarge` | same, standard router | 0.1956 (0.2544) |
+| `openpiv_4khz` | `openpivFourKHz` | 10 OpenPIV configs | 0.1975 (0.2544) |
+| `openpiv_4khz_large` | `openpivFourKHzLarge` | same, standard router | 0.1956 (0.2544) |
 
 ## Layout
 

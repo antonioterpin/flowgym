@@ -660,6 +660,16 @@ def test_experiment_launcher_applies_dataset_overrides(
             "121533ae 37c4290e 555d463e 65957b24 6aec2a81 "
             "9215fc07 dae3d3ef dc377309 dcbc9026 ea3880db",
         ),
+        (
+            "openpiv_1khz",
+            "056ddd95 05ed395f 36659c05 4b514659 6047fd62 "
+            "8a926801 b2f7f13d c4a2b3db d1bb2725 f8badbaa",
+        ),
+        (
+            "openpiv_4khz",
+            "10a2232b 36659c05 5ffd819a 76590e9e 7bf46b30 "
+            "8a926801 c4a2b3db d1bb2725 dbf97772 effb56b3",
+        ),
     ],
 )
 def test_art_of_piv_libraries_hit_the_paper_caches(row, hashes):
@@ -672,4 +682,5 @@ def test_art_of_piv_libraries_hit_the_paper_caches(row, hashes):
         cache_ids.append(
             library["cache_id_base"] + estimator.get_cache_id_suffix(None)
         )
-    assert cache_ids == [f"piv-class1-dis_c{h}" for h in hashes.split()]
+    base = library["cache_id_base"]
+    assert cache_ids == [f"{base}_c{h}" for h in hashes.split()]

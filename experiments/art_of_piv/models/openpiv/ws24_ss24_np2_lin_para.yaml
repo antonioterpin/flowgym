@@ -1,0 +1,8 @@
+extends: base.yaml
+config:
+  window_size: 24
+  overlap: 12
+  search_size: 24
+  n_passes: 2
+  correlation_method: linear
+  subpixel_method: parabolic

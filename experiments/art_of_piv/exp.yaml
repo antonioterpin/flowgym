@@ -8,6 +8,11 @@ models:
   - models/router_dis_1khz.yaml
   - models/router_dis_1khz_large.yaml
   - models/dis/ps11_st3_gd8_lv3.yaml
+  - models/router_openpiv_1khz.yaml
+  - models/router_openpiv_1khz_large.yaml
+  - models/router_openpiv_4khz.yaml
+  - models/router_openpiv_4khz_large.yaml
+  - models/openpiv/ws16_ss16_np3_circ_para_s2n.yaml
 seeds: [0, 1, 2]
 metrics: [mean_epe, median_epe, p95_epe, p99_epe]
 entrypoint: src/main.py
