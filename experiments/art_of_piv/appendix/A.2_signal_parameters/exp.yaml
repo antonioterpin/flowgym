@@ -1,0 +1,19 @@
+# uv run --extra cuda12 --extra wandb --extra hf python experiments/run.py --exp art_of_piv/appendix/A.2_signal_parameters
+project: Art_of_PIV
+mode: train-supervised
+dataset: experiments/art_of_piv/datasets/train.yaml
+models:
+  # Figure 9: bandit exploration epsilon.
+  - models/bandit/eps0.yaml
+  - models/bandit/eps0.02.yaml
+  - models/bandit/eps0.05.yaml
+  - models/bandit/eps0.1.yaml
+  - models/bandit/eps0.25.yaml
+  - models/bandit/eps0.5.yaml
+  - models/bandit/eps1.yaml
+  # Table 4: regression target.
+  - models/regression/raw.yaml
+  - models/regression/mean.yaml
+  - models/regression/log.yaml
+seeds: [0, 1, 2]
+entrypoint: src/main.py
