@@ -19,7 +19,7 @@ def oracle(tmp_path):
 
 
 def test_oracle_from_router_config(tmp_path):
-    """A router's config builds the oracle; its router_config is dropped."""
+    """A router's config builds the oracle; router_config, oracle dropped."""
     library = tmp_path / "library.yaml"
     library.write_text("estimators: [{name: a}, {name: b}]\n")
     oracle = ArtOfPIVOracleEstimator.from_config(
@@ -27,9 +27,21 @@ def test_oracle_from_router_config(tmp_path):
             "estimators_list_path": str(library),
             "initialize_estimators": False,
             "router_config": {"hidden_dims": [8]},
+            "oracle": False,
         }
     )
     assert oracle.num_estimators == 2
+    assert oracle.is_oracle()
+
+
+def test_oracle_rejects_empty_library(tmp_path):
+    """An empty library fails at construction, not at inference."""
+    library = tmp_path / "library.yaml"
+    library.write_text("estimators: []\n")
+    with pytest.raises(ValueError, match="No estimators"):
+        ArtOfPIVOracleEstimator(
+            estimators_list_path=str(library), initialize_estimators=False
+        )
 
 
 def test_oracle_picks_lowest_valid_cached_epe(oracle):

@@ -27,22 +27,30 @@ class ArtOfPIVOracleEstimator(ArtOfPIVEstimator):
             estimators_list_path: Path to the library config file.
             **kwargs: Other ``ArtOfPIVEstimator`` arguments; router and
                 training ones are ignored.
+
+        Raises:
+            ValueError: If the library has no estimators.
         """
-        kwargs.setdefault("oracle", True)
         super().__init__(
             router_config={},
             estimators_list_path=estimators_list_path,
+            oracle=True,
             **kwargs,
         )
+        if self.num_estimators == 0:
+            raise ValueError(f"No estimators in {estimators_list_path}.")
 
     @classmethod
     def get_init_param_names(cls) -> set[str]:
-        """Parent ``__init__`` parameters, without ``router_config``.
+        """Parent ``__init__`` parameters, without the fixed ones.
+
+        The oracle has no router and always gets the ground truth, so a
+        config's ``router_config`` and ``oracle`` are dropped.
 
         Returns:
             The parameter names ``from_config`` keeps.
         """
-        return super().get_init_param_names() - {"router_config"}
+        return super().get_init_param_names() - {"router_config", "oracle"}
 
     def _init_router(self, router_config: dict, **kwargs: Any) -> None:
         """No router network.
