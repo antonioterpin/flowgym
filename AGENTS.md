@@ -35,12 +35,13 @@ full version lives at `docs/contribute/contributing.md`.
 These apply to AI assistants running in this repo, not to human
 contributors:
 
-- Use a unique `GOGGLES_PORT` per concurrent process. Never reuse a
-  port across agent-started processes on the same machine; assign a
-  random free port at startup, for example:
+- Use a unique `GOGGLES_SOCKET` per concurrent process. Goggles logs
+  through a per-user default socket, so concurrent processes otherwise
+  share one logging host: their logs mix, and they stop when the first
+  process exits. `GOGGLES_PORT` is ignored. For example:
 
   ```bash
-  GOGGLES_PORT=$(uv run python -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()')
+  GOGGLES_SOCKET=$(mktemp -u /tmp/goggles-XXXXXX.sock)
   ```
 
 - Do not modify tooling rules or policy files (`pyproject.toml` lint

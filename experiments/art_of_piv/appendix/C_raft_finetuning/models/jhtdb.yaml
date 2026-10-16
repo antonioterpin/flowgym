@@ -1,0 +1,6 @@
+# RAFT32-PIV fine-tuned on the jhtdb class.
+extends: experiments/art_of_piv/appendix/C_raft_finetuning/models/finetune.yaml
+dataset: experiments/art_of_piv/appendix/C_raft_finetuning/datasets/jhtdb.yaml
+study:
+  tags:
+    flow_class: jhtdb

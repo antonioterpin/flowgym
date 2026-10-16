@@ -1,0 +1,5 @@
+# Test split of the SQG class (45 frames), in 15 batches of 3.
+extends: experiments/art_of_piv/appendix/C_raft_finetuning/datasets/test/base.yaml
+num_batches: 15
+file_list:
+  - hf://activefluidcontrol/piv-class1@ccc784ebbe86f16121bdc51ccb20b4cdf6b6a150:test/SQG

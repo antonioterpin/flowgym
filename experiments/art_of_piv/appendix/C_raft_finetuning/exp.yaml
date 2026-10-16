@@ -1,0 +1,20 @@
+# uv run --extra cuda12 --extra wandb --extra hf python experiments/run.py --exp art_of_piv/appendix/C_raft_finetuning
+project: Art_of_PIV
+mode: train-supervised
+models:
+  # Fine-tune the pretrained RAFT32-PIV on each flow class.
+  - models/cylinder.yaml
+  - models/backstep.yaml
+  - models/DNS_turbulence.yaml
+  - models/SQG.yaml
+  - models/jhtdb.yaml
+  - models/uniform.yaml
+  # The paper's specialists on the same test splits.
+  - models/paper/cylinder.yaml
+  - models/paper/backstep.yaml
+  - models/paper/DNS_turbulence.yaml
+  - models/paper/SQG.yaml
+  - models/paper/jhtdb.yaml
+  - models/paper/uniform.yaml
+seeds: [0]
+entrypoint: src/main.py
