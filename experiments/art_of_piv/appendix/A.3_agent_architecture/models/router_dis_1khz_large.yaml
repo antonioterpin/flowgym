@@ -7,3 +7,8 @@ study:
     row: dis_1khz_large
 config:
   estimators_list_path: experiments/art_of_piv/libraries/dis_1khz.yaml
+# Score the best checkpoint on the val split instead of test.
+dataset_overrides:
+  test:
+    num_batches: 66
+    dataset: experiments/art_of_piv/datasets/val_bs20.yaml

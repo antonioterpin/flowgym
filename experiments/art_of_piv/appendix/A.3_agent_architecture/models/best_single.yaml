@@ -1,0 +1,17 @@
+# Best single estimator on the val split: the oracle on a library holding only
+# that estimator, so its per-frame EPEs come from the same caches the routers
+# train on. Files best_single_<row>.yaml extend this one and set the library.
+estimator: oracle_art_of_piv
+estimate_type: flow
+mode: eval
+dataset: experiments/art_of_piv/datasets/val_bs20.yaml
+study:
+  name: art_of_piv/appendix/A.3_agent_architecture
+config:
+  jit: true
+dataset_overrides:
+  caching:
+    root_dir: hf://activefluidcontrol/piv-class1-caches@7068a49525da1d8c1b7bdf4027a3c3a74da5d02a
+    cache_id: art_of_piv
+    read_only: true
+    warm_start: all

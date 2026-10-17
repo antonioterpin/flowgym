@@ -1,0 +1,9 @@
+# The deployed dis_1khz router of Table 1, scored on the val split.
+extends: experiments/art_of_piv/table_1/models/router_dis_1khz.yaml
+study:
+  name: art_of_piv/appendix/A.3_agent_architecture
+# Score the best checkpoint on the val split instead of test.
+dataset_overrides:
+  test:
+    num_batches: 66
+    dataset: experiments/art_of_piv/datasets/val_bs20.yaml

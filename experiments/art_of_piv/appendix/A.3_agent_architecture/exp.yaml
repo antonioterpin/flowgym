@@ -2,9 +2,14 @@
 project: Art_of_PIV
 mode: train-supervised
 models:
+  - models/router_dis_1khz.yaml
   - models/router_dis_1khz_large.yaml
+  - models/best_single_dis_1khz.yaml
+  - models/router_openpiv_1khz.yaml
   - models/router_openpiv_1khz_large.yaml
+  - models/router_openpiv_4khz.yaml
   - models/router_openpiv_4khz_large.yaml
+  - models/best_single_openpiv.yaml
 seeds: [0, 1, 2]
 metrics: [mean_epe, median_epe, p95_epe, p99_epe]
 entrypoint: src/main.py

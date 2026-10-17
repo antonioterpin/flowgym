@@ -1,0 +1,7 @@
+# Best single estimator of the dis_1khz row.
+extends: experiments/art_of_piv/appendix/A.3_agent_architecture/models/best_single.yaml
+study:
+  tags:
+    model: dis_ps11_st3_gd8_lv3
+config:
+  estimators_list_path: experiments/art_of_piv/libraries/best_single_dis_1khz.yaml
