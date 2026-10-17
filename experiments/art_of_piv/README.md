@@ -19,6 +19,12 @@ uv run --extra cuda12 --extra wandb --extra hf python experiments/run.py --exp a
 The names follow the paper's numbering at the time of writing; they are
 renamed once when the paper is final.
 
+Results live only in each folder's `results.json` (or the file its script
+writes), which the paper reads. A README never types a result: its tables are
+`<!-- BEGIN <file> -->` blocks that `run.py` and the scripts re-render from
+those files (`uv run python experiments/update_readmes.py` refreshes them all,
+and `tests/integration/test_experiments.py` fails on a stale block).
+
 ## Shared files
 
 Experiments share the files below. Paths inside configs start at the

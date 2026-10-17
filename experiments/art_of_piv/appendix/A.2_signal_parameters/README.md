@@ -40,24 +40,22 @@ split in batches of 20. The 30 runs take about an hour on one RTX 4090.
 
 ## Results
 
-Validation AEPE, mean ± std over seeds 0, 1, 2, 4× RTX 4090 (October 2026);
-the paper's Figure 9 and Table 4 read these means from `results.json`.
+Validation AEPE, mean ± std over seeds 0, 1, 2, 4× RTX 4090 (October 2026),
+generated from `results.json` (also per seed); the paper's Figure 9 and
+Table 4 read the means from it.
 Router training is not deterministic from run to run.
 
-| model | AEPE | per seed |
-|---|---|---|
-| bandit, ε = 0 | 0.1337 ± 0.0070 | 0.1339, 0.1251, 0.1422 |
-| bandit, ε = 0.02 | 0.1132 ± 0.0015 | 0.1140, 0.1111, 0.1144 |
-| bandit, ε = 0.05 | 0.1144 ± 0.0018 | 0.1162, 0.1150, 0.1120 |
-| bandit, ε = 0.1 | 0.1126 ± 0.0030 | 0.1115, 0.1167, 0.1096 |
-| bandit, ε = 0.25 | 0.1097 ± 0.0001 | 0.1097, 0.1097, 0.1099 |
-| bandit, ε = 0.5 | 0.1114 ± 0.0010 | 0.1103, 0.1127, 0.1114 |
-| bandit, ε = 1 | 0.1106 ± 0.0007 | 0.1103, 0.1099, 0.1115 |
-| regression, raw | 0.1084 ± 0.0004 | 0.1089, 0.1080, 0.1082 |
-| regression, per-pair mean | 0.1072 ± 0.0001 | 0.1072, 0.1074, 0.1071 |
-| regression, log | 0.1067 ± 0.0001 | 0.1068, 0.1066, 0.1066 |
-
-The log target is best, then the per-pair mean, then raw. Without
-exploration the bandit is clearly worst; for every ε ≥ 0.02 it lies within
-0.110–0.115, lowest at ε = 0.25. The seeds spread by up to 0.007 px for
-ε ≥ 0.02 and 0.017 px at ε = 0.
+<!-- BEGIN results.json -->
+| model | mean_epe |
+|---|---|
+| `models/bandit/eps0.yaml` | 0.13374 ± 0.00698 |
+| `models/bandit/eps0.02.yaml` | 0.11316 ± 0.00149 |
+| `models/bandit/eps0.05.yaml` | 0.11440 ± 0.00179 |
+| `models/bandit/eps0.1.yaml` | 0.11260 ± 0.00302 |
+| `models/bandit/eps0.25.yaml` | 0.10975 ± 0.00009 |
+| `models/bandit/eps0.5.yaml` | 0.11144 ± 0.00096 |
+| `models/bandit/eps1.yaml` | 0.11059 ± 0.00066 |
+| `models/regression/raw.yaml` | 0.10837 ± 0.00035 |
+| `models/regression/mean.yaml` | 0.10723 ± 0.00011 |
+| `models/regression/log.yaml` | 0.10668 ± 0.00010 |
+<!-- END results.json -->

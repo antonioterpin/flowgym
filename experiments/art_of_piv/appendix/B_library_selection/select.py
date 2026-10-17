@@ -22,6 +22,8 @@ from pathlib import Path
 import numpy as np
 from synthpix.data_sources import hf_resolver
 
+from flowgym.experiments import update_readme_results
+
 # Per-frame EPEs of every DIS config, and the tune split whose frames they
 # are restricted to; both pinned as in experiments/art_of_piv/datasets.
 CACHES = "hf://activefluidcontrol/piv-class1-caches@7068a49525da1d8c1b7bdf4027a3c3a74da5d02a"
@@ -108,6 +110,7 @@ def main() -> None:
         "sizes": sizes,
     }
     (HERE / "results.json").write_text(json.dumps(results, indent=2) + "\n")
+    update_readme_results(HERE / "README.md")
 
 
 if __name__ == "__main__":

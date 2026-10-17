@@ -18,6 +18,9 @@ import experiments.run as run_script
 from flowgym import run_setup
 from flowgym.experiments import (
     build_study_run_name,
+    render_readme_results,
+    render_results,
+    update_readme_results,
     validate_model_study,
     wandb_git_diff_capture,
     wandb_run_tags,
@@ -720,3 +723,44 @@ def test_experiment_launcher_applies_dataset_overrides(
     }
     model = yaml.safe_load(Path(cmd[cmd.index("--estimator") + 1]).read_text())
     assert "dataset_overrides" not in model
+
+
+def test_readme_results_blocks_are_rendered_from_their_file(tmp_path: Path):
+    """A README block between BEGIN/END markers is rewritten from its file."""
+    results = {"models/a.yaml": {"mean_epe": {"mean": 0.25, "std": 0.01}}}
+    (tmp_path / "results.json").write_text(json.dumps(results))
+    readme = tmp_path / "README.md"
+    readme.write_text(
+        "# X\n\n<!-- BEGIN results.json -->\nstale\n<!-- END results.json -->\n"
+    )
+    assert update_readme_results(readme)
+    text = readme.read_text()
+    assert "stale" not in text
+    assert "| `models/a.yaml` | 0.25000 ± 0.01000 |" in text
+    assert not update_readme_results(readme)
+
+
+def test_readme_results_table_has_every_models_metrics():
+    """A metric missing from the first model still gets a column."""
+    table = render_results(
+        {
+            "models/a.yaml": {"mean_epe": {"mean": 0.25, "std": 0.0}},
+            "models/b.yaml": {
+                "mean_epe": {"mean": 0.2, "std": 0.0},
+                "p95_epe": {"mean": 0.5, "std": 0.0},
+            },
+        }
+    )
+    assert table.splitlines()[0] == "| model | mean_epe | p95_epe |"
+    assert "| `models/a.yaml` | 0.25000 |  |" in table
+    assert "| `models/b.yaml` | 0.20000 | 0.50000 |" in table
+
+
+def test_experiment_readmes_match_their_results():
+    """Every generated README block matches the results file it names."""
+    readmes = sorted(Path("experiments").rglob("README.md"))
+    for readme in readmes:
+        before = readme.read_text()
+        assert render_readme_results(readme) == before, (
+            f"{readme} is stale; run experiments/update_readmes.py"
+        )

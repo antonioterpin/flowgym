@@ -25,6 +25,7 @@ import jax.numpy as jnp
 from flax.core import freeze, unfreeze
 
 from flowgym.common.base import NNEstimatorTrainableState
+from flowgym.experiments import update_readme_results
 from flowgym.make import make_estimator
 from flowgym.types import CachePayload
 from flowgym.utils import load_configuration
@@ -115,6 +116,7 @@ def main() -> None:
             print(lib, router, [round(t, 4) for t in agent_ms], flush=True)
     results["device"] = jax.devices()[0].device_kind
     (HERE / "agent_time.json").write_text(json.dumps(results, indent=2) + "\n")
+    update_readme_results(HERE / "README.md")
 
 
 if __name__ == "__main__":

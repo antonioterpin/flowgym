@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import shutil
@@ -272,3 +273,96 @@ def _sanitize_run_name_component(value: object) -> str:
     if text in {"", ".", ".."}:
         return "x"
     return text
+
+
+# A README block between ``<!-- BEGIN <file> -->`` and ``<!-- END <file> -->``
+# holds a table rendered from the named file in the README's folder.
+README_BLOCK = re.compile(
+    r"<!-- BEGIN (\S+) -->\n.*?<!-- END \1 -->", re.DOTALL
+)
+
+
+def _mean_std(stat: Mapping[str, Any]) -> str:
+    if stat["std"] == 0:
+        return f"{stat['mean']:.5f}"
+    return f"{stat['mean']:.5f} ± {stat['std']:.5f}"
+
+
+def render_results(data: Mapping[str, Any]) -> str:
+    """Render an experiment's results file as a Markdown table.
+
+    Args:
+        data: Either ``run.py``'s ``{model: {metric: {mean, std, seeds}}}``,
+            a library-selection sweep with ``sizes`` (appendix B), or a flat
+            ``{key: value}`` mapping.
+
+    Returns:
+        The table.
+    """
+    if "sizes" in data:
+        lines = [
+            f"Pool: {data['pool_size']} configs ({data['dropped_nonfinite']} "
+            f"diverging dropped), {data['tune_frames']} tune frames.",
+            "",
+            "| K | greedy | exact | gap (px) | gap (%) | MILP (s) |",
+            "|---|---|---|---|---|---|",
+        ]
+        for k, size in data["sizes"].items():
+            lines.append(
+                f"| {k} | {size['greedy_aepe']:.5f} | {size['exact_aepe']:.5f} "
+                f"| {size['gap_px']:.5f} | {size['gap_percent']:.2f} "
+                f"| {size['milp_seconds']:.1f} |"
+            )
+        return "\n".join(lines)
+    first = next(iter(data.values()))
+    if not isinstance(first, Mapping):
+        lines = ["| key | value |", "|---|---|"]
+        lines += [f"| `{key}` | {value} |" for key, value in data.items()]
+        return "\n".join(lines)
+    # run.py keeps each model's metrics independently: take every column
+    metrics = list(dict.fromkeys(m for stats in data.values() for m in stats))
+    lines = [
+        "| model | " + " | ".join(metrics) + " |",
+        "|---|" + "---|" * len(metrics),
+    ]
+    for model, stats in data.items():
+        cells = [_mean_std(stats[m]) if m in stats else "" for m in metrics]
+        lines.append(f"| `{model}` | " + " | ".join(cells) + " |")
+    return "\n".join(lines)
+
+
+def render_readme_results(readme: Path) -> str:
+    """Return a README's text with every results block re-rendered.
+
+    Args:
+        readme: The README; each block names a file in the same folder.
+
+    Returns:
+        The updated text.
+    """
+
+    def block(match: re.Match[str]) -> str:
+        name = match.group(1)
+        data = json.loads((readme.parent / name).read_text())
+        table = render_results(data)
+        return f"<!-- BEGIN {name} -->\n{table}\n<!-- END {name} -->"
+
+    return README_BLOCK.sub(block, readme.read_text())
+
+
+def update_readme_results(readme: Path) -> bool:
+    """Re-render a README's results blocks in place.
+
+    Args:
+        readme: The README to update; a missing file is left alone.
+
+    Returns:
+        Whether the file changed.
+    """
+    if not readme.is_file():
+        return False
+    text = render_readme_results(readme)
+    if text == readme.read_text():
+        return False
+    readme.write_text(text)
+    return True

@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from flowgym.experiments import validate_model_study
+from flowgym.experiments import update_readme_results, validate_model_study
 from flowgym.utils import deep_merge, dump_yaml, load_configuration
 
 DEFAULT_PROJECT = "flowgym"
@@ -169,6 +169,7 @@ def main() -> None:
                 }
     if results:
         results_path.write_text(json.dumps(results, indent=2) + "\n")
+        update_readme_results(exp_dir / "README.md")
 
 
 if __name__ == "__main__":

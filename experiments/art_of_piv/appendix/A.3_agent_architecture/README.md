@@ -27,23 +27,22 @@ uv run --extra cuda12 --extra wandb --extra hf python experiments/run.py --exp a
 
 ## Results
 
-Mean ± std over seeds 0, 1, 2 on the val split (1320 frames), RTX 5090
-(October 2026); rAEPE against the row's best single estimator on val.
+AEPE on the val split (1320 frames), mean ± std over seeds 0, 1, 2, RTX
+5090 (October 2026), generated from `results.json`; the paper's Table 5
+computes rAEPE against the row's best single estimator.
 
-| Row | Agent | AEPE | rAEPE |
-|---|---|---|---|
-| `dis_1khz` | deployed | 0.12787 ± 0.00008 | 15.1 % |
-| | larger | 0.12716 ± 0.00018 | 15.6 % |
-| | best single | 0.15061 | |
-| `openpiv_1khz` | deployed | 0.18269 ± 0.00008 | 21.0 % |
-| | larger | 0.18227 ± 0.00012 | 21.2 % |
-| `openpiv_4khz` | deployed | 0.18275 ± 0.00016 | 21.0 % |
-| | larger | 0.18237 ± 0.00014 | 21.2 % |
-| OpenPIV rows | best single | 0.23133 | |
-
-The larger router is better by 0.0004–0.0007 px in every row, so the
-deployed one loses little accuracy for its shorter execution time.
-
+<!-- BEGIN results.json -->
+| model | mean_epe | median_epe | p95_epe | p99_epe |
+|---|---|---|---|---|
+| `models/router_dis_1khz.yaml` | 0.12787 ± 0.00008 | 0.09851 ± 0.00008 | 0.28712 ± 0.00066 | 0.49516 ± 0.00758 |
+| `models/router_dis_1khz_large.yaml` | 0.12716 ± 0.00018 | 0.09830 ± 0.00005 | 0.28469 ± 0.00009 | 0.42359 ± 0.01038 |
+| `models/best_single_dis_1khz.yaml` | 0.15061 | 0.11031 | 0.34182 | 0.62324 |
+| `models/router_openpiv_1khz.yaml` | 0.18269 ± 0.00008 | 0.13709 ± 0.00014 | 0.43978 ± 0.00047 | 0.69563 |
+| `models/router_openpiv_1khz_large.yaml` | 0.18227 ± 0.00012 | 0.13714 ± 0.00018 | 0.44005 ± 0.00076 | 0.69563 |
+| `models/router_openpiv_4khz.yaml` | 0.18275 ± 0.00016 | 0.13806 ± 0.00041 | 0.44014 ± 0.00008 | 0.69563 |
+| `models/router_openpiv_4khz_large.yaml` | 0.18237 ± 0.00014 | 0.13798 ± 0.00013 | 0.44008 ± 0.00008 | 0.69563 |
+| `models/best_single_openpiv.yaml` | 0.23133 | 0.15379 | 0.58439 | 1.34944 |
+<!-- END results.json -->
 ## Agent execution time
 
 `agent_time.py` times the agent of the deployed router (`router/fast.yaml`)
@@ -58,11 +57,18 @@ the mean over the members. It writes `agent_time.json`. Run it on an idle GPU:
 uv run --extra cuda12 python experiments/art_of_piv/appendix/A.3_agent_architecture/agent_time.py
 ```
 
-| Key | Paper macro | `agent_time.json` (ms, RTX 5090) |
-|---|---|---|
-| `dis_deployed_ms` | `agentOverheadDisDeployedMs` | 0.163 |
-| `dis_large_ms` | `agentOverheadDisLargeMs` | 0.269 |
-| `openpiv_deployed_ms` | `agentOverheadOpenpivDeployedMs` | 0.111 |
-| `openpiv_large_ms` | `agentOverheadOpenpivLargeMs` | 0.211 |
+Each key `<family>_<agent>_ms` feeds the paper macro
+`agentOverhead<Family><Agent>Ms` (e.g. `dis_deployed_ms` →
+`\agentOverheadDisDeployedMs`):
 
-Timings vary by about 0.01 ms between runs.
+<!-- BEGIN agent_time.json -->
+| key | value |
+|---|---|
+| `dis_deployed_ms` | 0.1632 |
+| `dis_large_ms` | 0.2685 |
+| `openpiv_deployed_ms` | 0.1112 |
+| `openpiv_large_ms` | 0.2108 |
+| `device` | NVIDIA GeForce RTX 5090 |
+<!-- END agent_time.json -->
+
+Timings vary slightly from run to run.
