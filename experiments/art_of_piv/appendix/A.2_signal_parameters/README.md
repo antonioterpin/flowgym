@@ -40,27 +40,24 @@ split in batches of 20. The 30 runs take about an hour on one RTX 4090.
 
 ## Results
 
-Mean ± std over seeds 0, 1, 2 on an RTX 4090 (October 2026), against the
-paper's `figures/ablation_bandit_eps.csv` and
-`figures/ablation_regression_targets.csv`. Those hold one number per
-configuration, from the June 2026 runs on the RTX 5090. Router training is
-not deterministic from run to run.
+Validation AEPE, mean ± std over seeds 0, 1, 2, 4× RTX 4090 (October 2026);
+the paper's Figure 9 and Table 4 read these means from `results.json`.
+Router training is not deterministic from run to run.
 
-| model | AEPE | per seed | paper | diff |
-|---|---|---|---|---|
-| bandit, ε = 0 | 0.1359 ± 0.0081 | 0.1385, 0.1249, 0.1444 | 0.1353 | +0.5 % |
-| bandit, ε = 0.02 | 0.1165 ± 0.0026 | 0.1152, 0.1201, 0.1142 | 0.1213 | −4.0 % |
-| bandit, ε = 0.05 | 0.1158 ± 0.0018 | 0.1151, 0.1183, 0.1139 | 0.1116 | +3.7 % |
-| bandit, ε = 0.1 | 0.1119 ± 0.0023 | 0.1106, 0.1100, 0.1151 | 0.1128 | −0.8 % |
-| bandit, ε = 0.25 | 0.1095 ± 0.0004 | 0.1099, 0.1095, 0.1090 | 0.1104 | −0.9 % |
-| bandit, ε = 0.5 | 0.1104 ± 0.0006 | 0.1098, 0.1112, 0.1101 | 0.1119 | −1.3 % |
-| bandit, ε = 1 | 0.1113 ± 0.0008 | 0.1113, 0.1103, 0.1122 | 0.1118 | −0.5 % |
-| regression, raw | 0.1088 ± 0.0005 | 0.1094, 0.1087, 0.1082 | 0.1091 | −0.3 % |
-| regression, per-pair mean | 0.1072 ± 0.0003 | 0.1070, 0.1070, 0.1075 | 0.1078 | −0.6 % |
-| regression, log | 0.1064 ± 0.0001 | 0.1063, 0.1065, 0.1065 | 0.1066 | −0.1 % |
+| model | AEPE | per seed |
+|---|---|---|
+| bandit, ε = 0 | 0.1337 ± 0.0070 | 0.1339, 0.1251, 0.1422 |
+| bandit, ε = 0.02 | 0.1132 ± 0.0015 | 0.1140, 0.1111, 0.1144 |
+| bandit, ε = 0.05 | 0.1144 ± 0.0018 | 0.1162, 0.1150, 0.1120 |
+| bandit, ε = 0.1 | 0.1126 ± 0.0030 | 0.1115, 0.1167, 0.1096 |
+| bandit, ε = 0.25 | 0.1097 ± 0.0001 | 0.1097, 0.1097, 0.1099 |
+| bandit, ε = 0.5 | 0.1114 ± 0.0010 | 0.1103, 0.1127, 0.1114 |
+| bandit, ε = 1 | 0.1106 ± 0.0007 | 0.1103, 0.1099, 0.1115 |
+| regression, raw | 0.1084 ± 0.0004 | 0.1089, 0.1080, 0.1082 |
+| regression, per-pair mean | 0.1072 ± 0.0001 | 0.1072, 0.1074, 0.1071 |
+| regression, log | 0.1067 ± 0.0001 | 0.1068, 0.1066, 0.1066 |
 
-Table 4 reproduces within 0.6 % with the same ordering (log, then
-per-pair mean, then raw). Figure 9 keeps its shape: no exploration is
-clearly worst, and from ε = 0.1 on the AEPE is flat around 0.110–0.112. At
-ε ≤ 0.05 the seeds spread by up to 0.02 px, so the paper's single runs at
-0.02 and 0.05 sit within that spread.
+The log target is best, then the per-pair mean, then raw. Without
+exploration the bandit is clearly worst; for every ε ≥ 0.02 it lies within
+0.110–0.115, lowest at ε = 0.25. The seeds spread by up to 0.007 px for
+ε ≥ 0.02 and 0.017 px at ε = 0.

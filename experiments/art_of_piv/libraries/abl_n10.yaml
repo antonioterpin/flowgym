@@ -6,9 +6,9 @@ estimators:
   - experiments/art_of_piv/models/dis/ps7_st1_gd8_lv2.yaml
   - experiments/art_of_piv/models/dis/ps17_st1_gd8_lv3.yaml
   - experiments/art_of_piv/models/dis/ps5_st1_gd6_lv2.yaml
-  - experiments/art_of_piv/models/dis/ps13_st1_gd16_lv3.yaml
-  - experiments/art_of_piv/models/dis/ps31_st1_gd4_lv3.yaml
+  - experiments/art_of_piv/models/dis/ps13_st1_gd8_lv3.yaml
+  - experiments/art_of_piv/models/dis/ps31_st1_gd16_lv3.yaml
   - experiments/art_of_piv/models/dis/ps7_st1_gd4_lv2.yaml
-  - experiments/art_of_piv/models/dis/ps11_st1_gd4_lv3.yaml
   - experiments/art_of_piv/models/dis/ps9_st1_gd8_lv2.yaml
+  - experiments/art_of_piv/models/dis/ps11_st1_gd4_lv3.yaml
   - experiments/art_of_piv/models/dis/ps7_st1_gd4_lv3.yaml

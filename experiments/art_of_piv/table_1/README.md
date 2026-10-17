@@ -58,7 +58,7 @@ does both, from the repository root (CPU, under a minute each), with the pins
 of `experiments/art_of_piv/datasets/train.yaml`:
 
 ```bash
-CACHES=hf://activefluidcontrol/piv-class1-caches@8e306db132ae0f20a037c2e442de583e6dea0b7a
+CACHES=hf://activefluidcontrol/piv-class1-caches@7068a49525da1d8c1b7bdf4027a3c3a74da5d02a
 TUNE=hf://activefluidcontrol/piv-class1@ccc784ebbe86f16121bdc51ccb20b4cdf6b6a150:tune
 # Library of dis_20hz; add --out <file>.json to keep the picks
 uv run --extra hf python scripts/select_ensemble.py --cache-root $CACHES \

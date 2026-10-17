@@ -1,8 +1,9 @@
 # Appendix B: greedy versus exact library selection
 
-Appendix B compares the greedy library selection used throughout the paper
-with the exact optimum on the DIS pool. For every library size K from 1 to
-20, `select.py` picks the K DIS configs that minimize the mean oracle EPE
+Appendix B compares greedy library selection with the exact optimum on the
+DIS pool (the libraries of Table 1 are exact optima, those of A.1 greedy;
+see `table_1/README.md`). For every library size K from 1 to 20,
+`select.py` picks the K DIS configs that minimize the mean oracle EPE
 (per frame, the error of the best member) over the 1320 tune frames, once
 greedily and once exactly with the mixed-integer program of
 `scripts/select_ensemble.py` (HiGHS), and times the exact solve.
@@ -31,9 +32,9 @@ uv run --extra hf python experiments/art_of_piv/appendix/B_library_selection/sel
 ## Results
 
 Pool: 477 DIS configs (the 565 cached ones, minus 10 not run on every tune
-frame and 78 that diverge on some frame). Greedy on this pool nearly
-reproduces the A.1 library `abl_n20`: the first four members are the same,
-two members differ, and it scores 0.11050 against 0.11049 for `abl_n20`.
+frame and 78 that diverge on some frame). Greedy on this pool is the A.1
+library `abl_n20`, in order (checked by
+`tests/integration/art_of_piv_paper/test_libraries.py`).
 The original run (June 2026) also dropped the 25 configs without a timing
 file, leaving 452.
 
@@ -51,11 +52,6 @@ file, leaving 452.
 All sizes are in `results.json`. Times are wall clock on the CPU of the
 RTX 4090 machine (64 cores).
 
-The paper's numbers are absolute gaps in hundredths of a pixel: the
-original text (paper commit e26a95d) read "0.8 pp at two models, below
-0.05 pp from three models on", where 1 pp is 0.01 px of AEPE. They match:
-0.0078 px at K = 2 and at most 0.00046 px for K ≥ 3. The MILP solves in 5
-to 17 s for K ≥ 2 (about 10 s, as in the paper); K = 1 takes 42 s. The
-current text turned the gaps into percentages of the optimal AEPE
-("0.8 %", "below 0.05 %", "within 1 %"); as relative gaps they are 6.7 %
-at K = 2 and up to 0.41 % for K ≥ 3.
+The paper reports the gap at K = 2 (6.7 %), the largest gap for K ≥ 3
+(0.41 %, at K = 5) and the MILP time range for K ≥ 2 (5.6–16.8 s) from
+`results.json`. K = 1 takes 42 s.

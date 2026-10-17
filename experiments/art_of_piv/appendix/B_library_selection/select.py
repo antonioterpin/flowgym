@@ -24,7 +24,7 @@ from synthpix.data_sources import hf_resolver
 
 # Per-frame EPEs of every DIS config, and the tune split whose frames they
 # are restricted to; both pinned as in experiments/art_of_piv/datasets.
-CACHES = "hf://activefluidcontrol/piv-class1-caches@8e306db132ae0f20a037c2e442de583e6dea0b7a"
+CACHES = "hf://activefluidcontrol/piv-class1-caches@7068a49525da1d8c1b7bdf4027a3c3a74da5d02a"
 TUNE = "hf://activefluidcontrol/piv-class1@ccc784ebbe86f16121bdc51ccb20b4cdf6b6a150:tune"
 POOL_PREFIX = "piv-class1-dis"
 SIZES = range(1, 21)

@@ -2,7 +2,8 @@
 
 The fast tests check that the committed library and pool files hash to the
 caches the paper used. The ``run_explicitly`` tests download the pinned
-caches and re-run each selection with ``scripts/select_ensemble.py``
+caches and re-run each selection (Table 1 and the A.1 libraries) with
+``scripts/select_ensemble.py``
 (``pytest -m run_explicitly tests/integration/art_of_piv_paper``).
 """
 
@@ -22,10 +23,10 @@ EXP = Path("experiments/art_of_piv")
 
 # Greedy DIS libraries of appendix A.1; abl_n<K> is the first K of these.
 ABL_HASHES = (
-    "fe074ef0 e48f5064 ab441c2c 259d75c5 830a7b7d "
-    "322009ba f6cef0e8 551175b8 60471ef2 c036e3c6 "
-    "8b9c3640 b68adbad 919d720b b67b6d2a 99cf63bf "
-    "7ae7658d cb42e3a5 ded331fe 1f2e4378 845842bb"
+    "fe074ef0 e48f5064 ab441c2c 259d75c5 3cf3cb36 "
+    "be1eaf6d f6cef0e8 60471ef2 551175b8 c036e3c6 "
+    "b68adbad 8b9c3640 b67b6d2a 919d720b 99cf63bf "
+    "7ae7658d cb42e3a5 1f2e4378 ded331fe 845842bb"
 ).split()
 
 # Table 1 row: (pool, budget on mean latency in ms = 1 / nominal rate,
@@ -162,6 +163,17 @@ def test_table_1_selections_reproduce(row, tmp_path):
     assert [m["cache_id"] for m in single["greedy"]["selected"]] == (
         _model_cache_ids(prefix, [best])
     )
+
+
+@pytest.mark.run_explicitly
+def test_a1_selection_reproduces(tmp_path):
+    """Greedy over the whole DIS pool; abl_n<K> is the first K of 20."""
+    prefix = "piv-class1-dis"
+    picked = _select(tmp_path, prefix, 20)
+    order = [m["cache_id"] for m in picked["greedy"]["selected"]]
+    for k in (1, 2, 3, 4, 5, 10, 15, 20):
+        library = load_configuration(EXP / "libraries" / f"abl_n{k}.yaml")
+        assert order[:k] == _model_cache_ids(prefix, library["estimators"])
 
 
 @pytest.mark.run_explicitly
