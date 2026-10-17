@@ -450,3 +450,34 @@ def test_cache_id_prefix_filters_subdirs(tmp_path: Path) -> None:
     assert set(cache_ids) == {"dis_alpha", "dis_beta"}
     assert "raft_gamma" not in cache_ids
     assert E.shape == (2, 3)
+
+
+def test_hf_paths_are_resolved_to_their_download_directory(
+    tiny_cache: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``--cache-root`` and ``--keys-from`` accept ``hf://`` URIs."""
+    from synthpix.data_sources import hf_resolver
+
+    local = {
+        "hf://org/caches@abc": tiny_cache,
+        "hf://org/data@def:tune": tmp_path,
+    }
+    monkeypatch.setattr(
+        hf_resolver, "resolve_to_directory", lambda spec: local[spec]
+    )
+    args = select_ensemble._parse_args(
+        [
+            "--cache-root",
+            "hf://org/caches@abc",
+            "--K",
+            "1",
+            "--keys-from",
+            "hf://org/data@def:tune",
+        ]
+    )
+    assert args.cache_root == tiny_cache
+    assert args.keys_from == tmp_path
+    local_args = select_ensemble._parse_args(
+        ["--cache-root", "caches", "--K", "1"]
+    )
+    assert local_args.cache_root == Path("caches")

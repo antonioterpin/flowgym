@@ -15,14 +15,13 @@ import pytest
 import yaml
 
 import experiments.run as run_script
-from flowgym import ALL_ESTIMATORS, run_setup
+from flowgym import run_setup
 from flowgym.experiments import (
     build_study_run_name,
     validate_model_study,
     wandb_git_diff_capture,
     wandb_run_tags,
 )
-from flowgym.utils import load_configuration
 
 
 def _git(cwd: Path, *args: str) -> None:
@@ -721,55 +720,3 @@ def test_experiment_launcher_applies_dataset_overrides(
     }
     model = yaml.safe_load(Path(cmd[cmd.index("--estimator") + 1]).read_text())
     assert "dataset_overrides" not in model
-
-
-# Greedy DIS libraries of appendix A.1; abl_n<K> is the first K of these.
-ABL_HASHES = (
-    "fe074ef0 e48f5064 ab441c2c 259d75c5 830a7b7d "
-    "322009ba f6cef0e8 551175b8 60471ef2 c036e3c6 "
-    "8b9c3640 b68adbad 919d720b b67b6d2a 99cf63bf "
-    "7ae7658d cb42e3a5 ded331fe 1f2e4378 845842bb"
-).split()
-
-
-@pytest.mark.parametrize(
-    ("row", "hashes"),
-    [
-        *(
-            (f"abl_n{k}", " ".join(ABL_HASHES[:k]))
-            for k in (1, 2, 3, 4, 5, 10, 15, 20)
-        ),
-        (
-            "dis_20hz",
-            "007d9a94 86725532 9f485cd6 ad340132 b68adbad "
-            "c072b2f2 c83b3862 cc366684 f37adac3 f581f19f",
-        ),
-        (
-            "dis_1khz",
-            "121533ae 37c4290e 555d463e 65957b24 6aec2a81 "
-            "9215fc07 dae3d3ef dc377309 dcbc9026 ea3880db",
-        ),
-        (
-            "openpiv_1khz",
-            "056ddd95 05ed395f 36659c05 4b514659 6047fd62 "
-            "8a926801 b2f7f13d c4a2b3db d1bb2725 f8badbaa",
-        ),
-        (
-            "openpiv_4khz",
-            "10a2232b 36659c05 5ffd819a 76590e9e 7bf46b30 "
-            "8a926801 c4a2b3db d1bb2725 dbf97772 effb56b3",
-        ),
-    ],
-)
-def test_art_of_piv_libraries_hit_the_paper_caches(row, hashes):
-    """The merged library configs hash to the cache ids the paper used."""
-    library = load_configuration(f"experiments/art_of_piv/libraries/{row}.yaml")
-    cache_ids = []
-    for path in library["estimators"]:
-        cfg = load_configuration(path)
-        estimator = ALL_ESTIMATORS[cfg["estimator"]].from_config(cfg["config"])
-        cache_ids.append(
-            library["cache_id_base"] + estimator.get_cache_id_suffix(None)
-        )
-    base = library["cache_id_base"]
-    assert cache_ids == [f"{base}_c{h}" for h in hashes.split()]

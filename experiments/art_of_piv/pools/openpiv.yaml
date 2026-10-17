@@ -1,0 +1,45 @@
+# Candidate pool of the OpenPIV rows of Table 1 (paper eq. library): 1080
+# configs. Each candidate is experiments/art_of_piv/models/openpiv/base.yaml
+# with these knobs; an entry whose knobs are lists stands for every
+# combination of them, and a null knob is left unset (no signal-to-noise
+# validation). A candidate's per-frame EPE cache is <cache_id_base><suffix of
+# its config>. Table 1's libraries are selected from it (see
+# table_1/README.md).
+base: experiments/art_of_piv/models/openpiv/base.yaml
+cache_id_base: piv-class1-openpiv
+candidates:
+  - window_size: 12
+    overlap: [6, 9]
+    search_size: [12, 17, 23]
+    n_passes: [1, 2, 3]
+    correlation_method: [circular, linear]
+    subpixel_method: [centroid, gaussian, parabolic]
+    sig2noise_threshold: [null, 1.3]
+  - window_size: 16
+    overlap: [8, 12]
+    search_size: [16, 21, 27]
+    n_passes: [1, 2, 3]
+    correlation_method: [circular, linear]
+    subpixel_method: [centroid, gaussian, parabolic]
+    sig2noise_threshold: [null, 1.3]
+  - window_size: 20
+    overlap: [10, 15]
+    search_size: [20, 25, 31]
+    n_passes: [1, 2, 3]
+    correlation_method: [circular, linear]
+    subpixel_method: [centroid, gaussian, parabolic]
+    sig2noise_threshold: [null, 1.3]
+  - window_size: 24
+    overlap: [12, 18]
+    search_size: [24, 29, 35]
+    n_passes: [1, 2, 3]
+    correlation_method: [circular, linear]
+    subpixel_method: [centroid, gaussian, parabolic]
+    sig2noise_threshold: [null, 1.3]
+  - window_size: 32
+    overlap: [16, 24]
+    search_size: [32, 37, 43]
+    n_passes: [1, 2, 3]
+    correlation_method: [circular, linear]
+    subpixel_method: [centroid, gaussian, parabolic]
+    sig2noise_threshold: [null, 1.3]

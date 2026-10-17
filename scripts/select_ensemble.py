@@ -149,6 +149,22 @@ def _restrict_candidate_to_keys(
     return req, errors[idx]
 
 
+def _path_or_hf(value: str) -> Path:
+    """Resolve an ``hf://`` URI to its local download directory.
+
+    Args:
+        value: A local path or an ``hf://`` URI (synthpix resolver syntax).
+
+    Returns:
+        The local directory.
+    """
+    if value.startswith("hf://"):
+        from synthpix.data_sources import hf_resolver  # noqa: PLC0415
+
+        return Path(hf_resolver.resolve_to_directory(value))
+    return Path(value)
+
+
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse command-line arguments.
 
@@ -164,9 +180,10 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--cache-root",
-        type=Path,
+        type=_path_or_hf,
         required=True,
-        help="Root directory of the sweep cache (one subdir per candidate).",
+        help="Root directory of the sweep cache (one subdir per candidate); "
+        "an hf:// URI is downloaded and resolved.",
     )
     parser.add_argument(
         "--K",
@@ -244,12 +261,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--keys-from",
-        type=Path,
+        type=_path_or_hf,
         default=None,
-        help="Directory to glob for *.mat files whose filenames define the "
-        "requested key set. Only keys from this split are used for selection; "
-        "candidates missing any key are dropped. Unset → use all keys found "
-        "in the cache (current behaviour).",
+        help="Directory (or hf:// URI) to glob for *.mat files whose "
+        "filenames define the requested key set. Only keys from this split "
+        "are used for selection; candidates missing any key are dropped. "
+        "Unset → use all keys found in the cache (current behaviour).",
     )
     parser.add_argument(
         "--cache-id-prefix",
