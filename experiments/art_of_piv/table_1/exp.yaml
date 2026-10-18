@@ -13,5 +13,5 @@ models:
   - models/router_raft32.yaml
   - models/best_single_raft32.yaml
 seeds: [0, 1, 2]
-metrics: [mean_epe, median_epe, p95_epe, p99_epe]
+metrics: [mean_epe, std_epe, median_epe, p90_epe, p95_epe, p99_epe, max_epe]
 entrypoint: src/main.py

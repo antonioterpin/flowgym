@@ -563,7 +563,11 @@ def test_train_supervised_evaluates_on_test(
     """Test eval uses the best-on-val checkpoint, else the final state."""
     val_sampler = MagicMock() if validate else None
     test_sampler = MagicMock()
-    metrics = {"mean_error": np.float32(0.1), "errors": jnp.array([0.1])}
+    metrics = {
+        "mean_error": np.float32(0.1),
+        "errors": jnp.array([0.1]),
+        "files": ["a.mat"],
+    }
 
     with (
         patch("train_supervised.Checkpointer", side_effect=_FakeCheckpointer),
@@ -595,6 +599,8 @@ def test_train_supervised_evaluates_on_test(
     summary = json.loads((tmp_path / "test_summary.json").read_text())
     assert summary["mean_epe"] == pytest.approx(0.1)
     assert summary["p99_epe"] == pytest.approx(0.1)
+    assert summary["std_epe"] == pytest.approx(0.0)
+    assert summary["frames"] == {"file": ["a.mat"], "epe": [pytest.approx(0.1)]}
     assert summary["step"] == 5
 
 

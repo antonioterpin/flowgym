@@ -11,7 +11,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from eval import eval_full_dataset, evaluate_batches
+from eval import eval_full_dataset, evaluate_batches, write_summary
 from flowgym.common.base import Estimator
 from flowgym.training.caching import CacheManager
 
@@ -174,6 +174,38 @@ def test_eval_full_dataset_caching_robust():
         )
 
 
+def test_evaluate_batches_files_survive_base_process_metrics(tmp_path):
+    """The base metric hook (np.asarray on every value) keeps files a list."""
+
+    class BaseHookEstimator(MockEvalEstimator):
+        process_metrics = Estimator.process_metrics
+
+    batch = MockEvalBatch(keys=[0, 1])
+    batch.files = ["dir/a.mat", "dir/b.mat"]
+    results = evaluate_batches(
+        estimator=BaseHookEstimator(),
+        sampler=[batch],
+        create_state_fn=lambda img, key: {
+            "estimates": jnp.zeros((len(img), 1, 32, 32, 2))
+        },
+        compute_estimate_fn=lambda img2, state, ts, cache_payload=None: (
+            state,
+            {"errors": np.array([0.1, 0.5])},
+        ),
+        trainable_state=None,
+        num_batches=1,
+        reset_sampler=False,
+    )
+
+    assert results["files"] == ["a.mat", "b.mat"]
+    write_summary(
+        tmp_path / "s.json",
+        {},
+        files=results["files"],
+        errors=results["errors"],
+    )
+
+
 @pytest.mark.parametrize(
     ("errors", "mean_epe"), [([0.1, 0.5], 0.3), ([0.1, np.nan], None)]
 )
@@ -181,10 +213,13 @@ def test_eval_full_dataset_writes_summary(tmp_path, errors, mean_epe):
     """``summary_out`` gets valid JSON with only the measured metrics."""
 
     def compute_estimate_fn(img2, state, trained_state, cache_payload=None):
-        return state, {"errors": np.array(errors)}
+        return state, {"errors": np.array([*errors, 9.0])}
 
     sampler = MagicMock()
-    sampler.__iter__.return_value = iter([MockEvalBatch(keys=[0, 1])])
+    batch = MockEvalBatch(keys=[0, 1, 2])
+    batch.mask = np.array([True, True, False])
+    batch.files = ["dir/a.mat", "dir/b.mat", "dir/a.mat"]
+    sampler.__iter__.return_value = iter([batch])
     summary_out = tmp_path / "summary.json"
     eval_full_dataset(
         estimator=MockEvalEstimator(),
@@ -201,6 +236,9 @@ def test_eval_full_dataset_writes_summary(tmp_path, errors, mean_epe):
     assert summary["mean_epe"] == pytest.approx(mean_epe)
     assert summary["median_epe"] == pytest.approx(mean_epe)
     assert "mean_relative_error" not in summary
+    assert summary["frames"]["file"] == ["a.mat", "b.mat"]
+    assert summary["frames"]["epe"][0] == pytest.approx(0.1)
+    assert (summary["frames"]["epe"][1] is None) == (mean_epe is None)
 
 
 if __name__ == "__main__":

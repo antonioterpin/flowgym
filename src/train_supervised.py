@@ -2,11 +2,9 @@
 
 import contextlib
 import itertools
-import json
-import math
 import time
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 import goggles as gg
 import jax
@@ -17,6 +15,7 @@ from eval import (
     log_eval_metrics,
     metrics_summary,
     scalar_metrics,
+    write_summary,
 )
 from flowgym.checkpointing import CheckpointConfig, Checkpointer
 from flowgym.common.base import Estimator, NNEstimatorTrainableState
@@ -77,7 +76,7 @@ def train_supervised(
         test_sampler: If given, evaluated after training on the
             best-on-validation checkpoint (the final state without
             validation); results are logged under ``test/`` and written to
-            ``out_dir/test_summary.json`` (EPE mean, median, p95, p99).
+            ``out_dir/test_summary.json`` (EPE statistics and per-frame EPE).
         test_num_batches: Number of batches to test on.
         num_batches: Number of batches to train for.
         estimate_type: Type of estimate to compute.
@@ -491,15 +490,11 @@ def train_supervised(
             )
             summary = metrics_summary(test_results["errors"], "epe")
             summary["step"] = float(test_step)
-            # NaN/inf are not valid JSON; write them as null
-            Path(out_dir, "test_summary.json").write_text(
-                json.dumps(
-                    {
-                        k: v if math.isfinite(v) else None
-                        for k, v in summary.items()
-                    },
-                    indent=2,
-                )
+            write_summary(
+                Path(out_dir, "test_summary.json"),
+                summary,
+                files=cast("list[str]", test_results.get("files", [])),
+                errors=test_results["errors"],
             )
 
         # Final cache flush (inside context while cache_manager is still active)

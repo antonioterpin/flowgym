@@ -15,6 +15,7 @@ uv run --extra cuda12 --extra wandb --extra hf python experiments/run.py --exp a
 | `appendix/A.3_agent_architecture/` | Appendix A.3, Table 5 (larger router) |
 | `appendix/B_library_selection/` | Appendix B (greedy vs exact library selection; a script, not `run.py`) |
 | `appendix/C_raft_finetuning/` | Appendix C (the six RAFT32 specialists of the raft32 row) |
+| `appendix/E_epe_statistics/` | Appendix E (per-frame EPE statistics of Table 1; a script, run after `table_1/`) |
 
 The names follow the paper's numbering at the time of writing; they are
 renamed once when the paper is final.

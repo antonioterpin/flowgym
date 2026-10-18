@@ -327,6 +327,7 @@ def evaluate_batches(
         sampler.reset()
 
     errors_list: list[float] = []
+    files_list: list[str] = []
     aggregated_metrics: dict[str, list[float]] = {}
     batches_processed = 0
     eval_key = key
@@ -362,6 +363,7 @@ def evaluate_batches(
         if errors.ndim == 0:
             errors = errors[None]
         errors_list.extend(errors.tolist())
+        files_list.extend(_frame_files(batch))
 
         for metric_name, value in metrics.items():
             if metric_name == "errors":
@@ -427,29 +429,78 @@ def evaluate_batches(
     # Allow estimator to add derived metrics to the summary
     processed = estimator.process_metrics(dict(summary))
     summary.update(processed)
+    # After the hook, which may turn every value into an array
+    summary["files"] = files_list
     return dict(summary)
 
 
 def metrics_summary(values: npt.ArrayLike, name: str) -> dict[str, float]:
-    """Mean, median, tail quantiles and extremes of a per-frame metric.
+    """Mean, spread, tail quantiles and extremes of a per-frame metric.
 
     Args:
         values: The metric of each frame.
         name: Metric name used in the keys, e.g. ``"epe"``.
 
     Returns:
-        ``mean_<name>``, ``median_<name>``, ``p95_<name>``, ``p99_<name>``,
-        ``max_<name>`` and ``min_<name>``.
+        ``mean_<name>``, ``std_<name>``, ``median_<name>``, ``p90_<name>``,
+        ``p95_<name>``, ``p99_<name>``, ``max_<name>`` and ``min_<name>``.
     """
     values = np.asarray(values, dtype=np.float32)
     return {
         f"mean_{name}": float(values.mean()),
+        f"std_{name}": float(values.std()),
         f"median_{name}": float(np.median(values)),
+        f"p90_{name}": float(np.percentile(values, 90)),
         f"p95_{name}": float(np.percentile(values, 95)),
         f"p99_{name}": float(np.percentile(values, 99)),
         f"max_{name}": float(values.max()),
         f"min_{name}": float(values.min()),
     }
+
+
+def write_summary(
+    path: str | Path,
+    summary: dict[str, float],
+    *,
+    files: list[str],
+    errors: npt.ArrayLike,
+) -> None:
+    """Write a summary as JSON, with each frame's EPE under ``frames``.
+
+    Args:
+        path: Output JSON path.
+        summary: Scalar metrics; NaN/inf (not valid JSON) are written as null.
+        files: File name of each frame; ``frames`` is omitted when these do
+            not match ``errors`` (e.g. synthetic data has no files).
+        errors: EPE of each frame.
+    """
+    out: dict = {k: v if math.isfinite(v) else None for k, v in summary.items()}
+    errors = np.asarray(errors, dtype=np.float32).reshape(-1)
+    if files and len(files) == errors.size:
+        out["frames"] = {
+            "file": files,
+            "epe": [e if math.isfinite(e) else None for e in errors.tolist()],
+        }
+    Path(path).write_text(json.dumps(out, indent=2))
+
+
+def _frame_files(batch: SynthpixBatch) -> list[str]:
+    """File names of a batch's real (unpadded) frames.
+
+    Args:
+        batch: The evaluated batch.
+
+    Returns:
+        The base names, or ``[]`` if the batch has no files.
+    """
+    files = getattr(batch, "files", None)
+    if files is None:
+        return []
+    if batch.mask is not None:
+        files = [
+            f for f, m in zip(files, np.asarray(batch.mask), strict=True) if m
+        ]
+    return [Path(f).name for f in files]
 
 
 def scalar_metrics(metrics: Metrics) -> dict[str, float]:
@@ -536,6 +587,7 @@ def eval_full_dataset(
             # if it's not None, since it may be optional.
             stack.enter_context(cache_manager)
         errors_list = []
+        files_list: list[str] = []
         relative_errors_list = []
         if key is None:
             key = jax.random.PRNGKey(0)
@@ -630,6 +682,7 @@ def eval_full_dataset(
                 if errors.ndim == 0:
                     errors = jnp.expand_dims(errors, axis=0)
                 errors_list.extend(list(errors))
+                files_list.extend(_frame_files(batch))
 
             if "relative_errors" in metrics:
                 relative_errors = jnp.asarray(metrics["relative_errors"])
@@ -712,12 +765,9 @@ def eval_full_dataset(
                 summary["min_relative_error"] = float(min_relative_errors)
             estimator.record_eval_summary(summary)
             if summary_out is not None:
-                # NaN/inf are not valid JSON; write them as null
-                finite = {
-                    k: v if math.isfinite(v) else None
-                    for k, v in summary.items()
-                }
-                Path(summary_out).write_text(json.dumps(finite, indent=2))
+                write_summary(
+                    summary_out, summary, files=files_list, errors=errors_array
+                )
         else:
             logger.info(
                 f"Mean Density Error over {batches_processed} batches: "
