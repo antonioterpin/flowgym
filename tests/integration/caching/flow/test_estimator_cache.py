@@ -193,8 +193,8 @@ class TestCacheManagerEnrich:
 class TestEstimatorCacheInterface:
     """Test the estimator.enrich interface."""
 
-    def test_base_estimator_returns_none(self):
-        """Estimator.enrich returns None without ground-truth flow."""
+    def test_base_estimator_without_ground_truth(self):
+        """Without ground-truth flow, enrich returns only corr16_peak."""
         from flowgym.flow.dis.dis_jax import (
             DISJAXFlowFieldEstimator,
             PresetType,
@@ -214,9 +214,8 @@ class TestEstimatorCacheInterface:
             keys=jnp.array([1, 2], dtype=jnp.uint64),
         )
 
-        # Without flow_fields, DIS returns None
         result = estimator.enrich(batch, np.array([0, 1]))
-        assert result is None
+        assert set(result) == {"corr16_peak"}
 
     def test_cache_id_suffix_includes_config(self):
         """Cache ID suffix reflects the estimator configuration hash."""

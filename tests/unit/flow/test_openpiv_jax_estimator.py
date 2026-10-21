@@ -17,6 +17,7 @@ import pytest
 from synthpix import SynthpixBatch
 
 from flowgym.flow.open_piv.openpiv_jax import OpenPIVJAXEstimator
+from flowgym.flow.quality import correlation_peak_quality
 
 # Canonical config used by the on-disk sweep cache library. Its pure-param
 # ``get_config`` md5 is pinned below; the cache re-key migration targets it.
@@ -206,7 +207,10 @@ def test_sig2noise_has_no_effect_with_multipass(image_pair):
 
 
 def test_enrich_returns_per_sample_epe(image_pair):
-    """enrich returns EPE of the estimate for the missing samples only."""
+    """enrich scores the estimate for the missing samples only.
+
+    The ground-truth-free corr16_peak is always there; EPE needs ground truth.
+    """
     img1, img2 = image_pair
     imgs1 = jnp.concatenate([img1, img2])
     imgs2 = jnp.concatenate([img2, img1])
@@ -223,6 +227,11 @@ def test_enrich_returns_per_sample_epe(image_pair):
     expected = jnp.mean(jnp.linalg.norm(flow - gt[1:], axis=-1), axis=(1, 2))
     np.testing.assert_allclose(payload["epe"], expected, rtol=1e-5)
     assert payload["relative_epe"].shape == (1,)
+    np.testing.assert_allclose(
+        payload["corr16_peak"],
+        correlation_peak_quality(imgs1[1:], imgs2[1:], flow),
+        rtol=1e-5,
+    )
 
     no_gt = SynthpixBatch(
         images1=imgs1,
@@ -230,7 +239,11 @@ def test_enrich_returns_per_sample_epe(image_pair):
         flow_fields=None,
         keys=jnp.arange(2, dtype=jnp.uint64),
     )
-    assert est.enrich(no_gt, np.array([0])) is None
+    no_gt_payload = est.enrich(no_gt, np.array([1]))
+    assert set(no_gt_payload) == {"corr16_peak"}
+    np.testing.assert_allclose(
+        no_gt_payload["corr16_peak"], payload["corr16_peak"], rtol=1e-5
+    )
 
 
 def test_integer_like_sizes_are_accepted():
