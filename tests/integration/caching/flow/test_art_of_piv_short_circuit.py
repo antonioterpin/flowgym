@@ -287,3 +287,43 @@ def test_art_of_piv_short_circuits_during_evaluation():
             "both greedy choices match oracle selections."
         ),
     )
+
+
+def test_art_of_piv_runs_sub_estimators_when_cache_holds_other_metric():
+    """Cached non-EPE router labels must not be reported as eval errors."""
+    from flowgym.flow.art_of_piv import inference as art_of_piv_inference
+
+    B, H, W = 2, 16, 16
+    cache_payload = CachePayload(
+        epe_all=np.full((B, 3), 0.5, dtype=np.float32),
+        epe_mask=np.ones((B, 3), dtype=bool),
+    )
+
+    def mock_run_router_fn(*args, **kwargs):
+        return (
+            jnp.array([0, 1]),
+            jnp.zeros((B, 3)),
+            jnp.zeros(B),
+            jnp.zeros((B, 2), dtype=jnp.uint32),
+        )
+
+    def mock_run_subestimators_fn(*args, **kwargs):
+        return jnp.ones((B, H, W, 2)), {"choices": jnp.array([0, 1])}, {}
+
+    flow, _, metrics = art_of_piv_inference.estimate(
+        images=jnp.zeros((B, H, W)),
+        state={
+            "images": jnp.zeros((B, 1, H, W)),
+            "estimates": jnp.zeros((B, 1, H, W, 2)),
+        },
+        trainable_state=None,
+        extras={"cache_payload": cache_payload},
+        use_temporal_propagation=False,
+        use_last_estimate=False,
+        run_router_fn=mock_run_router_fn,
+        run_subestimators_fn=mock_run_subestimators_fn,
+        cache_holds_epe=False,
+    )
+
+    np.testing.assert_array_equal(flow, jnp.ones((B, H, W, 2)))
+    assert "errors" not in metrics

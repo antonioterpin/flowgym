@@ -66,6 +66,12 @@ All three modes share the same supervision signal — the EPE vector
 $\mathbf{e}(s, \varphi) \in \mathbb{R}^K$ — and differ only in how the
 router head is asked to *use* it.
 
+Without ground truth (e.g. real images), set `target_metric: corr16_peak`:
+the vector then holds each sub-estimator's ground-truth-free
+correlation-peak score (`flowgym.flow.quality`) instead of its EPE, read
+from caches collected on those images. This needs supervised training with
+caching enabled.
+
 **Regression.** Treat each $Q_\theta(s)_k$ as a prediction of the
 (transformed, negated) per-sub-estimator error. Loss is a per-arm
 regression:

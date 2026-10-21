@@ -227,12 +227,13 @@ def build_unified_index(
     sub_model_states: Sequence[EstimatorTrainableState],
     sub_cache_managers: Mapping[str, SubCacheManager],
     cache_id_base: str | None = None,
+    target_metric: str = "epe",
 ) -> dict[int, tuple[np.ndarray, np.ndarray]]:
     """Build a unified hash-based index for O(1) lookups.
 
-    Aggregates EPEs from all sub-model caches into a single dictionary
-    mapping key -> (epe_0, epe_1, ..., epe_n). Only keys present in ALL
-    **loaded** sub-model caches are included.
+    Aggregates ``target_metric`` (EPE by default) from all sub-model caches
+    into a single dictionary mapping key -> (epe_0, epe_1, ..., epe_n).
+    Only keys present in ALL **loaded** sub-model caches are included.
 
     If some sub-model caches are not loaded (e.g., on first run when caches
     don't exist yet), the unified index will still be built for the available
@@ -246,6 +247,7 @@ def build_unified_index(
             resolving each sub-model's manager from ``sub_cache_managers``.
             Must match the value passed to ``preload_caches``. Defaults to
             None, which uses the sub-model class name.
+        target_metric: Sub-cache column used as the per-estimator score.
 
     Returns:
         Dictionary mapping key -> (epe_array, mask).
@@ -279,8 +281,11 @@ def build_unified_index(
                 f"loaded or empty)"
             )
             continue
+        if target_metric not in cm.all_data:
+            logger.warning(f"Skipping {cache_id}: no {target_metric!r} column")
+            continue
 
-        cache_data.append((cm.all_data["key"], cm.all_data["epe"], i))
+        cache_data.append((cm.all_data["key"], cm.all_data[target_metric], i))
         model_indices.append(i)
 
     if not cache_data:
@@ -334,6 +339,7 @@ def enrich_from_sub_caches(
     root_dir: str | None = None,
     allow_create_missing: bool = False,
     cache_id_base: str | None = None,
+    target_metric: str = "epe",
 ) -> dict[str, np.ndarray]:
     """Aggregate EPEs from pre-loaded sub-model caches using unified index.
 
@@ -355,6 +361,9 @@ def enrich_from_sub_caches(
         cache_id_base: Optional fixed base for sub-cache ids; when set, the
             write-back path uses ``<cache_id_base><suffix>`` to match
             ``preload_caches`` (defaults to the sub-model class name).
+        target_metric: Sub-cache field used as the per-estimator score;
+            misses of a ground-truth-free one (``corr16_peak``) are also
+            computed for batches without ground truth.
 
     Returns:
         Dictionary with "epe_all" (B, num_estimators) and
@@ -386,7 +395,7 @@ def enrich_from_sub_caches(
     # Compute misses on demand if requested and ground truth available
     if compute_misses and np.any(~epe_mask):
         flow_fields = getattr(batch, "flow_fields", None)
-        if flow_fields is None:
+        if flow_fields is None and target_metric != "corr16_peak":
             logger.debug("Skipping miss computation: no ground truth in batch")
             return {"epe_all": epe_all, "epe_mask": epe_mask}
 
@@ -400,13 +409,14 @@ def enrich_from_sub_caches(
 
             # Compute via sub-model inference
             sub_payload = model.enrich(batch, miss_pos, trainable_state=t_state)
-            if sub_payload is None or "epe" not in sub_payload:
+            if sub_payload is None or target_metric not in sub_payload:
                 continue
 
-            epe_vals = np.asarray(sub_payload["epe"])
+            epe_vals = np.asarray(sub_payload[target_metric])
             if epe_vals.ndim == 0 or epe_vals.shape[0] != miss_pos.size:
                 raise ValueError(
-                    "Sub-model payload 'epe' must align with misses: "
+                    f"Sub-model payload {target_metric!r} must align with "
+                    "misses: "
                     f"expected first dimension {miss_pos.size}, got "
                     f"{epe_vals.shape}"
                 )

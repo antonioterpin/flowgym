@@ -65,6 +65,7 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
         estimator_fns: Callable tuple used to execute sub-estimators.
         sub_models: Instantiated sub-estimator model objects.
         sub_model_states: Trainable state tuple aligned with ``sub_models``.
+        target_metric: Sub-estimator cache field the router minimises.
     """
 
     train_type: str
@@ -73,6 +74,7 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
     estimator_fns: tuple[EstimateFn, ...]
     sub_models: tuple[FlowFieldEstimator, ...]
     sub_model_states: tuple[EstimatorTrainableState, ...]
+    target_metric: str = "epe"
 
     def __init__(
         self,
@@ -91,6 +93,7 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
         loss_config: dict | None = None,
         gamma: float = 0,
         target_transform_config: dict | None = None,
+        target_metric: Literal["epe", "relative_epe", "corr16_peak"] = "epe",
         # Exploration strategy
         exploration_config: dict | None = None,
         # Postprocessing
@@ -152,6 +155,10 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
                 Must be in [0, 1).
             target_transform_config: Configuration for transforming
                 target values before loss computation.
+            target_metric: Sub-estimator cache field the router learns to
+                minimise. ``corr16_peak`` needs no ground truth, so it can
+                label real images; it requires supervised training from
+                cached labels.
             exploration_config: Exploration strategy configuration
                 (e.g., epsilon-greedy with schedule).
             postprocess: Sequence of post-processing functions to apply
@@ -162,6 +169,10 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
                 during initialization.
             **kwargs: Additional keyword arguments passed to base
                 FlowFieldEstimator.
+
+        Raises:
+            ValueError: If ``target_metric`` is unknown, or is not EPE with
+                RL training.
         """
         # Set default loss config
         if loss_config is None:
@@ -180,6 +191,13 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
 
         # Validate train type
         self.train_type = art_of_piv_validation.validate_train_type(train_type)
+        if target_metric not in ("epe", "relative_epe", "corr16_peak"):
+            raise ValueError(f"Unknown target_metric: {target_metric!r}")
+        if target_metric != "epe" and self.train_type != "supervised":
+            raise ValueError(
+                f"target_metric={target_metric!r} needs supervised training."
+            )
+        self.target_metric = target_metric
 
         # Validate and load estimators configuration
         estimators_list_config = (
@@ -416,7 +434,10 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
             suffix = sub_model.get_cache_id_suffix(sub_state)
             suffixes.append(suffix)
 
-        # Combine all suffixes into a single hash
+        # Combine all suffixes into a single hash; the target metric joins it
+        # only when it is not EPE, so existing router caches keep their id.
+        if self.target_metric != "epe":
+            suffixes.append(self.target_metric)
         combined = "".join(suffixes)
         h = hashlib.md5(combined.encode("utf-8")).hexdigest()
         return f"_art_of_piv{h[:8]}"
@@ -466,6 +487,7 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
                 sub_model_states=self.sub_model_states,
                 sub_cache_managers=self._sub_cache_managers,
                 cache_id_base=self._cache_id_base,
+                target_metric=self.target_metric,
             )
             or {}
         )
@@ -513,6 +535,7 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
             root_dir=self._cache_root_dir,
             allow_create_missing=self._allow_create_missing_sub_caches,
             cache_id_base=self._cache_id_base,
+            target_metric=self.target_metric,
         )
         # Filter to miss_idxs only (enrich_batch expects data for misses)
         return {k: v[miss_idxs] for k, v in payload.items()}
@@ -598,7 +621,17 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
 
         Returns:
             The prepared experience with enriched state.
+
+        Raises:
+            ValueError: If ``target_metric`` is not EPE: replayed experiences
+                drop their cache payload, the only source of such labels.
         """
+        if self.target_metric != "epe":
+            raise ValueError(
+                f"target_metric={self.target_metric!r} does not support "
+                "replay (cached labels are not replayed); set "
+                "replay_buffer_capacity to 0."
+            )
         return art_of_piv_training.prepare_experience_for_replay(
             experience=experience,
             trainable_state=trainable_state,
@@ -645,6 +678,7 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
             estimator_configs=self.estimator_configs,
             estimator_fns=self.estimator_fns,
             estimator_states=self.sub_model_states,
+            target_metric=self.target_metric,
         )
 
     def create_rl_train_step(self) -> RLTrainStep:
@@ -772,6 +806,7 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
                 estimator_fns=self.estimator_fns,
                 estimator_states=self.sub_model_states,
             ),
+            cache_holds_epe=self.target_metric == "epe",
         )
 
     def _create_extras(

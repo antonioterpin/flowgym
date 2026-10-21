@@ -49,6 +49,7 @@ def create_supervised_train_step(
     estimator_configs: list[dict[str, Any]],
     estimator_fns: tuple[EstimateFn, ...],
     estimator_states: tuple[EstimatorTrainableState, ...] | None = None,
+    target_metric: str = "epe",
 ) -> SupervisedTrainStep:
     """Create a supervised training step for multi-armed bandit mode.
 
@@ -73,6 +74,9 @@ def create_supervised_train_step(
         estimator_states: Optional tuple of sub-model trainable states aligned
             with `estimator_fns`. When not provided, `trainable_state` is used
             as a fallback for backwards compatibility.
+        target_metric: Score the cached ``epe_all`` holds; anything but EPE
+            can only come from the cache, since the uncached path computes
+            EPE against ground truth.
 
     Returns:
         The supervised training step closure.
@@ -92,6 +96,10 @@ def create_supervised_train_step(
             The computed loss.
             The updated trainable state.
             A metrics dictionary.
+
+        Raises:
+            ValueError: If ``target_metric`` is not EPE and the batch has no
+                cached labels.
         """
         # Backward-compat: coerce legacy dict-based cache_payload.
         if isinstance(experience.cache_payload, dict):
@@ -111,6 +119,11 @@ def create_supervised_train_step(
             experience.cache_payload is not None
             and experience.cache_payload.epe_all is not None
         )
+        if not has_cached_epe and target_metric != "epe":
+            raise ValueError(
+                f"target_metric={target_metric!r} needs cached labels; "
+                "configure caching for the training dataset."
+            )
 
         # Use router method
         def run_router(s):

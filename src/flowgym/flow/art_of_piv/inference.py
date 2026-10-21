@@ -54,6 +54,7 @@ def estimate(
     use_last_estimate: bool,
     run_router_fn: RunRouterFn,
     run_subestimators_fn: RunSubEstimatorsFn,
+    cache_holds_epe: bool = True,
 ) -> tuple[jnp.ndarray, dict[str, Any], dict[str, Any]]:
     """Compute the flow field between the two most recent frames.
 
@@ -68,6 +69,9 @@ def estimate(
         run_router_fn: Bound router function that returns (choices, qs,
             exploration_rate, estimate_keys).
         run_subestimators_fn: Bound sub-estimator dispatch function.
+        cache_holds_epe: Whether a cached ``epe_all`` is the sub-estimators'
+            EPE. Only then can it stand in for running them; other router
+            labels (e.g. ``corr16_peak``) are not errors to report.
 
     Returns:
         Tuple of (flow, out_extras, metrics).
@@ -114,7 +118,11 @@ def estimate(
     # Short-circuit if we have cached EPEs from CachePayload.
     # This optimization is valid because sub-estimators are frozen during
     # both training and evaluation - only the router weights change.
-    if cache_payload is not None and cache_payload.epe_all is not None:
+    if (
+        cache_holds_epe
+        and cache_payload is not None
+        and cache_payload.epe_all is not None
+    ):
         # Handle potential partial cache misses.
         epe_all = jnp.asarray(cache_payload.epe_all)
         epe_mask_raw = cache_payload.epe_mask

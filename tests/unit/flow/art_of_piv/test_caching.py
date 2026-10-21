@@ -3,6 +3,7 @@
 Unit tests for cache management, aggregation, and unified index building.
 """
 
+import hashlib
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -391,3 +392,57 @@ def test_cache_spec_matches_library_size():
         "epe_all": ("float32", (3,)),
         "epe_mask": ("bool", (3,)),
     }
+
+
+def test_target_metric_without_ground_truth(mock_batch, mock_sub_model):
+    """A GT-free target metric is read from caches and computed for misses."""
+    mock_batch.flow_fields = None
+    mock_sub_model.get_cache_id_suffix.return_value = "_suffix"
+    cm = MagicMock()
+    cm.all_data = {
+        "key": np.array([1, 2, 3], dtype=np.int64),
+        "corr16_peak": np.array([0.1, 0.2, 0.3], dtype=np.float32),
+    }
+    index = caching.build_unified_index(
+        sub_models=[mock_sub_model],
+        sub_model_states=[None],
+        sub_cache_managers={"MagicMock_suffix": cm},
+        target_metric="corr16_peak",
+    )
+    mock_sub_model.enrich.return_value = {
+        "corr16_peak": np.array([0.7], dtype=np.float32)
+    }
+
+    with patch("flowgym.training.caching.compute_batch_keys") as mock_keys:
+        mock_keys.return_value = np.array([1, 2, 3, 4], dtype=np.int64)
+        payload = caching.enrich_from_sub_caches(
+            batch=mock_batch,
+            compute_misses=True,
+            sub_models=[mock_sub_model],
+            sub_model_states=[None],
+            sub_cache_managers={},
+            unified_epe_index=index,
+            target_metric="corr16_peak",
+        )
+
+    np.testing.assert_allclose(payload["epe_all"][:, 0], [0.1, 0.2, 0.3, 0.7])
+    assert payload["epe_mask"].all()
+
+
+def test_target_metric_changes_cache_id_only_when_not_epe():
+    """Existing router caches keep their id; other targets get their own."""
+    estimator = build_testable_art_of_piv_estimator([MockSubModel(name="m0")])
+    sub_suffix = estimator.sub_models[0].get_cache_id_suffix(None)
+    legacy = hashlib.md5(sub_suffix.encode("utf-8")).hexdigest()[:8]
+    assert estimator.get_cache_id_suffix(None) == f"_art_of_piv{legacy}"
+
+    estimator.target_metric = "corr16_peak"
+    assert estimator.get_cache_id_suffix(None) != f"_art_of_piv{legacy}"
+
+
+def test_target_metric_rejects_replay():
+    """Replay drops cached labels, so non-EPE targets refuse it up front."""
+    estimator = build_testable_art_of_piv_estimator([MockSubModel(name="m0")])
+    estimator.target_metric = "corr16_peak"
+    with pytest.raises(ValueError, match="replay"):
+        estimator.prepare_experience_for_replay(MagicMock(), None)
