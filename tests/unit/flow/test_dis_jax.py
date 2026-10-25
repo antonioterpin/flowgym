@@ -14,6 +14,8 @@ import numpy as np
 import pytest
 from jax import random
 
+from flowgym.flow.dis import process
+from flowgym.flow.dis.dis_jax import DISJAXFlowFieldEstimator
 from flowgym.flow.dis.process import (
     build_pyramid,
     compute_flow_level,
@@ -270,6 +272,47 @@ def test_estimate_dis_flow_batch_identity():
     )
     assert flows.shape == (2, 4, 4, 2)
     assert jnp.allclose(flows, 0.0)
+
+
+def test_estimate_dis_flow_sequential_matches_vmap():
+    """Sequential and vectorized batching give the same flow."""
+    prev = random.uniform(random.PRNGKey(0), (3, 32, 32))
+    curr = jnp.roll(prev, 1, axis=2)
+    kwargs = {
+        "start_level": 0,
+        "levels": 2,
+        "level_steps": 1,
+        "grad_desc_iters": 4,
+        "patch_stride": 4,
+        "patch_size": 9,
+        "output_full_res": True,
+        "starting_flow": jnp.zeros((3, 32, 32, 2), dtype=jnp.float32),
+        "var_refine_iters": 0,
+    }
+    vectorized = estimate_dis_flow(prev, curr, sequential=False, **kwargs)
+    sequential = estimate_dis_flow(prev, curr, sequential=True, **kwargs)
+    assert jnp.allclose(sequential, vectorized, atol=1e-5)
+
+
+@pytest.mark.parametrize("sequential_batch", [True, False])
+def test_estimator_forwards_sequential_batch(monkeypatch, sequential_batch):
+    """DISJAXFlowFieldEstimator honours sequential_batch from its config."""
+    seen = {}
+
+    def fake_estimate(prev, *_, sequential, **__):
+        seen["sequential"] = sequential
+        return jnp.zeros((*prev.shape, 2))
+
+    monkeypatch.setattr(process, "estimate_dis_flow", fake_estimate)
+    estimator = DISJAXFlowFieldEstimator.from_config(
+        {"sequential_batch": sequential_batch}
+    )
+    images = jnp.zeros((2, 16, 16))
+    state = estimator.create_state(
+        images, jnp.zeros((2, 16, 16, 2)), image_history_size=1
+    )
+    estimator(images, state, None)
+    assert seen["sequential"] is sequential_batch
 
 
 @pytest.fixture(scope="module")

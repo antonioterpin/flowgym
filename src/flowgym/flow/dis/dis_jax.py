@@ -49,6 +49,7 @@ class DISJAXFlowFieldEstimator(FlowFieldEstimator):
         use_spatial_propagation: bool = True,
         use_temporal_propagation: bool = False,
         output_full_res: bool = True,
+        sequential_batch: bool = False,
         **kwargs: Any,
     ) -> None:
         """Initialize the DIS estimator.
@@ -69,6 +70,8 @@ class DISJAXFlowFieldEstimator(FlowFieldEstimator):
             use_spatial_propagation: Enable spatial propagation of flow.
             use_temporal_propagation: Enable temporal propagation of flow.
             output_full_res: Output full resolution flow field.
+            sequential_batch: Estimate the batch one pair at a time instead
+                of vectorizing it (lower peak memory, same result).
             **kwargs: Additional keyword arguments for the base class.
 
         Raises:
@@ -198,6 +201,7 @@ class DISJAXFlowFieldEstimator(FlowFieldEstimator):
             )
         self.level_steps = level_steps
         self.output_full_res = bool(output_full_res)
+        self.sequential_batch = bool(sequential_batch)
         self.use_mean_normalization = bool(use_mean_normalization)
         self.use_spatial_propagation = bool(use_spatial_propagation)
         self.use_temporal_propagation = bool(use_temporal_propagation)
@@ -340,11 +344,15 @@ class DISJAXFlowFieldEstimator(FlowFieldEstimator):
             output_full_res=self.output_full_res,
             starting_flow=flow,
             var_refine_iters=self.var_refine_iters,
+            sequential=self.sequential_batch,
         )
         return flows, {}, {}
 
     def get_config(self) -> dict[str, Any]:
         """Get the configuration of the estimator.
+
+        ``sequential_batch`` is left out: it changes how the batch is
+        scheduled, not the flow, so it must not rename the cache.
 
         Returns:
             Dictionary containing the configuration parameters.

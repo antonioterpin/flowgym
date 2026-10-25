@@ -33,6 +33,8 @@ from flowgym.utils import load_configuration
 
 logger = get_logger(__name__)
 
+_KEYS_HANDLED_BY_CALLERS = {"jit", "image_shape", "estimate_shape", "rng"}
+
 
 class Estimator(abc.ABC):
     """Base class for estimators."""
@@ -798,7 +800,14 @@ class Estimator(abc.ABC):
             # Add post-processing parameters to valid keys
             config["postprocessing_steps"] = postprocess_config
 
-        # Filter the config to only include valid keys
+        # Filter the config to only include valid keys. ``jit`` is read by
+        # the callers and make_estimator always passes the shapes and rng,
+        # so only warn about other keys: a typo or a removed parameter.
+        ignored = set(config) - valid_keys - _KEYS_HANDLED_BY_CALLERS
+        if ignored:
+            logger.warning(
+                f"{cls.__name__} ignores unknown config keys {sorted(ignored)}."
+            )
         filtered = {k: v for k, v in config.items() if k in valid_keys}
         estimator = cls(**filtered)
         estimator._config = copy.deepcopy(filtered)
