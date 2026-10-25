@@ -7,7 +7,6 @@ import copy
 import hashlib
 import inspect
 import json
-from functools import partial
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -27,7 +26,7 @@ from goggles.history.spec import HistorySpec
 from goggles.history.types import History
 
 from flowgym.common.base.trainable_state import EstimatorTrainableState
-from flowgym.common.preprocess import apply_preprocessing, validate_params
+from flowgym.common.preprocess import build_preprocessing_steps
 from flowgym.types import CachePayload, PRNGKey, TrainStep
 from flowgym.utils import load_configuration
 
@@ -61,26 +60,9 @@ class Estimator(abc.ABC):
             ValueError: If preprocessing steps are invalid, `optimizer_config`
                 is not a dictionary, or `oracle` is not a boolean.
         """
-        if preprocessing_steps is None:
-            preprocessing_steps = []
-
-        # Validate preprocessing steps
-        self.preprocessing_steps = []
-        for step in preprocessing_steps:
-            if not isinstance(step, dict):
-                raise ValueError(
-                    f"Preprocessing step {step} must be a dictionary."
-                )
-            if "name" not in step:
-                raise ValueError(
-                    f"Preprocessing step {step} must have a 'name' key."
-                )
-            validate_params(
-                step["name"], **{k: v for k, v in step.items() if k != "name"}
-            )
-            self.preprocessing_steps.append(
-                partial(apply_preprocessing, **step)
-            )
+        self.preprocessing_steps = build_preprocessing_steps(
+            preprocessing_steps
+        )
 
         if optimizer_config is not None and not isinstance(
             optimizer_config, dict

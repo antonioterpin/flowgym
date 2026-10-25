@@ -84,6 +84,20 @@ Runnable end-to-end versions of these configs live in
 [`examples/12_caching_art_of_piv.py`](../../examples/art-of-piv.md) and
 its mixed-pool counterpart.
 
+## Router preprocessing
+
+`router_preprocess:` takes the same steps as `preprocess` and applies them
+only to the frames the router sees, e.g. to run the router on a crop while
+the sub-estimators use the full frame. It also applies in training, and is not
+supported with `use_last_estimate`.
+
+```yaml
+config:
+  router_preprocess:
+    - {name: crop_special, target_height: 512, target_width: 512,
+       fraction_v: 0.15, fraction_h: 0.85}
+```
+
 ## API reference
 
 For the nested encoder/head router format, `encoder.first_conv_stride`

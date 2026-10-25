@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from functools import partial
 from typing import TYPE_CHECKING, Any, Literal, cast
 
@@ -19,6 +19,7 @@ from flowgym.common.base import (
     EstimatorTrainableState,
     NNEstimatorTrainableState,
 )
+from flowgym.common.preprocess import build_preprocessing_steps
 from flowgym.flow.art_of_piv import caching as art_of_piv_caching
 from flowgym.flow.art_of_piv import inference as art_of_piv_inference
 from flowgym.flow.art_of_piv import router as art_of_piv_router
@@ -66,6 +67,8 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
         sub_models: Instantiated sub-estimator model objects.
         sub_model_states: Trainable state tuple aligned with ``sub_models``.
         target_metric: Sub-estimator cache field the router minimises.
+        router_preprocessing_steps: Steps applied to the frames the router
+            reads, and not to those of the sub-estimators.
     """
 
     train_type: str
@@ -75,6 +78,9 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
     sub_models: tuple[FlowFieldEstimator, ...]
     sub_model_states: tuple[EstimatorTrainableState, ...]
     target_metric: str = "epe"
+    router_preprocessing_steps: Sequence[
+        Callable[[jnp.ndarray], jnp.ndarray]
+    ] = ()
 
     def __init__(
         self,
@@ -94,6 +100,7 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
         gamma: float = 0,
         target_transform_config: dict | None = None,
         target_metric: Literal["epe", "relative_epe", "corr16_peak"] = "epe",
+        router_preprocess: Sequence[dict] | None = None,
         # Exploration strategy
         exploration_config: dict | None = None,
         # Postprocessing
@@ -159,6 +166,14 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
                 minimise. ``corr16_peak`` needs no ground truth, so it can
                 label real images; it requires supervised training from
                 cached labels.
+            router_preprocess: Preprocessing steps applied to the frames the
+                router reads, in addition to the estimator-level ``preprocess``.
+                The sub-estimators keep receiving the full frames, so the
+                router can run on a crop or a downsampled copy. It applies
+                wherever the router reads frames, including training: leave it
+                unset when training on frames that are already preprocessed.
+                Not supported with ``use_last_estimate``, whose flow input
+                has the full-frame size.
             exploration_config: Exploration strategy configuration
                 (e.g., epsilon-greedy with schedule).
             postprocess: Sequence of post-processing functions to apply
@@ -198,6 +213,17 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
                 f"target_metric={target_metric!r} needs supervised training."
             )
         self.target_metric = target_metric
+        if router_preprocess and self.use_last_estimate:
+            raise ValueError(
+                "router_preprocess is not supported with use_last_estimate."
+            )
+        self.router_preprocessing_steps = build_preprocessing_steps(
+            router_preprocess
+        )
+        # clahe runs on the host (NumPy) and cannot be traced.
+        self._router_preprocess_jittable = not any(
+            step["name"] == "clahe" for step in router_preprocess or []
+        )
 
         # Validate and load estimators configuration
         estimators_list_config = (
@@ -398,6 +424,14 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
             states.append(trainable_state)
         return tuple(estimators), tuple(models), tuple(states)
 
+    def supports_jit(self) -> bool:
+        """Whether the estimator can be JIT-compiled.
+
+        Returns:
+            False when a router preprocessing step runs on the host.
+        """
+        return self._router_preprocess_jittable
+
     def cache_spec(self) -> dict[str, tuple[str, tuple[int, ...]]]:
         """One cached EPE (and its validity mask) per library member.
 
@@ -573,6 +607,8 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
                 f"got {dummy_input.ndim}."
             )
 
+        dummy_input = self._preprocess_for_router(dummy_input)
+
         if self.use_last_estimate:
             # Input is two images and a flow field
             dummy_input = jnp.tile(
@@ -740,6 +776,19 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
             train=train,
         )
 
+    def _preprocess_for_router(self, frames: jnp.ndarray) -> jnp.ndarray:
+        """Apply the router-only preprocessing steps.
+
+        Args:
+            frames: Batch of frames of shape (B, H, W).
+
+        Returns:
+            The frames as the router reads them.
+        """
+        for step in self.router_preprocessing_steps:
+            frames = step(frames)
+        return frames
+
     def q_estimate(
         self,
         prev: jnp.ndarray,
@@ -763,6 +812,8 @@ class ArtOfPIVEstimator(FlowFieldEstimator):
         Returns:
             jnp.ndarray: Q-values of shape (B, num_estimators).
         """
+        prev = self._preprocess_for_router(prev)
+        curr = self._preprocess_for_router(curr)
         return art_of_piv_router.q_estimate(
             prev,
             curr,

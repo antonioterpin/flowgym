@@ -1,6 +1,8 @@
 """Module for preprocessing PIV images."""
 
-from functools import cache
+from collections.abc import Callable, Sequence
+from functools import cache, partial
+from typing import Any
 
 import jax.image as jim
 import jax.numpy as jnp
@@ -460,3 +462,34 @@ def apply_preprocessing(
         Preprocessed image.
     """
     return globals()[name](image, **kwargs)
+
+
+def build_preprocessing_steps(
+    steps: Sequence[dict[str, Any]] | None,
+) -> list[Callable[[jnp.ndarray], jnp.ndarray]]:
+    """Validate preprocessing step configs and bind them to callables.
+
+    Args:
+        steps: Preprocessing steps. Each is a dictionary with a ``"name"`` key
+            and the parameters of that step.
+
+    Returns:
+        One callable per step, applied in order to a batch of images.
+
+    Raises:
+        ValueError: If a step is not a dictionary, has no ``"name"``, or has
+            invalid parameters.
+    """
+    built = []
+    for step in steps or []:
+        if not isinstance(step, dict):
+            raise ValueError(f"Preprocessing step {step} must be a dictionary.")
+        if "name" not in step:
+            raise ValueError(
+                f"Preprocessing step {step} must have a 'name' key."
+            )
+        validate_params(
+            step["name"], **{k: v for k, v in step.items() if k != "name"}
+        )
+        built.append(partial(apply_preprocessing, **step))
+    return built
