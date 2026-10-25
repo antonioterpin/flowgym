@@ -86,6 +86,12 @@ its mixed-pool counterpart.
 
 ## API reference
 
+For the nested encoder/head router format, `encoder.first_conv_stride`
+sets the stride of the first convolution. It defaults to `1` and accepts
+positive integers; values above one require `use_residual: false`.
+This downsamples camera images within the learned encoder before the
+remaining convolution blocks and pooling stages.
+
 ```{eval-rst}
 .. automodule:: flowgym.flow.art_of_piv.estimator
    :members:

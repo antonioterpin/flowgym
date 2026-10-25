@@ -482,12 +482,14 @@ class CNNEncoderModel(nn.Module):
         output_dim: Dimension of the output feature vector.
         use_residual: Whether to use residual blocks.
         norm_fn: Normalization type.
+        first_conv_stride: Spatial stride of the first nonresidual convolution.
     """
 
     features_list: list[int]
     output_dim: int = 64
     use_residual: bool = False
     norm_fn: str = "none"
+    first_conv_stride: int = 1
 
     @nn.compact
     def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
@@ -499,16 +501,18 @@ class CNNEncoderModel(nn.Module):
         Returns:
             Output feature vector of shape (B, output_dim).
         """
-        for features in self.features_list:
+        for stage, features in enumerate(self.features_list):
             if self.use_residual:
                 x = ResidualBlock(
                     features=features,
                     norm_fn=self.norm_fn,
                 )(x)
             else:
+                stride = self.first_conv_stride if stage == 0 else 1
                 x = ConvBlock(
                     features=features,
                     norm_fn=self.norm_fn,
+                    strides=(stride, stride),
                 )(x)
                 x = ConvBlock(
                     features=features,
@@ -536,6 +540,8 @@ def build_cnn_encoder_from_config(
         output_dim: Output feature dimension (default: 64)
         use_residual: Whether to use residual blocks (default: False)
         norm_fn: Normalization type from NORM_REGISTRY (default: "none")
+        first_conv_stride: First convolution stride (default: 1); requires
+            use_residual=false when greater than one.
 
     Args:
         config: Configuration dictionary.
@@ -575,6 +581,12 @@ def build_cnn_encoder_from_config(
 
     use_residual = _parse_use_residual(config)
 
+    first_conv_stride = config.get("first_conv_stride", 1)
+    if type(first_conv_stride) is not int or first_conv_stride < 1:
+        raise ValueError("first_conv_stride must be a positive integer")
+    if use_residual and first_conv_stride != 1:
+        raise ValueError("first_conv_stride requires use_residual=false")
+
     norm_fn = cast(
         Literal["none", "batch", "instance", "group"],
         get_norm(str(config.get("norm_fn", "none"))),
@@ -585,6 +597,7 @@ def build_cnn_encoder_from_config(
         output_dim=output_dim,
         use_residual=use_residual,
         norm_fn=norm_fn,
+        first_conv_stride=first_conv_stride,
     )
 
 

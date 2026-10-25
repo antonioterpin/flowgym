@@ -202,6 +202,12 @@ def _validate_nested_router_config(router_config: dict) -> dict:
             f"encoder use_residual must be a boolean, got {use_residual}."
         )
 
+    first_conv_stride = encoder_config.get("first_conv_stride", 1)
+    if type(first_conv_stride) is not int or first_conv_stride < 1:
+        raise ValueError("encoder first_conv_stride must be a positive integer")
+    if use_residual and first_conv_stride != 1:
+        raise ValueError("first_conv_stride requires use_residual=false")
+
     norm_fn = encoder_config.get("norm_fn", "none")
     if not isinstance(norm_fn, str) or norm_fn not in NORM_KINDS:
         raise ValueError(
@@ -248,6 +254,7 @@ def _validate_nested_router_config(router_config: dict) -> dict:
             "output_dim": output_dim,
             "use_residual": use_residual,
             "norm_fn": norm_fn,
+            "first_conv_stride": first_conv_stride,
         },
         "head": {
             "hidden_dims": tuple(hidden_dims),
