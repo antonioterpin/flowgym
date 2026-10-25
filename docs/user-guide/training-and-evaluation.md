@@ -115,6 +115,21 @@ The results are logged under `test/` (with `test/step`, the checkpoint
 used) and written to `<run dir>/test_summary.json`. The test batch size
 may differ from the training one.
 
+### Photometric augmentation
+
+Set `photometric_augmentation:` in the dataset config to randomise the
+lighting of every training pair (a gain and offset shared by both frames,
+and a small gain per frame), so the model cannot rely on a recording's
+brightness. Positions are untouched;
+labels, cached scores and the initial estimator state use the original
+frames.
+
+```yaml
+photometric_augmentation: {}    # defaults, for images in [0, 255]
+```
+
+Ranges and their defaults: `flowgym.common.augment.photometric_augment`.
+
 ## What's in `flowgym.training`
 
 The training-side helpers that the workflows above pull on:

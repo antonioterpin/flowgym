@@ -425,6 +425,9 @@ if __name__ == "__main__":
                 ),
                 cache_manager=cache_manager,
                 log_timing=dataset_config.get("log_timing", False),
+                photometric_augmentation=dataset_config.get(
+                    "photometric_augmentation"
+                ),
             )
             test_summary = Path(out_dir, "test_summary.json")
             if args.summary_out is not None and test_summary.exists():

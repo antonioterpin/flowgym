@@ -3,11 +3,13 @@
 import contextlib
 import itertools
 import time
+from functools import partial
 from pathlib import Path
 from typing import Literal, cast
 
 import goggles as gg
 import jax
+import jax.numpy as jnp
 from synthpix.sampler import Sampler
 
 from eval import (
@@ -18,6 +20,10 @@ from eval import (
     write_summary,
 )
 from flowgym.checkpointing import CheckpointConfig, Checkpointer
+from flowgym.common.augment import (
+    photometric_augment,
+    photometric_augment_validate_params,
+)
 from flowgym.common.base import Estimator, NNEstimatorTrainableState
 from flowgym.training.caching import CacheManager, enrich_batch
 from flowgym.training.replay import ReplayBuffer
@@ -59,6 +65,7 @@ def train_supervised(
     cache_manager: CacheManager | None = None,
     checkpoint_config: CheckpointConfig | None = None,
     log_timing: bool = False,
+    photometric_augmentation: dict | None = None,
 ) -> None:
     """Train the flow estimator.
 
@@ -96,6 +103,11 @@ def train_supervised(
             through ``Checkpointer``.
         log_timing: Whether to log per-batch times. Blocks on every train
             step so the times include device compute.
+        photometric_augmentation: If given, randomises the lighting of the
+            frames the estimator is trained on (keys of
+            ``flowgym.common.augment.photometric_augment``; ``{}`` for the
+            defaults). Labels, cached scores and the initial estimator state
+            come from the original frames.
 
     Raises:
         ValueError: If estimate_type is not "flow" or "density", or if
@@ -104,6 +116,13 @@ def train_supervised(
     """
     if key is None:
         key = jax.random.PRNGKey(0)
+
+    augment_pairs = None
+    if photometric_augmentation is not None:
+        photometric_augment_validate_params(**photometric_augmentation)
+        augment_pairs = jax.jit(
+            jax.vmap(partial(photometric_augment, **photometric_augmentation))
+        )
 
     # Create the training step function
     train_step_fn = estimator.create_train_step()
@@ -238,10 +257,22 @@ def train_supervised(
                 key, subkey = jax.random.split(key)
                 estimator_state = create_state_fn(images1, subkey)
 
+                # Augment only what the estimator is trained on. Labels and
+                # cached scores above came from the original frames.
+                obs1, obs2 = images1, images2
+                if augment_pairs is not None:
+                    assert key is not None
+                    key, aug_key = jax.random.split(key)
+                    pairs = jnp.stack([images1, images2], axis=1)
+                    pairs = augment_pairs(
+                        pairs, jax.random.split(aug_key, pairs.shape[0])
+                    )
+                    obs1, obs2 = pairs[:, 0], pairs[:, 1]
+
                 # Create the experience object
                 experience = SupervisedExperience(
                     state=estimator_state,
-                    obs=(images1, images2),
+                    obs=(obs1, obs2),
                     ground_truth=ground_truth,
                     cache_payload=cache_payload,
                 )
