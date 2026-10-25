@@ -1,5 +1,7 @@
 """Module for preprocessing PIV images."""
 
+from functools import cache
+
 import jax.image as jim
 import jax.numpy as jnp
 import numpy as np
@@ -8,19 +10,28 @@ from flowgym.common.filters import gaussian_smoothing
 from flowgym.utils import DEBUG
 
 
-def stretch_contrast_validate_params():
-    """Validate parameters for contrast stretching."""
-    pass
+def stretch_contrast_validate_params(scale: float = 1.0):
+    """Validate parameters for contrast stretching.
+
+    Args:
+        scale: Output maximum.
+
+    Raises:
+        ValueError: If `scale` is not positive.
+    """
+    if scale <= 0:
+        raise ValueError(f"scale must be positive, got {scale}")
 
 
-def stretch_contrast(image: jnp.ndarray) -> jnp.ndarray:
+def stretch_contrast(image: jnp.ndarray, scale: float = 1.0) -> jnp.ndarray:
     """Stretch contrast of an image to enhance visibility.
 
     Args:
         image: Input image.
+        scale: Output maximum, e.g. 255 for 8-bit-like images.
 
     Returns:
-        Contrast-stretched image.
+        Contrast-stretched image in [0, scale].
     """
     if DEBUG:
         assert isinstance(image, jnp.ndarray), "Input must be a JAX array."
@@ -29,7 +40,7 @@ def stretch_contrast(image: jnp.ndarray) -> jnp.ndarray:
     min_val = jnp.min(image, axis=(1, 2), keepdims=True)
     max_val = jnp.max(image, axis=(1, 2), keepdims=True)
     stretched_image = (image - min_val) / (max_val - min_val + 1e-22)
-    return jnp.clip(stretched_image, 0, 1)
+    return scale * jnp.clip(stretched_image, 0, 1)
 
 
 def intensity_capping_validate_params(n: float):
@@ -198,13 +209,65 @@ def high_pass_filter(
     Returns:
         High-pass filtered output of same shape as input.
     """
-    # Low-pass via Gaussian smoothing
-    blurred = gaussian_smoothing(
+    return image - gaussian_blur(image, sigma, truncate)
+
+
+gaussian_blur_validate_params = high_pass_filter_validate_params
+
+
+def gaussian_blur(
+    image: jnp.ndarray, sigma: float, truncate: float = 4.0
+) -> jnp.ndarray:
+    """Low-pass a batch of images with a Gaussian kernel.
+
+    Widens particles that the camera undersamples (about 1 px), which
+    keeps sub-pixel shifts measurable.
+
+    Args:
+        image: Input array of shape (B, H, W).
+        sigma: Standard deviation of the Gaussian kernel in pixels.
+        truncate: Truncate parameter for the Gaussian kernel.
+
+    Returns:
+        Blurred output of same shape as input.
+    """
+    return gaussian_smoothing(
         image[..., None], sigma=sigma, truncate=truncate, mode="reflect"
     )[..., 0]
 
-    # High-pass result
-    return image - blurred
+
+@cache
+def _load_background(path: str) -> np.ndarray:
+    return np.load(path).astype(np.float32)
+
+
+def background_subtraction_validate_params(path: str):
+    """Validate parameters for background subtraction.
+
+    Args:
+        path: `.npy` file holding an (H, W) background image.
+
+    Raises:
+        ValueError: If the background is not a 2D array.
+    """
+    if _load_background(path).ndim != 2:
+        raise ValueError(f"Background in {path} must be 2D (H, W).")
+
+
+def background_subtraction(image: jnp.ndarray, path: str) -> jnp.ndarray:
+    """Subtract a stored static background and clamp at zero.
+
+    The background is typically the per-pixel temporal median of a run,
+    which removes walls, reflections and fixed-pattern noise.
+
+    Args:
+        image: Input array of shape (B, H, W).
+        path: `.npy` file holding an (H, W) background image.
+
+    Returns:
+        Background-subtracted image of the same shape.
+    """
+    return jnp.clip(image - _load_background(path), 0, None)
 
 
 def background_suppression_validate_params(
