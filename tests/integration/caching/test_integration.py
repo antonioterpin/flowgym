@@ -9,26 +9,10 @@ from unittest.mock import MagicMock, patch
 import jax.numpy as jnp
 import numpy as np
 
+from flowgym.flow.dummy import DummyEstimator
 from flowgym.training.caching import CacheManager
-from flowgym.types import NNEstimatorTrainableState, SupervisedTrainStep
+from flowgym.types import NNEstimatorTrainableState
 from src.train_supervised import train_supervised
-
-
-class MockTrainStep(SupervisedTrainStep):
-    def __call__(self, trainable_state, experience):
-        return (jnp.array(0.0), trainable_state, {"loss": jnp.array(0.0)})
-
-
-class MockEstimator:
-    def create_train_step(self):
-        return MockTrainStep()
-
-    def prepare_experience_for_replay(self, experience, trainable_state):
-        return experience
-
-    def enrich(self, batch, miss_idxs, **kwargs):
-        """Return None by default (opt out of caching)."""
-        return None
 
 
 class MockBatch:
@@ -61,7 +45,7 @@ def test_train_supervised_caching_integration(mock_checkpointer):
         )
 
         # 1. Setup Mock Components
-        estimator = MockEstimator()
+        estimator = DummyEstimator(train_type="supervised")
         estimator_config = {"config": {"jit": False}}
         trainable_state = MagicMock(spec=NNEstimatorTrainableState)
         trainable_state.params = {}
@@ -174,18 +158,17 @@ def test_estimator_enrich(mock_checkpointer):
         )
 
         # Mock Estimator that returns a payload
-        estimator = MagicMock(spec=MockEstimator)
-        estimator.create_train_step.return_value = MockTrainStep()
+        estimator = DummyEstimator(train_type="supervised")
 
         def enrich_fn(batch, miss_idxs, **kwargs):
             # Return fixed value 99.0 for misses
             N = len(miss_idxs)
             return {"values": np.full((N, 1), 99.0, dtype=np.float32)}
 
-        estimator.enrich.side_effect = enrich_fn
+        estimator.enrich = MagicMock(side_effect=enrich_fn)
 
         # Batch with missing key
-        batch = MockBatch(keys=np.array([10], dtype=np.uint64))
+        batch = MockBatch(batch_size=1, keys=np.array([10], dtype=np.uint64))
 
         sampler = MagicMock()
         sampler.__iter__.return_value = iter([batch])

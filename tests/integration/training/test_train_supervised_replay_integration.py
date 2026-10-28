@@ -3,40 +3,31 @@
 Verifies that the replay buffer is populated and sampled during training.
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import jax.numpy as jnp
+from synthpix import SynthpixBatch
 
+from flowgym.flow.dummy import DummyEstimator
 from train_supervised import train_supervised
 
 
-def test_train_supervised_integration_with_replay():
+@patch("train_supervised.Checkpointer")
+def test_train_supervised_integration_with_replay(
+    mock_checkpointer, tmp_path, dummy_trainable_state
+):
     """train_supervised issues one real step and one replay step per batch."""
-    # Mock estimator
-    estimator = MagicMock()
-    train_step_fn = MagicMock()
-
-    # Return dummy values: loss, trainable_state, metrics
-    train_step_fn.return_value = (
-        jnp.array(1.0),
-        MagicMock(),
-        {"m": jnp.array(0.0)},
-    )
-    estimator.create_train_step.return_value = train_step_fn
-    estimator.process_metrics.side_effect = lambda x: x
-    # Mock prepare_experience_for_replay to just return the experience
-    estimator.prepare_experience_for_replay.side_effect = lambda exp, state: exp
+    estimator = DummyEstimator(train_type="supervised")
+    train_step_fn = MagicMock(wraps=estimator.create_train_step())
+    estimator.create_train_step = MagicMock(return_value=train_step_fn)
 
     # Mock sampler
-    batch = MagicMock()
-    # Use standard 4D shape (B, C, H, W) or 3D if that's what's expected
-    # train_supervised seems to expect images of shape (B, H, W) or (B, C, H, W)
-    # Replay uses batch size B
     B, H, W = 2, 4, 4
-    batch.images1 = jnp.zeros((B, H, W))
-    batch.images2 = jnp.zeros((B, H, W))
-    batch.flow_fields = jnp.zeros((B, H, W, 2))
-    batch.params = None
+    batch = SynthpixBatch(
+        images1=jnp.zeros((B, H, W)),
+        images2=jnp.zeros((B, H, W)),
+        flow_fields=jnp.zeros((B, H, W, 2)),
+    )
 
     sampler = MagicMock()
     sampler.__iter__.return_value = iter([batch])
@@ -46,8 +37,8 @@ def test_train_supervised_integration_with_replay():
     train_supervised(
         estimator=estimator,
         estimator_config={"config": {"jit": False}},
-        trainable_state=MagicMock(),
-        out_dir="/tmp",
+        trainable_state=dummy_trainable_state,
+        out_dir=str(tmp_path),
         # Use a real dict for state so it can be tree_mapped/stacked
         create_state_fn=lambda img, key: {"images": img},
         compute_estimate_fn=MagicMock(),
