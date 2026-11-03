@@ -88,6 +88,19 @@ class Estimator(abc.ABC):
             f"{pformat(param_log)}"
         )
 
+    def preprocess(self, images: jnp.ndarray) -> jnp.ndarray:
+        """Apply the configured preprocessing pipeline to batched images.
+
+        Args:
+            images: Input images before preprocessing.
+
+        Returns:
+            Images after all configured preprocessing steps.
+        """
+        for step in self.preprocessing_steps:
+            images = step(images)
+        return images
+
     def create_state(
         self,
         images: jnp.ndarray,
@@ -174,8 +187,7 @@ class Estimator(abc.ABC):
             )
 
         # Apply preprocessing to images
-        for step in self.preprocessing_steps:
-            images = step(images)
+        images = self.preprocess(images)
 
         B, H, W = images.shape
 
@@ -334,8 +346,7 @@ class Estimator(abc.ABC):
             )
 
         # Preprocess images
-        for step in self.preprocessing_steps:
-            images = step(images)
+        images = self.preprocess(images)
 
         # Handle per-batch RNG keys if present
         have_keys = "keys" in state
