@@ -6,7 +6,6 @@ from typing import overload
 import jax
 import jax.numpy as jnp
 from jax import lax
-from jaxtyping import Bool
 
 from flowgym.flow.open_piv.types import (
     CorrelationMethod,
@@ -516,9 +515,7 @@ def sig2noise_ratio(
     return jnp.where(flag, 0.0, ratio)
 
 
-def sig2noise_val(
-    s2n: jnp.ndarray, threshold: float = 1.0
-) -> Bool[jax.Array, "..."]:
+def sig2noise_val(s2n: jnp.ndarray, threshold: float = 1.0) -> jnp.ndarray:
     """Flag vectors whose signal-to-noise ratio is below a threshold.
 
     JAX port of ``openpiv.validation.sig2noise_val``: vectors whose
@@ -545,7 +542,7 @@ def sig2noise_val(
         Boolean array of the same shape as ``s2n``; ``True`` marks outliers
         (openpiv convention -- see the Note above).
     """
-    return jnp.asarray(s2n < threshold, dtype=jnp.bool_)
+    return s2n < threshold
 
 
 def subpixel_displacement(
