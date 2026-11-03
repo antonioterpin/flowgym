@@ -5,11 +5,19 @@ Typed callers use the literal aliases. Parsers retain a runtime backstop for
 untyped YAML/CLI input and direct Python calls, including during JIT tracing.
 """
 
-from typing import Literal, TypeAlias, cast, get_args
+from typing import Literal, TypeAlias, get_args
 
 SubpixelMethod: TypeAlias = Literal["gaussian", "parabolic", "centroid"]
 CorrelationMethod: TypeAlias = Literal["circular", "linear"]
 SignalToNoiseMethod: TypeAlias = Literal["peak2peak", "peak2mean"]
+
+_SUBPIXEL_METHODS: tuple[SubpixelMethod, ...] = get_args(SubpixelMethod)
+_CORRELATION_METHODS: tuple[CorrelationMethod, ...] = get_args(
+    CorrelationMethod
+)
+_SIG2NOISE_METHODS: tuple[SignalToNoiseMethod, ...] = get_args(
+    SignalToNoiseMethod
+)
 
 
 def parse_subpixel_method(value: str) -> SubpixelMethod:
@@ -24,12 +32,12 @@ def parse_subpixel_method(value: str) -> SubpixelMethod:
     Raises:
         ValueError: If the value is not a supported subpixel method.
     """
-    options = get_args(SubpixelMethod)
-    if value not in options:
+    if value not in _SUBPIXEL_METHODS:
         raise ValueError(
-            f"Unknown subpixel_method {value!r}; expected one of {options}."
+            f"Unknown subpixel_method {value!r}; "
+            f"expected one of {_SUBPIXEL_METHODS}."
         )
-    return cast(SubpixelMethod, value)
+    return value
 
 
 def parse_correlation_method(value: str) -> CorrelationMethod:
@@ -44,12 +52,12 @@ def parse_correlation_method(value: str) -> CorrelationMethod:
     Raises:
         ValueError: If the value is not a supported correlation method.
     """
-    options = get_args(CorrelationMethod)
-    if value not in options:
+    if value not in _CORRELATION_METHODS:
         raise ValueError(
-            f"Unknown correlation_method {value!r}; expected one of {options}."
+            f"Unknown correlation_method {value!r}; "
+            f"expected one of {_CORRELATION_METHODS}."
         )
-    return cast(CorrelationMethod, value)
+    return value
 
 
 def parse_sig2noise_method(value: str) -> SignalToNoiseMethod:
@@ -64,10 +72,9 @@ def parse_sig2noise_method(value: str) -> SignalToNoiseMethod:
     Raises:
         ValueError: If the value is not a supported signal-to-noise method.
     """
-    options = get_args(SignalToNoiseMethod)
-    if value not in options:
+    if value not in _SIG2NOISE_METHODS:
         raise ValueError(
             f"sig2noise_method not supported: {value!r}; "
-            f"expected one of {options}."
+            f"expected one of {_SIG2NOISE_METHODS}."
         )
-    return cast(SignalToNoiseMethod, value)
+    return value
