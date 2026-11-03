@@ -58,8 +58,9 @@ jobs:
             - name: Install dependencies
               run: uv sync --group dev
 
-            # One pytest-xdist worker per runner core; --durations keeps the
-            # slowest tests visible in the log.
+            # One pytest-xdist worker per logical CPU (`auto` counts physical
+            # cores, half the runner's vCPUs); --durations keeps the slowest
+            # tests visible in the log.
             - name: Run pytest
               env:
                   FAST_TIER: >-
@@ -67,7 +68,7 @@ jobs:
                       && !contains(github.event.pull_request.labels.*.name, 'full-tests') }}
               run: |
                   if [ "$FAST_TIER" = true ]; then
-                      uv run pytest -n auto --durations=30 -m "not slow"
+                      uv run pytest -n logical --durations=30 -m "not slow"
                   else
-                      uv run pytest -n auto --durations=30
+                      uv run pytest -n logical --durations=30
                   fi
