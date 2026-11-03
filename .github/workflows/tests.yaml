@@ -1,10 +1,12 @@
 name: Tests
 
-# Runs on PRs and on pushes to main. Pushes to dev are not tested again:
-# every change reaches dev through a PR that already ran this workflow.
-# A new push to a PR cancels that PR's in-flight run.
+# PRs run the fast tier (`-m "not slow"`); labelling a PR `full-tests` runs
+# everything. Pushes to main and a nightly run on dev run the full suite.
+# Pushes to dev are not tested again: every change reaches dev through a PR
+# that already ran this workflow. A new push to a PR cancels its in-flight run.
 on:
     pull_request:
+        types: [opened, synchronize, reopened, labeled]
         # Skip PRs that only touch prose or repo metadata. Experiment READMEs
         # are not ignored: tests check that they match their results files.
         paths-ignore:
@@ -21,19 +23,28 @@ on:
             - '.github/dependabot.yml'
     push:
         branches: [main]
+    schedule:
+        - cron: '0 3 * * *'   # nightly 03:00 UTC, full suite on dev
     workflow_dispatch:
 
 concurrency:
-    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+    group: >-
+        ${{ github.workflow }}-${{ github.event.pull_request.number
+        || format('{0}-{1}', github.event_name, github.ref) }}
     cancel-in-progress: true
 
 jobs:
     tests:
         runs-on: ubuntu-latest
+        # Adding any other label to a PR must not start a run.
+        if: github.event.action != 'labeled' || github.event.label.name == 'full-tests'
 
         steps:
+            # Scheduled runs start on the default branch (main); test dev.
             - name: Check out code
               uses: actions/checkout@v7
+              with:
+                  ref: ${{ github.event_name == 'schedule' && 'dev' || '' }}
 
             - name: Install uv
               uses: astral-sh/setup-uv@v7
@@ -50,4 +61,13 @@ jobs:
             # One pytest-xdist worker per runner core; --durations keeps the
             # slowest tests visible in the log.
             - name: Run pytest
-              run: uv run pytest -n auto --durations=30
+              env:
+                  FAST_TIER: >-
+                      ${{ github.event_name == 'pull_request'
+                      && !contains(github.event.pull_request.labels.*.name, 'full-tests') }}
+              run: |
+                  if [ "$FAST_TIER" = true ]; then
+                      uv run pytest -n auto --durations=30 -m "not slow"
+                  else
+                      uv run pytest -n auto --durations=30
+                  fi
