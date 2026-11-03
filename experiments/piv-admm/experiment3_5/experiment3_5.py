@@ -178,7 +178,13 @@ OUTLIER_SCHEMES = [
 
 
 def set_nested_value(d: dict, dotted_key: str, value: Any) -> None:
-    """Set a value in a nested dictionary using a dotted path."""
+    """Set a value in a nested dictionary using a dotted path.
+
+    Args:
+        d: Dictionary to update in place.
+        dotted_key: Dot-separated path to the value, e.g. ``"config.lr"``.
+        value: Value to set.
+    """
     keys = dotted_key.split(".")
     for key in keys[:-1]:
         d = d.setdefault(key, {})
@@ -189,7 +195,21 @@ def inject_sub_estimator_postprocess(
     estimators_cfg: dict[str, Any],
     postprocess_cfg: str | list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Attach postprocessing to each sub-estimator configuration."""
+    """Attach postprocessing to each sub-estimator configuration.
+
+    Args:
+        estimators_cfg: Estimators-list configuration with an ``estimators``
+            key.
+        postprocess_cfg: Postprocessing configuration to set on every
+            sub-estimator.
+
+    Returns:
+        A copy of ``estimators_cfg`` with the postprocessing attached.
+
+    Raises:
+        ValueError: If the estimators list or an estimator config is
+            malformed.
+    """
     out = copy.deepcopy(estimators_cfg)
     estimators = out.get("estimators", [])
     if not isinstance(estimators, list):

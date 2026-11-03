@@ -181,10 +181,10 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
         return estimators, supports_jit
 
     def supports_jit(self) -> bool:
-        """Determine whether consensus supports JIT compilation.
+        """Return whether the estimator can be JIT-compiled.
 
         Returns:
-            Whether all inner estimators are jittable.
+            True only if all inner estimators are jittable.
         """
         return self._inner_estimators_support_jit
 
@@ -208,7 +208,8 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
             each, or ``(None, None)`` when no rejection mask is available.
 
         Raises:
-            ValueError: If flow or rejection-mask shapes are inconsistent.
+            ValueError: If ``flows_shape`` is not 5D, does not match the
+                number of estimators, or a rejection mask has the wrong shape.
         """
         if len(flows_shape) != 5:
             raise ValueError(
@@ -461,8 +462,9 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
             Processed metrics object.
 
         Raises:
+            TypeError: If the ``log_metrics`` experiment parameter is not a
+                dict.
             ValueError: If the batch size cannot be inferred from the metrics.
-            TypeError: If baseline performance is not a dictionary.
         """
         del flow_field, flow_field_gt
         # Try to extract the batch size B from any array in metrics
@@ -662,7 +664,9 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
         """Get mean rejected percentages aggregated per estimator.
 
         Returns:
-            Mean rejection percentage keyed by estimator.
+            Mapping from ``estimator_{idx}_mean_rejected_percentage`` to the
+            mean rejected percentage of that estimator; empty if nothing has
+            been accumulated yet.
         """
         rejected_sum = getattr(self, "running_rejected_percentage_sum", {})
         rejected_count = getattr(self, "running_rejected_percentage_count", {})

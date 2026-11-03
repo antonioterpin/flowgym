@@ -1,7 +1,7 @@
 """Trainable states for flow field estimators."""
 
 from collections.abc import Callable, Mapping
-from typing import Any
+from typing import Any, Self
 
 import jax.numpy as jnp
 import optax
@@ -10,7 +10,6 @@ from flax.core.frozen_dict import FrozenDict
 from flax.training.train_state import TrainState
 from goggles import get_logger
 from jax.tree_util import register_pytree_node
-from typing_extensions import Self
 
 from flowgym.training.optimizer import build_optimizer_from_config
 

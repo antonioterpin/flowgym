@@ -8,7 +8,6 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from flowgym.common import base as base_mod
 from flowgym.common.base import Estimator, EstimatorTrainableState
 
 
@@ -72,105 +71,81 @@ class TrainableEstimator(NonTrainableEstimator):
 # ---------------------------------------------------------------------------
 
 
-def test_init_with_no_preprocessing(monkeypatch):
-    """preprocessing_steps defaults to [] and no validators are called."""
-    # Arrange
-    validate_calls = []
-    apply_calls = []
+def _stretched(images: jnp.ndarray, scale: float) -> jnp.ndarray:
+    """Per-image min-max rescaling to [0, scale], computed independently."""
+    low = images.min(axis=(1, 2), keepdims=True)
+    high = images.max(axis=(1, 2), keepdims=True)
+    return scale * (images - low) / (high - low)
 
-    def fake_validate_params(name, **params):
-        validate_calls.append((name, params))
 
-    def fake_apply_preprocessing(images, **kwargs):
-        apply_calls.append(kwargs)
-        return images
+def _ramp_images(B: int = 2, H: int = 4, W: int = 4) -> jnp.ndarray:
+    """Images whose per-image range differs, so rescaling is visible."""
+    ramp = jnp.arange(H * W, dtype=jnp.float32).reshape(1, H, W)
+    return ramp * jnp.arange(1, B + 1, dtype=jnp.float32)[:, None, None] + 3.0
 
-    monkeypatch.setattr(
-        base_mod.estimator, "validate_params", fake_validate_params
-    )
-    monkeypatch.setattr(
-        base_mod.estimator, "apply_preprocessing", fake_apply_preprocessing
-    )
 
-    # Act
+def test_init_with_no_preprocessing():
+    """Without steps, preprocessing returns the images unchanged."""
     estimator = NonTrainableEstimator(preprocessing_steps=None)
+    images = _ramp_images()
 
-    # Assert
     assert estimator.preprocessing_steps == []
-    assert validate_calls == []
-    assert apply_calls == []
+    assert jnp.array_equal(estimator.preprocess(images), images)
 
 
-def test_init_raises_on_non_dict_preprocessing_step(monkeypatch):
+def test_init_raises_on_non_dict_preprocessing_step():
     """A non-dict preprocessing step raises ValueError on construction."""
-    # Arrange
-    monkeypatch.setattr(
-        base_mod.estimator, "validate_params", lambda *a, **k: None
-    )
-    monkeypatch.setattr(
-        base_mod.estimator,
-        "apply_preprocessing",
-        lambda images, **kwargs: images,
-    )
-
-    # Act / Assert
     with pytest.raises(ValueError, match="must be a dictionary"):
         NonTrainableEstimator(preprocessing_steps=["not-a-dict"])  # type: ignore
 
 
-def test_init_raises_on_missing_name_key(monkeypatch):
+def test_init_raises_on_missing_name_key():
     """A preprocessing step dict without 'name' raises ValueError."""
-    # Arrange
-    monkeypatch.setattr(
-        base_mod.estimator, "validate_params", lambda *a, **k: None
-    )
-    monkeypatch.setattr(
-        base_mod.estimator,
-        "apply_preprocessing",
-        lambda images, **kwargs: images,
-    )
-
-    bad_step = {"sigma": 1.0}
-
-    # Act / Assert
     with pytest.raises(ValueError, match="must have a 'name' key"):
-        NonTrainableEstimator(preprocessing_steps=[bad_step])
+        NonTrainableEstimator(preprocessing_steps=[{"scale": 1.0}])
 
 
-def test_init_valid_preprocessing_builds_partials_and_validates(monkeypatch):
-    """Valid preprocessing config builds callable partials and validates."""
-    # Arrange
-    validate_calls = []
-    apply_calls = []
+def test_init_raises_on_unknown_preprocessing_step():
+    """An unregistered step name is rejected at construction, not at call."""
+    with pytest.raises(ValueError, match="Unknown preprocessing step"):
+        NonTrainableEstimator(preprocessing_steps=[{"name": "not_a_step"}])
 
-    def fake_validate_params(name, **params):
-        validate_calls.append((name, params))
 
-    def fake_apply_preprocessing(images, **kwargs):
-        apply_calls.append(kwargs)
-        # Return a clearly modified tensor to ensure it is used.
-        return images + 1.0
+def test_init_validates_preprocessing_step_params():
+    """Invalid step parameters are rejected at construction."""
+    with pytest.raises(ValueError, match="scale must be positive"):
+        NonTrainableEstimator(
+            preprocessing_steps=[{"name": "stretch_contrast", "scale": -1.0}]
+        )
 
-    monkeypatch.setattr(
-        base_mod.estimator, "validate_params", fake_validate_params
+
+def test_preprocess_applies_configured_step_with_its_params():
+    """A configured step runs with the parameters from its config."""
+    estimator = NonTrainableEstimator(
+        preprocessing_steps=[{"name": "stretch_contrast", "scale": 2.0}]
     )
-    monkeypatch.setattr(
-        base_mod.estimator, "apply_preprocessing", fake_apply_preprocessing
-    )
+    images = _ramp_images()
 
-    step_cfg = {"name": "normalize", "alpha": 0.1, "beta": 0.2}
-    estimator = NonTrainableEstimator(preprocessing_steps=[step_cfg])
+    out = estimator.preprocess(images)
 
-    # Act
-    images = jnp.zeros((2, 4, 4))
-    # stored step is a functools.partial around fake_apply_preprocessing
-    (step,) = estimator.preprocessing_steps
-    out = step(images)
+    assert jnp.allclose(out, _stretched(images, 2.0))
 
-    # Assert
-    assert validate_calls == [("normalize", {"alpha": 0.1, "beta": 0.2})]
-    assert apply_calls == [{"name": "normalize", "alpha": 0.1, "beta": 0.2}]
-    assert jnp.array_equal(out, images + 1.0)
+
+def test_preprocess_applies_steps_in_config_order():
+    """Steps run in config order: the last rescaling sets the range."""
+    to_two = {"name": "stretch_contrast", "scale": 2.0}
+    to_one = {"name": "stretch_contrast", "scale": 1.0}
+    images = _ramp_images()
+
+    out = NonTrainableEstimator(
+        preprocessing_steps=[to_two, to_one]
+    ).preprocess(images)
+    reversed_out = NonTrainableEstimator(
+        preprocessing_steps=[to_one, to_two]
+    ).preprocess(images)
+
+    assert jnp.allclose(out.max(axis=(1, 2)), 1.0)
+    assert jnp.allclose(reversed_out.max(axis=(1, 2)), 2.0)
 
 
 # ---------------------------------------------------------------------------
@@ -392,28 +367,16 @@ def test_trainable_estimator_create_train_step_returns_callable():
 # ---------------------------------------------------------------------------
 
 
-def test_call_applies_preprocessing_and_updates_history(monkeypatch):
-    """__call__ applies preprocessing and rolls image/estimate histories."""
+def test_call_applies_preprocessing_and_updates_history():
+    """create_state and __call__ both store and estimate on processed images."""
     # Arrange
-    apply_calls = []
-
-    def fake_apply_preprocessing(images, **kwargs):
-        apply_calls.append(kwargs)
-        return images * 2.0
-
-    # validate_params is required during __init__, but behavior is simple here.
-    monkeypatch.setattr(
-        base_mod.estimator, "validate_params", lambda *a, **k: None
+    estimator = NonTrainableEstimator(
+        preprocessing_steps=[{"name": "stretch_contrast", "scale": 2.0}]
     )
-    monkeypatch.setattr(
-        base_mod.estimator, "apply_preprocessing", fake_apply_preprocessing
-    )
-
-    step_cfg = {"name": "scale", "factor": 2.0}
-    estimator = NonTrainableEstimator(preprocessing_steps=[step_cfg])
 
     B, H, W = 2, 4, 4
-    images = jnp.ones((B, H, W))
+    first = _ramp_images(B, H, W)
+    second = first[:, ::-1, :] * 5.0 - 1.0
     init_estimates = jnp.zeros((B, 2))
 
     extras_cfg = {
@@ -427,7 +390,7 @@ def test_call_applies_preprocessing_and_updates_history(monkeypatch):
     # Use rng=None so that no "keys" field is present; extras field
     # ensures extras dict is non-empty inside __call__.
     state = estimator.create_state(
-        images,
+        first,
         init_estimates,
         image_history_size=3,
         estimate_history_size=2,
@@ -435,24 +398,25 @@ def test_call_applies_preprocessing_and_updates_history(monkeypatch):
         rng=None,
     )
     trainable_state = estimator.create_trainable_state(
-        images, jax.random.PRNGKey(0)
+        first, jax.random.PRNGKey(0)
     )
 
+    # Assert: create_state fills the history with processed images.
+    for t in range(3):
+        assert jnp.allclose(state["images"][:, t], _stretched(first, 2.0))
+
     # Act
-    new_state, metrics = estimator(images, state, trainable_state)
+    new_state, metrics = estimator(second, state, trainable_state)
 
-    # Assert: preprocessing
-    assert len(apply_calls) == 2  # One call during __call__, one during init
-    assert apply_calls[0]["name"] == "scale"
-    assert apply_calls[0]["factor"] == 2.0
-
-    preprocessed = images * 2.0
+    # Assert: _estimate sees the processed current images.
+    preprocessed = _stretched(second, 2.0)
     last_call = estimator.calls[-1]
-    assert jnp.array_equal(last_call["images"], preprocessed)
+    assert jnp.allclose(last_call["images"], preprocessed)
 
-    # History images should have last frame equal to preprocessed images.
+    # History rolls: processed current frame last, processed first before it.
     assert new_state["images"].shape[0] == B
-    assert jnp.array_equal(new_state["images"][:, -1, ...], preprocessed)
+    assert jnp.allclose(new_state["images"][:, -1, ...], preprocessed)
+    assert jnp.allclose(new_state["images"][:, -2, ...], _stretched(first, 2.0))
 
     # Estimates history last entry should be equal to the estimates
     # returned by _estimate.
@@ -470,18 +434,9 @@ def test_call_applies_preprocessing_and_updates_history(monkeypatch):
     )
 
 
-def test_call_uses_state_without_preprocessing(monkeypatch):
+def test_call_uses_state_without_preprocessing():
     """Images pass through unchanged to _estimate when no steps are set."""
     # Arrange
-    monkeypatch.setattr(
-        base_mod.estimator, "validate_params", lambda *a, **k: None
-    )
-    monkeypatch.setattr(
-        base_mod.estimator,
-        "apply_preprocessing",
-        lambda images, **kwargs: images,
-    )
-
     estimator = NonTrainableEstimator(preprocessing_steps=[])
     B, H, W = 2, 3, 3
     images = jnp.arange(B * H * W, dtype=jnp.float32).reshape(B, H, W)

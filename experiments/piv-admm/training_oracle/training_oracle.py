@@ -54,7 +54,13 @@ RUN_CMD = [
 
 
 def set_nested_value(d: dict[str, Any], dotted_key: str, value: Any) -> None:
-    """Set a value in a nested dictionary using a dotted path."""
+    """Set a value in a nested dictionary using a dotted path.
+
+    Args:
+        d: Dictionary to update in place.
+        dotted_key: Dot-separated path to the value, e.g. ``"config.lr"``.
+        value: Value to set.
+    """
     keys = dotted_key.split(".")
     for key in keys[:-1]:
         d = d.setdefault(key, {})
@@ -134,7 +140,20 @@ def run_training_oracle(
     estimator_list_name: str,
     oracle_thresholds: list[float],
 ) -> None:
-    """Run supervised training for all oracle-threshold values."""
+    """Run supervised training for all oracle-threshold values.
+
+    Args:
+        cuda_visible_devices: Value for ``CUDA_VISIBLE_DEVICES``.
+        goggles_port: Port of the Goggles logging host.
+        include_image_pair: Whether the oracle model also receives the image
+            pair as input.
+        min_epochs: Minimum number of training epochs.
+        estimator_list_name: Name of the sub-estimator list to train on.
+        oracle_thresholds: Oracle EPE thresholds to train one model each for.
+
+    Raises:
+        ValueError: If ``estimator_list_name`` is unknown.
+    """
     estimator_list_path = ESTIMATOR_LISTS.get(estimator_list_name)
     if estimator_list_path is None:
         raise ValueError(

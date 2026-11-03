@@ -7,7 +7,11 @@ from flax import linen as nn
 
 
 class OracleMaskCNN(nn.Module):
-    """Small CNN producing per-pixel mask logits from a flow field."""
+    """Small CNN producing per-pixel mask logits from a flow field.
+
+    Attributes:
+        features: Number of output channels of each hidden convolution.
+    """
 
     features: tuple[int, ...] = (16, 32)
 
