@@ -280,15 +280,16 @@ def adaptive_local_filter_validate_params(
             (patch = (2*radius+1, 2*radius+1)).
 
     Raises:
-        ValueError: If n_sigma is not a positive number or radius is negative.
+        ValueError: If n_sigma is not a positive number or radius is not
+            a positive integer.
     """
     if not isinstance(n_sigma, (int, float)):
         raise ValueError(f"Invalid n_sigma: {n_sigma}. Must be a number.")
     if n_sigma <= 0:
         raise ValueError(f"Invalid n_sigma: {n_sigma}. Must be positive.")
-    if not isinstance(radius, int) or radius < 0:
+    if not isinstance(radius, int) or radius < 1:
         raise ValueError(
-            f"Invalid radius: {radius}. Must be a non-negative integer."
+            f"Invalid radius: {radius}. Must be a positive integer."
         )
 
 
@@ -384,7 +385,7 @@ def universal_median_test_validate_params(
 
     Raises:
         ValueError: If r_threshold is not positive, epsilon is not positive,
-            or radius is negative.
+            or radius is not a positive integer.
     """
     if not isinstance(r_threshold, (int, float)) or r_threshold <= 0:
         raise ValueError(
@@ -392,9 +393,9 @@ def universal_median_test_validate_params(
         )
     if not isinstance(epsilon, (int, float)) or epsilon <= 0:
         raise ValueError(f"Invalid epsilon: {epsilon}. Must be positive.")
-    if not isinstance(radius, int) or radius < 0:
+    if not isinstance(radius, int) or radius < 1:
         raise ValueError(
-            f"Invalid radius: {radius}. Must be a non-negative integer."
+            f"Invalid radius: {radius}. Must be a positive integer."
         )
 
 
