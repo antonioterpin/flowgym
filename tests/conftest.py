@@ -6,9 +6,15 @@ the truly cross-cutting ``clean_tmp_path`` fixture.
 """
 
 import importlib.util
+import os
 import shutil
 
 import pytest
+from mocks.worker_env import isolate_goggles_socket
+
+# Runs before the plugins below import flowgym (and so goggles), so each
+# pytest-xdist worker spawns its own goggles host.
+isolate_goggles_socket(os.environ)
 
 # Register the shared mock/fixture modules as plugins so their fixtures are
 # available to every test without an explicit import.

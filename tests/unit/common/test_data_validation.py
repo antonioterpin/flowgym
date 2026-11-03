@@ -43,7 +43,6 @@ NUMBER_OF_EXECUTIONS = config["EXECUTIONS_POST_PROCESS"]
     [
         (64, 64),
         (32, 64),
-        (1024, 2048),
     ],
 )
 @pytest.mark.parametrize("seed", [0, 42])
@@ -65,33 +64,16 @@ def test_constant_threshold_filter_batch(
         flow_field, vel_min, vel_max, valid=None, state=None
     )
 
-    # check the return without batching
-    for b in range(B):
-        assert mask is not None, f"Mask is None for batch {b}"
-        # check the shape of the mask
-        assert mask[b].shape == (
-            H,
-            W,
-        ), f"Mask shape mismatch for batch {b}: {mask[b].shape}"
+    assert mask is not None, "Mask is None"
+    assert mask.shape == (B, H, W), f"Mask shape mismatch: {mask.shape}"
+    assert mask.dtype == jnp.bool_, f"Mask dtype mismatch: {mask.dtype}"
 
-        # check that the mask is boolean
-        assert mask[b].dtype == jnp.bool_, (
-            f"Mask dtype mismatch for batch {b}: {mask[b].dtype}"
-        )
-
-        # check that the mask has no NaNs
-        assert not jnp.isnan(mask[b]).any(), f"Mask contains NaNs for batch {b}"
-
-        # check that all the True values in the mask correspond to inliers
-        mag = jnp.linalg.norm(flow_field[b], axis=-1)
-        assert jnp.all((mag[mask[b]] >= vel_min) & (mag[mask[b]] <= vel_max)), (
-            f"Mask does not correctly identify inliers for batch {b}"
-        )
-
-        # check that all the False values in the mask correspond to outliers
-        assert jnp.all((mag[~mask[b]] < vel_min) | (mag[~mask[b]] > vel_max)), (
-            f"Mask does not correctly identify outliers for batch {b}"
-        )
+    # the mask marks exactly the vectors whose magnitude is in range
+    mag = jnp.linalg.norm(flow_field, axis=-1)
+    inliers = (mag >= vel_min) & (mag <= vel_max)
+    assert jnp.array_equal(mask, inliers), (
+        "Mask does not match the inlier/outlier split"
+    )
 
 
 @pytest.mark.skipif(

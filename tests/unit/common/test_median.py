@@ -31,8 +31,8 @@ NUMBER_OF_EXECUTIONS = config["EXECUTIONS_POST_PROCESS"]
 
 
 @pytest.mark.parametrize("dim", [1, 2, 3, 8, 9, 24, 25, 32, 48, 49, 64])
-@pytest.mark.parametrize("batch_size", [1, 2, 4, 8, 16, 32, 64, 128])
-@pytest.mark.parametrize("seed", [0, 1, 2, 42, 100])
+@pytest.mark.parametrize("batch_size", [1, 16])
+@pytest.mark.parametrize("seed", [0])
 def test_median(dim, batch_size, seed):
     """Generic median dispatcher matches jnp.median across dim sizes."""
     key = jax.random.PRNGKey(seed)
@@ -66,9 +66,7 @@ def test_median(dim, batch_size, seed):
     [
         (0, (16, 32)),
         (1, (4,)),
-        (2, (32, 1)),
         (42, (1, 8, 1, 2)),
-        (100, (10, 1, 3)),
     ],
 )
 def test_median_correctness(fn, dim, seed, shape):

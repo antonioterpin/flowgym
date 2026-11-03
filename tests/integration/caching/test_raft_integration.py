@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pytest
 
 from flowgym.flow.raft.raft_jax import RaftJaxEstimator
 from flowgym.training.caching import CacheManager
@@ -34,6 +35,7 @@ class MiniRaftBatch:
 
 
 @patch("src.train_supervised.Checkpointer")
+@pytest.mark.slow
 def test_raft_integration_caching(mock_checkpointer):
     """RAFT populates the cache on first pass; second pass serves hits only."""
 

@@ -92,7 +92,7 @@ def _numpy_median_smoothing(flow: np.ndarray, radius: int) -> np.ndarray:
         (2, 7, 8, 2),
         (3, 64, 64, 2),
         (4, 128, 128, 2),
-        (5, 256, 256, 2),
+        pytest.param((5, 256, 256, 2), marks=pytest.mark.slow),
     ],
 )
 @pytest.mark.parametrize("seed", [0, 42, 123])

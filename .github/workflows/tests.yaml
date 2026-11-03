@@ -1,29 +1,55 @@
 name: Tests
 
-# Runs on PRs and on pushes to the integration branches only — not on every
-# feature-branch push — because the full jax-CPU suite is slow (~40 min).
+# PRs run the fast tier (`-m "not slow"`); labelling a PR `full-tests` runs
+# everything. Pushes to main and a nightly run on dev run the full suite.
+# Pushes to dev are not tested again: every change reaches dev through a PR
+# that already ran this workflow. A new push to a PR cancels its in-flight run.
 on:
     pull_request:
+        types: [opened, synchronize, reopened, labeled]
+        # Skip PRs that only touch prose or repo metadata. Experiment READMEs
+        # are not ignored: tests check that they match their results files.
+        paths-ignore:
+            - 'docs/**'
+            - '*.md'
+            - 'LICENSE'
+            - '*.jpg'
+            - '.readthedocs.yaml'
+            - '.gitlint'
+            - '.gitmessage'
+            - '.github/ISSUE_TEMPLATE/**'
+            - '.github/pull_request_template.md'
+            - '.github/CODEOWNERS'
+            - '.github/dependabot.yml'
     push:
-        branches: [main, dev]
+        branches: [main]
+    schedule:
+        - cron: '0 3 * * *'   # nightly 03:00 UTC, full suite on dev
+    workflow_dispatch:
+
+concurrency:
+    group: >-
+        ${{ github.workflow }}-${{ github.event.pull_request.number
+        || format('{0}-{1}', github.event_name, github.ref) }}
+    cancel-in-progress: true
 
 jobs:
     tests:
         runs-on: ubuntu-latest
-
-        strategy:
-            fail-fast: false
-            matrix:
-                python-version: ['3.11', '3.12']
+        # Adding any other label to a PR must not start a run.
+        if: github.event.action != 'labeled' || github.event.label.name == 'full-tests'
 
         steps:
+            # Scheduled runs start on the default branch (main); test dev.
             - name: Check out code
               uses: actions/checkout@v7
+              with:
+                  ref: ${{ github.event_name == 'schedule' && 'dev' || '' }}
 
             - name: Install uv
               uses: astral-sh/setup-uv@v7
               with:
-                  python-version: ${{ matrix.python-version }}
+                  python-version: '3.12'
                   enable-cache: true
 
             # Public git deps were moved to PyPI, so no SSH key is needed.
@@ -32,5 +58,51 @@ jobs:
             - name: Install dependencies
               run: uv sync --group dev
 
+            # Most of the suite's time is XLA compilation, so persist JAX's
+            # compilation cache across runs. PR runs can read caches saved on
+            # the default branch, which the nightly run fills. Compiled CPU
+            # code is specific to the instruction set, so key on the CPU model.
+            # A cache is only reused under the same uv.lock, so dependency
+            # updates start a fresh one instead of growing it forever.
+            - name: Identify runner CPU
+              id: cpu
+              run: |
+                  model=$(grep -m1 'model name' /proc/cpuinfo | sha256sum)
+                  echo "model=${model:0:12}" >> "$GITHUB_OUTPUT"
+
+            - name: Restore JAX compilation cache
+              uses: actions/cache/restore@v6
+              with:
+                  path: ${{ runner.temp }}/jax-cache
+                  key: jax-${{ runner.os }}-${{ steps.cpu.outputs.model }}-${{ hashFiles('uv.lock') }}-${{ github.run_id }}-${{ github.run_attempt }}
+                  restore-keys: |
+                      jax-${{ runner.os }}-${{ steps.cpu.outputs.model }}-${{ hashFiles('uv.lock') }}-
+
+            # One pytest-xdist worker per logical CPU (`auto` counts physical
+            # cores, half the runner's vCPUs); --durations keeps the slowest
+            # tests visible in the log.
             - name: Run pytest
-              run: uv run pytest
+              env:
+                  JAX_COMPILATION_CACHE_DIR: ${{ runner.temp }}/jax-cache
+                  # Cache every compilation. No JAX_COMPILATION_CACHE_MAX_SIZE:
+                  # its LRU eviction locks every access, which serializes the
+                  # xdist workers and doubled a cold run's time.
+                  JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS: 0
+                  JAX_PERSISTENT_CACHE_MIN_ENTRY_SIZE_BYTES: 0
+                  FAST_TIER: >-
+                      ${{ github.event_name == 'pull_request'
+                      && !contains(github.event.pull_request.labels.*.name, 'full-tests') }}
+              run: |
+                  if [ "$FAST_TIER" = true ]; then
+                      uv run pytest -n logical --durations=30 -m "not slow"
+                  else
+                      uv run pytest -n logical --durations=30
+                  fi
+
+            # Save even when tests fail, so a red PR still warms its cache.
+            - name: Save JAX compilation cache
+              if: always()
+              uses: actions/cache/save@v6
+              with:
+                  path: ${{ runner.temp }}/jax-cache
+                  key: jax-${{ runner.os }}-${{ steps.cpu.outputs.model }}-${{ hashFiles('uv.lock') }}-${{ github.run_id }}-${{ github.run_attempt }}
