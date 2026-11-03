@@ -1,0 +1,35 @@
+# Fast ART of PIV router for the 1 kHz rows: a one-layer encoder and a single
+# output head. Row files extend it and set their library.
+estimator: art_of_piv
+estimate_type: flow
+config:
+  jit: true
+  # Supervised classification: the label is the library member with the
+  # lowest cached EPE on the frame.
+  train_type: supervised
+  training_mode: classification
+  loss_config:
+    name: softmax_cross_entropy_with_integer_labels
+    reduction: mean
+  # Router network: a one-layer CNN encoder and a single-arm MLP head.
+  router_config:
+    encoder:
+      features_list: [32]
+      output_dim: 64
+      use_residual: false
+      norm_fn: none
+    head:
+      hidden_dims: [512]
+      activation: relu
+      single_arm: true
+  # Adam, learning rate decaying from 5e-3 to 5e-4 over 4000 steps.
+  optimizer_config:
+    name: adam
+    hyperparams:
+      learning_rate:
+        schedule:
+          name: exponential_decay
+          init_value: 0.005
+          decay_rate: 0.1
+          end_value: 0.0005
+          transition_steps: 4000

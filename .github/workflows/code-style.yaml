@@ -1,0 +1,30 @@
+name: Coding style validation
+
+on:
+    pull_request:
+    push:
+        branches: [main, dev]
+
+jobs:
+    code-style-check:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Check out code
+              uses: actions/checkout@v6
+
+            - name: Install uv
+              uses: astral-sh/setup-uv@v7
+              with:
+                  python-version: '3.12'
+                  enable-cache: true
+
+            # The pre-commit config has local hooks (basedpyright, pydoclint)
+            # that shell out to `uv run`, so the project env must be synced
+            # first. The other_methods extra is needed so basedpyright can
+            # resolve the optional cv2/torch/openpiv/pyoptflow imports.
+            - name: Install dependencies
+              run: uv sync --group dev --extra other_methods
+
+            - name: Run pre-commit
+              run: uv run pre-commit run --all-files

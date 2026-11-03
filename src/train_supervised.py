@@ -1,112 +1,540 @@
 """Train flow estimators with supervised learning."""
 
+import contextlib
+import itertools
 import time
-import jax
+from functools import partial
+from pathlib import Path
+from typing import Literal, cast
+
 import goggles as gg
-from flowgym.common.base import Estimator, EstimatorTrainableState
-from flowgym.environment.fluid_env import FluidEnv
-from flowgym.utils import GracefulShutdown, DEBUG
-from flowgym.make import save_model
-from flowgym.types import PRNGKey
+import jax
+import jax.numpy as jnp
+from synthpix.sampler import Sampler
+
+from eval import (
+    evaluate_batches,
+    log_eval_metrics,
+    metrics_summary,
+    scalar_metrics,
+    write_summary,
+)
+from flowgym.checkpointing import CheckpointConfig, Checkpointer
+from flowgym.common.augment import (
+    photometric_augment,
+    photometric_augment_validate_params,
+)
+from flowgym.common.base import Estimator, NNEstimatorTrainableState
+from flowgym.training.caching import CacheManager, enrich_batch
+from flowgym.training.replay import ReplayBuffer
+from flowgym.types import (
+    CompiledComputeEstimateFn,
+    CompiledCreateStateFn,
+    PRNGKey,
+    SupervisedExperience,
+    SupervisedTrainStep,
+)
+from flowgym.utils import DEBUG, GracefulShutdown
 
 logger = gg.get_logger(__name__, with_metrics=True)
 
 
 def train_supervised(
-    model: Estimator,
-    model_config: dict,
-    trainable_state: EstimatorTrainableState,
+    estimator: Estimator,
+    estimator_config: dict,
+    *,
+    trainable_state: NNEstimatorTrainableState,
     out_dir: str,
-    create_state_fn,
-    env: FluidEnv,
-    env_state: tuple,
-    num_episodes: int,
-    save_every: int,
-    obs: tuple,
-    key: PRNGKey,
-):
+    create_state_fn: CompiledCreateStateFn,
+    compute_estimate_fn: CompiledComputeEstimateFn,
+    sampler: Sampler,
+    val_sampler: Sampler | None = None,
+    val_interval: int | None = None,
+    val_num_batches: int | None = 1,
+    test_sampler: Sampler | None = None,
+    test_num_batches: int | None = 1,
+    num_batches: int = 1000,
+    estimate_type: Literal["flow", "density"] = "flow",
+    save_every: int = 10000,
+    log_every: int = 1,
+    save_only_best: bool = False,
+    key: PRNGKey | None = None,
+    replay_buffer_capacity: int = 0,
+    replay_ratio: float = 0.0,
+    prefetch_replay_size: int = 0,
+    cache_manager: CacheManager | None = None,
+    checkpoint_config: CheckpointConfig | None = None,
+    log_timing: bool = False,
+    photometric_augmentation: dict | None = None,
+) -> None:
     """Train the flow estimator.
 
     Args:
-        model: The flow estimator model.
-        model_config: Configuration for the model.
-        trainable_state: The initial state of the model.
-        out_dir: Directory to save the model.
+        estimator: The flow estimator.
+        estimator_config: Configuration for the estimator.
+        trainable_state: The initial state of the estimator.
+        out_dir: Directory to save the estimator.
         create_state_fn: Function to create the initial state of the estimator.
-        compute_estimate_fn: Function to compute the flow estimate.
-        env: The environment to train in.
-        env_state: Initial state of the environment.
-        num_episodes: Number of episodes to train for.
-        save_every: Frequency to save the model.
+        compute_estimate_fn: Function to compute the estimate.
+        sampler: The sampler to use to generate images.
+        val_sampler: The sampler to use to generate images for validation.
+        val_interval: Frequency to validate the estimator.
+        val_num_batches: Number of batches to validate for (``None``: all).
+        test_sampler: If given, evaluated after training on the
+            best-on-validation checkpoint (the final state without
+            validation); results are logged under ``test/`` and written to
+            ``out_dir/test_summary.json`` (EPE statistics and per-frame EPE).
+        test_num_batches: Number of batches to test on (``None``: all).
+        num_batches: Number of batches to train for.
+        estimate_type: Type of estimate to compute.
+        save_every: Frequency to save the estimator.
         log_every: Frequency to log the training progress.
-        obs: Initial observations from the environment.
+        save_only_best: Whether to save only the best estimator
+                    by evaluating it on the validation set.
         key: Random key for JAX operations.
+        replay_buffer_capacity: Capacity of the replay buffer.
+        replay_ratio: Ratio of replay samples to collected samples.
+        prefetch_replay_size: Prefetch buffer size for replay. If > 0,
+            enables GPU prefetch.
+        cache_manager: Optional CacheManager for read-through caching.
+        checkpoint_config: Checkpointer policy (W&B upload mode, best-
+            tracking, save cadence). When omitted, a default is built
+            from ``save_only_best`` and the trainer routes all saves
+            through ``Checkpointer``.
+        log_timing: Whether to log per-batch times. Blocks on every train
+            step so the times include device compute.
+        photometric_augmentation: If given, randomises the lighting of the
+            frames the estimator is trained on (keys of
+            ``flowgym.common.augment.photometric_augment``; ``{}`` for the
+            defaults). Labels, cached scores and the initial estimator state
+            come from the original frames.
+
+    Raises:
+        ValueError: If estimate_type is not "flow" or "density", or if
+            required ground truth data is missing from batch.
+        Exception: Any exception raised during training is logged and re-raised.
     """
+    if key is None:
+        key = jax.random.PRNGKey(0)
+
+    augment_pairs = None
+    if photometric_augmentation is not None:
+        photometric_augment_validate_params(**photometric_augmentation)
+        augment_pairs = jax.jit(
+            jax.vmap(partial(photometric_augment, **photometric_augmentation))
+        )
+
     # Create the training step function
-    train_step_fn = model.create_train_step()
-    if model_config["config"].get("jit", False) and not DEBUG:
-        train_step_fn = jax.jit(train_step_fn)
+    train_step_fn = estimator.create_train_step()
+    assert isinstance(train_step_fn, SupervisedTrainStep), (
+        "Expected SupervisedTrainStep callable"
+    )
 
-    logger.info("Model compiled successfully.")
-
-    # Handle randomization key
-    key, subkey = jax.random.split(key)
-
-    # Create the estimator state
-    # it is initialized with the first image
-    # and a first estimate of all zeros
-    estimation_state = create_state_fn(obs[0], subkey)
-
-    logger.info("Estimator state created successfully.")
-    logger.debug(f"{estimation_state=}")
-
-    with (GracefulShutdown("Stop detected, finishing epoch...") as g,):
-        episode_idx = 0
-        t_total = time.time()
-        while episode_idx < num_episodes and not g.stop:
-            episode_idx += 1
-
-            if (
-                episode_idx > 1
-            ):  # No need to reset the environment on the first iteration
-                # Reset the environment to the next episode
-                t_reset = time.time()
-                obs, env_state, _ = env.reset(env_state)
-                t_reset = time.time() - t_reset
-                logger.info(f"Environment reset took {t_reset} seconds.")
-
-                # Reset the state of the model but propagate the key
-                key, subkey = jax.random.split(key)
-                estimation_state = create_state_fn(obs[0], subkey)
-
-            # Store the new ground truth
-            gt = env_state[1]
-
-            # Do one training step
-            t = time.time()
-            loss, trainable_state, _ = train_step_fn(
-                estimation_state,
-                trainable_state,
-                None,
-                None,
-                obs,  # next state of the environment
-                None,  # previous state of the environment
-                None,
-                gt,  # ground truth
+    if estimator_config["config"].get("jit", False) and not DEBUG:
+        if estimator.supports_train_step_jit():
+            train_step_fn = jax.jit(train_step_fn)
+        else:
+            logger.warning(
+                "Disabling JIT for supervised train step: "
+                "estimator reports non-jittable train-step execution path."
             )
-            t = time.time() - t
-            logger.info(f"Training step took {t} seconds.")
 
-            logger.scalar("loss", float(loss), step=episode_idx)
+    logger.info("Training step function compiled successfully.")
 
-            logger.info(f"Batch {episode_idx} finished.\n" f"loss: {loss:.6f}.")
+    # Build the default best-checkpoint policy from the estimator's declared
+    # metric (e.g. mean_error/lower for most estimators, mask_f1/higher for the
+    # learned oracle). An explicit checkpoint_config (e.g. from YAML) takes
+    # precedence and is honored as-is.
+    metric_key, higher_is_better = estimator.checkpoint_metric()
+    cfg = checkpoint_config or CheckpointConfig(
+        save_only_best=save_only_best,
+        metric_key=metric_key,
+        higher_is_better=higher_is_better,
+    )
 
-            if episode_idx % save_every == 0:
-                save_model(
-                    trainable_state,
-                    out_dir,
-                    f"{model.__class__.__name__}-{episode_idx}",
+    # Initialize the replay buffer
+    replay_buffer = None
+    if replay_buffer_capacity > 0:
+        assert key is not None
+        key, subkey = jax.random.split(key)
+        replay_buffer = ReplayBuffer(
+            capacity=replay_buffer_capacity, key=subkey
+        )
+        logger.info(
+            f"Replay buffer initialized with capacity {replay_buffer_capacity}."
+        )
+
+    with contextlib.ExitStack() as stack:
+        checkpointer = stack.enter_context(
+            Checkpointer(
+                out_dir=out_dir,
+                model=estimator,
+                sampler=sampler,
+                config=cfg,
+            )
+        )
+        g = stack.enter_context(
+            GracefulShutdown("Stop detected, finishing epoch...")
+        )
+        if cache_manager is not None:
+            # We use a contextlib.ExitStack instead of a simple with-statement
+            # to ensure the cache manager gets added as a context manager only
+            # if it's not None, since it may be optional.
+            stack.enter_context(cache_manager)
+
+        # Run initial validation before any training
+        if val_sampler is not None and val_interval and val_interval > 0:
+            logger.info(
+                "Running initial validation (batch 0, before training)..."
+            )
+            assert key is not None
+            key, val_key = jax.random.split(key)
+            try:
+                val_metrics = evaluate_batches(
+                    estimator=estimator,
+                    sampler=val_sampler,
+                    create_state_fn=create_state_fn,
+                    compute_estimate_fn=compute_estimate_fn,
+                    trainable_state=trainable_state,
+                    estimate_type=estimate_type,
+                    key=val_key,
+                    num_batches=val_num_batches,
+                    cache_manager=cache_manager,
                 )
+                log_eval_metrics(
+                    val_metrics,
+                    prefix="val",
+                    step=0,
+                    title="Initial validation (before training)",
+                )
+                # Route the baseline through on_validation so it establishes
+                # the best-metric reference (and uploads when wandb_upload is
+                # enabled).
+                checkpointer.on_validation(trainable_state, 0, val_metrics)
+            except Exception as e:
+                logger.error(f"Initial validation failed: {e}")
 
-    t_total = time.time() - t_total
-    logger.info(f"Training took {t_total} seconds.")
+        t_sample_start = time.time()
+        last_batch_idx = -1
+        try:
+            for batch_idx, batch in enumerate(
+                itertools.islice(sampler, num_batches)
+            ):
+                last_batch_idx = batch_idx
+                t_sample = time.time() - t_sample_start
+                if g.stop:
+                    break
+
+                # Unpack the batch
+                images1 = batch.images1
+                images2 = batch.images2
+                if estimate_type == "flow":
+                    ground_truth = batch.flow_fields
+                elif estimate_type == "density":
+                    if (
+                        batch.params is None
+                        or batch.params.seeding_densities is None
+                    ):
+                        raise ValueError(
+                            "Seeding densities not found in batch."
+                        )
+                    ground_truth = batch.params.seeding_densities
+                else:
+                    raise ValueError(f"Unknown estimate type: {estimate_type}")
+
+                # Caching Logic - unified interface
+                t_enrich = time.time()
+                cache_payload = enrich_batch(
+                    batch,
+                    estimator,
+                    cache_manager=cache_manager,
+                    trainable_state=trainable_state,
+                )
+                t_enrich = time.time() - t_enrich
+
+                # Create the estimator state
+                assert key is not None
+                key, subkey = jax.random.split(key)
+                estimator_state = create_state_fn(images1, subkey)
+
+                # Augment only what the estimator is trained on. Labels and
+                # cached scores above came from the original frames.
+                obs1, obs2 = images1, images2
+                if augment_pairs is not None:
+                    assert key is not None
+                    key, aug_key = jax.random.split(key)
+                    pairs = jnp.stack([images1, images2], axis=1)
+                    pairs = augment_pairs(
+                        pairs, jax.random.split(aug_key, pairs.shape[0])
+                    )
+                    obs1, obs2 = pairs[:, 0], pairs[:, 1]
+
+                # Create the experience object
+                experience = SupervisedExperience(
+                    state=estimator_state,
+                    obs=(obs1, obs2),
+                    ground_truth=ground_truth,
+                    cache_payload=cache_payload,
+                )
+                experience = estimator.prepare_experience_for_training(
+                    experience, trainable_state
+                )
+                # Do one training step
+                t = time.time()
+                loss, trainable_state, metrics = train_step_fn(
+                    trainable_state=trainable_state,
+                    experience=experience,
+                )
+                if log_timing:
+                    # JAX dispatches asynchronously; wait for the device
+                    jax.block_until_ready(trainable_state)
+                    t_train = time.time() - t
+                    logger.info(
+                        f"Batch {batch_idx} timing: "
+                        f"Sample={t_sample:.4f}s, "
+                        f"Enrich={t_enrich:.4f}s, "
+                        f"Train={t_train:.4f}s. "
+                        f"Total={t_sample + t_enrich + t_train:.4f}s"
+                    )
+
+                # Log filenames for debugging coverage/randomization
+                batch_files = getattr(batch, "files", [])
+                if batch_files:
+                    # Log up to 4 files from the batch
+                    files_str = ", ".join(
+                        [str(f).split("/")[-1] for f in batch_files[:4]]
+                    )
+                    logger.info(f"Batch {batch_idx} files: {files_str}")
+
+                # Store experience in the replay buffer
+                if replay_buffer is not None:
+                    # Allow estimator to enrich experience before storing
+                    enriched_experience = (
+                        estimator.prepare_experience_for_replay(
+                            experience, trainable_state
+                        )
+                    )
+                    # We store unbatched experiences
+                    B = images1.shape[0]
+                    for i in range(B):
+                        exp = SupervisedExperience(
+                            state=jax.tree_util.tree_map(
+                                lambda x, i=i: x[i], enriched_experience.state
+                            ),
+                            obs=(
+                                enriched_experience.obs[0][i],
+                                enriched_experience.obs[1][i],
+                            ),
+                            ground_truth=enriched_experience.ground_truth[i],
+                        )
+                        replay_buffer.push(exp)
+
+                    # Replay training steps
+                    # We perform replay steps with probability replay_ratio % 1
+                    # and int(replay_ratio) steps
+                    num_replay_steps = int(replay_ratio)
+                    assert key is not None
+                    key, subkey = jax.random.split(key)
+                    if jax.random.uniform(subkey) < (replay_ratio % 1):
+                        num_replay_steps += 1
+
+                    for _ in range(num_replay_steps):
+                        if len(replay_buffer) >= B:
+                            # Use sample_iter with prefetch for GPU prefetch
+                            replay_iter = replay_buffer.sample_iter(
+                                batch_size=B,
+                                num_batches=1,
+                                prefetch=prefetch_replay_size,
+                            )
+                            for replay_exp in replay_iter:
+                                replay_exp_prepared = (
+                                    estimator.prepare_experience_for_training(
+                                        replay_exp, trainable_state
+                                    )
+                                )
+                                t_replay = time.time()
+                                (
+                                    replay_loss,
+                                    trainable_state,
+                                    _,
+                                ) = train_step_fn(
+                                    trainable_state=trainable_state,
+                                    experience=replay_exp_prepared,
+                                )
+                                t_replay = time.time() - t_replay
+                                logger.info(
+                                    f"Replay step took {t_replay:.4f} seconds."
+                                )
+                                logger.scalar(
+                                    "loss/replay",
+                                    float(replay_loss),
+                                    step=batch_idx,
+                                )
+
+                if (
+                    val_sampler is not None
+                    and val_interval
+                    and val_interval > 0
+                    and batch_idx > 0
+                    and batch_idx % val_interval == 0
+                ):
+                    assert key is not None
+                    key, val_key = jax.random.split(key)
+
+                    try:
+                        val_metrics = evaluate_batches(
+                            estimator=estimator,
+                            sampler=val_sampler,
+                            create_state_fn=create_state_fn,
+                            compute_estimate_fn=compute_estimate_fn,
+                            trainable_state=trainable_state,
+                            estimate_type=estimate_type,
+                            key=val_key,
+                            num_batches=val_num_batches,
+                            cache_manager=cache_manager,
+                        )
+                    except Exception as e:
+                        logger.error(f"Validation failed: {e}")
+                        continue
+
+                    log_eval_metrics(
+                        val_metrics,
+                        prefix="val",
+                        step=batch_idx,
+                        title=f"Validation after batch {batch_idx}",
+                    )
+                    saved_path = checkpointer.on_validation(
+                        trainable_state, batch_idx, val_metrics
+                    )
+                    if saved_path is not None:
+                        logger.info(
+                            f"Checkpoint saved at batch {batch_idx} -> "
+                            f"{saved_path} (best_metric="
+                            f"{checkpointer.best_metric})"
+                        )
+
+                if batch_idx % log_every == 0:
+                    logger.scalar("loss", float(loss), step=batch_idx)
+                    for metric_name, metric_value in metrics.items():
+                        logger.scalar(
+                            metric_name, float(metric_value), step=batch_idx
+                        )
+                    msg = f"Batch {batch_idx} finished.\nloss: {loss:.6f}."
+                    for metric_name, metric_value in metrics.items():
+                        if metric_name != "loss":
+                            msg += f"\n{metric_name}: {float(metric_value):.6f}"
+                    logger.info(msg)
+
+                if batch_idx > 0 and (
+                    batch_idx % save_every == 0 or batch_idx == num_batches - 1
+                ):
+                    saved_path = checkpointer.save_periodic(
+                        trainable_state, batch_idx
+                    )
+                    if saved_path is not None:
+                        logger.info(
+                            f"Periodic checkpoint saved at batch "
+                            f"{batch_idx} -> {saved_path}"
+                        )
+
+                # Reset sampler timer for next batch
+                t_sample_start = time.time()
+        except Exception as e:
+            logger.warning("Exception during training loop:")
+            logger.warning(str(e))
+            raise e
+
+        logger.info("Training complete.")
+
+        # Run final validation after training completes
+        # (inside context to keep cache_manager active)
+        if last_batch_idx >= 0:
+            # Use last_batch_idx + 1 as the step for the final save
+            # to appear after the last training batch
+            final_step = last_batch_idx + 1
+            final_val_metrics = None
+            if val_sampler is not None:
+                logger.info("Running final validation after training...")
+                assert key is not None
+                key, val_key = jax.random.split(key)
+                try:
+                    final_val_metrics = evaluate_batches(
+                        estimator=estimator,
+                        sampler=val_sampler,
+                        create_state_fn=create_state_fn,
+                        compute_estimate_fn=compute_estimate_fn,
+                        trainable_state=trainable_state,
+                        estimate_type=estimate_type,
+                        key=val_key,
+                        num_batches=val_num_batches,
+                        cache_manager=cache_manager,
+                    )
+                    log_eval_metrics(
+                        final_val_metrics,
+                        prefix="val",
+                        step=final_step,
+                        title=f"Final validation (step {final_step})",
+                    )
+                except Exception as e:
+                    logger.error(f"Final validation failed: {e}")
+                    final_val_metrics = None
+            # Finalize even without (or after a failed) validation so the
+            # end-of-run upload always happens.
+            try:
+                final_path = checkpointer.save_final(
+                    trainable_state,
+                    final_step,
+                    val_metrics=final_val_metrics,
+                )
+                if final_path is None:
+                    logger.info(
+                        f"Final checkpoint at step {final_step} skipped "
+                        "(orbax rejected the save — likely a duplicate of "
+                        "the last periodic checkpoint)."
+                    )
+                else:
+                    logger.info(f"Final checkpoint saved -> {final_path}")
+            except Exception as e:
+                logger.error(f"Final checkpoint failed: {e}")
+
+        if test_sampler is not None and last_batch_idx >= 0:
+            # Best-on-validation checkpoint if validated, else the final state
+            test_step, test_state = last_batch_idx + 1, trainable_state
+            best_step = checkpointer.best_step
+            if val_sampler is not None and best_step is not None:
+                best_state = checkpointer.restore_best(trainable_state)
+                if best_state is not None:
+                    test_step, test_state = best_step, best_state
+            assert key is not None
+            key, test_key = jax.random.split(key)
+            test_results = evaluate_batches(
+                estimator=estimator,
+                sampler=test_sampler,
+                create_state_fn=create_state_fn,
+                compute_estimate_fn=compute_estimate_fn,
+                trainable_state=test_state,
+                estimate_type=estimate_type,
+                key=test_key,
+                num_batches=test_num_batches,
+                cache_manager=cache_manager,
+            )
+            test_metrics = scalar_metrics(test_results)
+            test_metrics["step"] = float(test_step)
+            log_eval_metrics(
+                test_metrics,
+                prefix="test",
+                step=last_batch_idx + 1,
+                title=f"Test (checkpoint step {test_step})",
+            )
+            summary = metrics_summary(test_results["errors"], "epe")
+            summary["step"] = float(test_step)
+            write_summary(
+                Path(out_dir, "test_summary.json"),
+                summary,
+                files=cast("list[str]", test_results.get("files", [])),
+                errors=test_results["errors"],
+            )
+
+        # Final cache flush (inside context while cache_manager is still active)
+        if cache_manager is not None:
+            cache_manager.flush()

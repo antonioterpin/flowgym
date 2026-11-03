@@ -1,0 +1,12 @@
+# uv run --extra cuda12 --extra wandb python experiments/run.py --exp art_of_piv/appendix/F.3_selection_agent_training
+project: Art_of_PIV
+mode: train-supervised
+dataset: experiments/art_of_piv/appendix/F.3_selection_agent_training/datasets/train.yaml
+models:
+  - models/with_augmentation.yaml
+  - models/without_augmentation.yaml
+seeds: [0, 1, 2, 3, 4]
+# The router's error rate on the test split (its per-frame "EPE" is 0 for
+# the labelled member and 1 otherwise), with the best-on-val checkpoint.
+metrics: [mean_epe]
+entrypoint: src/main.py

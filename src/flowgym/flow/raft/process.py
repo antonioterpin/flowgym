@@ -1,5 +1,7 @@
 """Module for RAFT flow processing in JAX."""
 
+from typing import Literal, overload
+
 import jax
 import jax.numpy as jnp
 from flax.linen import avg_pool
@@ -28,7 +30,16 @@ def build_corr_volume(fmap1: jnp.ndarray, fmap2: jnp.ndarray) -> jnp.ndarray:
 def build_corr_pyramid(
     fmap1: jnp.ndarray, fmap2: jnp.ndarray, num_levels: int = 4
 ) -> list[jnp.ndarray]:
-    """Build a correlation pyramid from two feature maps."""
+    """Build a correlation pyramid from two feature maps.
+
+    Args:
+        fmap1: (B, H, W, C) feature map of image 1
+        fmap2: (B, H, W, C) feature map of image 2
+        num_levels: number of pyramid levels to build
+
+    Returns:
+        list of correlation volumes at different levels
+    """
     corr_pyramid = []
 
     # all pairs correlation
@@ -40,7 +51,9 @@ def build_corr_pyramid(
 
     for _ in range(num_levels - 1):
         # average pool over spatial dimensions
-        corr = avg_pool(corr, window_shape=(2, 2), strides=(2, 2), padding="VALID")
+        corr = avg_pool(
+            corr, window_shape=(2, 2), strides=(2, 2), padding="VALID"
+        )
         # TODO check if this is needed
         # corr = avg_pool2(corr)
 
@@ -49,9 +62,32 @@ def build_corr_pyramid(
     return corr_pyramid
 
 
+# Overloads for type safety based on the `mask` argument.
+# When mask=False (default), it returns only the sampled image.
+# When mask=True, it returns a tuple of (sampled image, sampled mask).
+# The third overload (mask: bool) acts as a fallback for when the mask value
+# is a variable and its literal value is not known statically.
+@overload
+def bilinear_sampler(
+    img: jnp.ndarray, coords: jnp.ndarray, mask: Literal[False] = False
+) -> jnp.ndarray: ...
+
+
+@overload
+def bilinear_sampler(
+    img: jnp.ndarray, coords: jnp.ndarray, mask: Literal[True]
+) -> tuple[jnp.ndarray, jnp.ndarray]: ...
+
+
+@overload
+def bilinear_sampler(
+    img: jnp.ndarray, coords: jnp.ndarray, mask: bool
+) -> jnp.ndarray | tuple[jnp.ndarray, jnp.ndarray]: ...
+
+
 def bilinear_sampler(
     img: jnp.ndarray, coords: jnp.ndarray, mask: bool = False
-) -> jnp.ndarray:
+) -> jnp.ndarray | tuple[jnp.ndarray, jnp.ndarray]:
     """Wrapper for grid_sample, uses pixel coordinates.
 
     Args:
@@ -76,8 +112,8 @@ def bilinear_sampler(
     img = grid_sample(img, grid, align_corners=True)
 
     if mask:
-        mask = (xgrid > -1) & (ygrid > -1) & (xgrid < 1) & (ygrid < 1)
-        return img, mask.astype(img.dtype)
+        sampled_mask = (xgrid > -1) & (ygrid > -1) & (xgrid < 1) & (ygrid < 1)
+        return img, sampled_mask.astype(img.dtype)
 
     return img
 
@@ -186,8 +222,9 @@ def correlation_block(
         centroid_lvl = coords.reshape(B * H1 * W1, 1, 1, 2) / (2**i)
         coords_lvl = centroid_lvl + delta_lvl
 
-        corr = bilinear_sampler(corr, coords_lvl)
-        corr = corr.reshape(B, H1, W1, -1)
+        corr_sampled = bilinear_sampler(corr, coords_lvl)
+        assert isinstance(corr_sampled, jnp.ndarray)
+        corr = corr_sampled.reshape(B, H1, W1, -1)
         out_pyramid.append(corr)
 
     out = jnp.concatenate(out_pyramid, axis=-1)
@@ -219,7 +256,9 @@ def unfold_patches(images: jnp.ndarray, K: int, S: int):
             return jax.lax.dynamic_slice(img, (y, x, 0), (K, K, C))  # (K,K,C)
 
         # vmap over x, then over y -> (Ny,Nx,K,K,C)
-        patches = jax.vmap(lambda y: jax.vmap(lambda x: extract_at(y, x))(xs))(ys)
+        patches = jax.vmap(lambda y: jax.vmap(lambda x: extract_at(y, x))(xs))(
+            ys
+        )
         return patches
 
     # vmap over batch -> (B,Ny,Nx,K,K,C)
@@ -231,10 +270,10 @@ def triang(M: int) -> jnp.ndarray:
     """Compute a 1D triangular window.
 
     Args:
-        M (int): Size of the window.
+        M: Size of the window.
 
     Returns:
-        jnp.ndarray: Triangular window of shape (M,).
+        Triangular window of shape (M,).
     """
     n = jnp.arange(0, M, dtype=jnp.float16)
     # Formula from scipy.signal.windows.triang
@@ -245,15 +284,15 @@ def triang(M: int) -> jnp.ndarray:
     return w  # shape (M,)
 
 
-def spline_window(window_size, power=2):
+def spline_window(window_size: int, power: int = 2) -> jnp.ndarray:
     """Compute a 1D spline window.
 
     Args:
-        window_size (int): Size of the window.
-        power (int): Power for the spline.
+        window_size: Size of the window.
+        power: Power for the spline.
 
     Returns:
-        jnp.ndarray: Spline window of shape (window_size,).
+        Spline window of shape (window_size,).
     """
     intersection = int(window_size / 4)
     wind_outer = (jnp.abs(2 * (triang(window_size))) ** power) / 2
@@ -268,23 +307,25 @@ def spline_window(window_size, power=2):
     return wind
 
 
-def window_2D(window_size, power=2):
+def window_2d(window_size: int, power: int = 2) -> jnp.ndarray:
     """Compute a 2D spline window.
 
     Args:
-        window_size (int): Size of the window.
-        power (int): Power for the spline.
+        window_size: Size of the window.
+        power: Power for the spline.
 
     Returns:
-        jnp.ndarray: 2D spline window of shape (window_size, window_size).
+        2D spline window of shape (window_size, window_size).
     """
     wind = spline_window(window_size, power)
-    wind = jnp.expand_dims(jnp.expand_dims(wind, -1), -1)  # shape (window_size, 1, 1)
+    wind = jnp.expand_dims(
+        jnp.expand_dims(wind, -1), -1
+    )  # shape (window_size, 1, 1)
     wind = wind * wind.transpose(1, 0, 2)  # shape (window_size, window_size, 1)
     return jnp.squeeze(wind, axis=-1)
 
 
-def fold_patches(patches, H, W, S):
+def fold_patches(patches: jnp.ndarray, H: int, W: int, S: int) -> jnp.ndarray:
     """Recompose patches into full images by summing overlaps.
 
     Args:
@@ -294,7 +335,7 @@ def fold_patches(patches, H, W, S):
         S: stride/shift S
 
     Returns:
-      full: recomposed full image of shape (H, W, C)
+        recomposed full image of shape (H, W, C)
     """
     Ny, Nx, K, _, C = patches.shape
     patches = patches.reshape((Ny * Nx, K, K, C))  # (Ny*Nx, K, K, C)
@@ -325,6 +366,53 @@ def fold_patches(patches, H, W, S):
     full = full.at[y_coords, x_coords].add(pixel_values)
 
     return full
+
+
+def convex_upsample(flow: jnp.ndarray, mask: jnp.ndarray) -> jnp.ndarray:
+    """Upsample a 1/8-resolution flow field to full resolution.
+
+    Mirrors the RAFT256-PIV convex upsampling head: each low-resolution flow
+    vector is scaled by 4 and replaced by a learned convex combination of its
+    3x3 neighbourhood, yielding an 8x8 block of high-resolution vectors. This
+    is the JAX/NHWC counterpart of the PyTorch ``RAFT256.upsample_flow``.
+
+    Args:
+        flow: (B, H, W, 2) flow field at 1/8 resolution, channels in (x, y)
+            order.
+        mask: (B, H, W, 9*8*8) unnormalised convex-combination logits, with
+            the channel axis ordered as (neighbour, sub_row, sub_col).
+
+    Returns:
+        (B, 8H, 8W, 2) upsampled flow field.
+    """
+    B, H, W, _ = flow.shape
+
+    # (B, H, W, 9 neighbours, 8 sub-rows, 8 sub-cols); softmax over neighbours.
+    mask = mask.reshape(B, H, W, 9, 8, 8)
+    mask = jax.nn.softmax(mask, axis=3)
+
+    # Unfold a 3x3 neighbourhood of (4 * flow) with zero padding, ordering the
+    # nine taps row-major in (kh, kw) to match torch ``F.unfold``.
+    scaled = 4.0 * flow
+    padded = jnp.pad(scaled, ((0, 0), (1, 1), (1, 1), (0, 0)))
+    taps = [
+        padded[:, kh : kh + H, kw : kw + W, :]
+        for kh in range(3)
+        for kw in range(3)
+    ]
+    neighbours = jnp.stack(taps, axis=-1)  # (B, H, W, 2, 9)
+
+    # Convex combination over the nine neighbours for every 8x8 sub-pixel. Use
+    # an explicit elementwise reduction (not einsum/matmul) to keep the
+    # accumulation in full float32 precision.
+    # neighbours -> (B, H, W, 2, 9, 1, 1); mask -> (B, H, W, 1, 9, 8, 8).
+    up = jnp.sum(
+        neighbours[..., None, None] * mask[..., None, :, :, :], axis=4
+    )  # (B, H, W, 2, 8, 8)
+
+    # (B, H, sub_row, W, sub_col, 2) -> (B, 8H, 8W, 2)
+    up = jnp.transpose(up, (0, 1, 4, 2, 5, 3))
+    return up.reshape(B, H * 8, W * 8, 2)
 
 
 # alternative to avg_pool from jax.lax

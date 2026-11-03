@@ -1,0 +1,7 @@
+{
+  "dis_deployed_ms": 0.1632,
+  "dis_large_ms": 0.2685,
+  "openpiv_deployed_ms": 0.1112,
+  "openpiv_large_ms": 0.2108,
+  "device": "NVIDIA GeForce RTX 5090"
+}

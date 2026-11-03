@@ -1,0 +1,18 @@
+estimator: raft_jax_256
+estimate_type: flow
+config:
+  jit: true
+  patch_size: 256
+  patch_stride: 64
+  hidden_dim: 128
+  context_dim: 128
+  corr_levels: 4
+  corr_radius: 4
+  iters: 16
+  patches_groups: 1
+  norm_fn: instance
+  dropout: 0.0
+  train: false
+  gamma: 0.8
+  use_temporal_propagation: false
+# load_from: output/RaftJax256Estimator-from-torch.pkl

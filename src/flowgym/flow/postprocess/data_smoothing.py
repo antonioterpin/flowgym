@@ -1,10 +1,13 @@
 """Data smoothing functions for optical flow estimation."""
 
+from typing import Any, Literal
+
 import jax.numpy as jnp
+from goggles.history.types import History
 from jax import lax
+
 from flowgym.common.filters import gaussian_smoothing as gs
 from flowgym.common.median import median
-from goggles.history.types import History
 
 
 def average_smoothing_validate_params(radius: int):
@@ -17,7 +20,9 @@ def average_smoothing_validate_params(radius: int):
         ValueError: If radius is not a positive integer.
     """
     if not isinstance(radius, int) or radius < 1:
-        raise ValueError(f"Invalid radius: {radius}. Must be a positive integer.")
+        raise ValueError(
+            f"Invalid radius: {radius}. Must be a positive integer."
+        )
 
 
 def average_smoothing(
@@ -25,6 +30,7 @@ def average_smoothing(
     radius: int,
     valid: jnp.ndarray | None = None,
     state: History | None = None,
+    **kwargs: Any,
 ) -> tuple[jnp.ndarray, jnp.ndarray | None, History | None]:
     """Uniform average smoothing (channel-wise).
 
@@ -64,7 +70,9 @@ def median_smoothing_validate_params(radius: int):
         ValueError: If radius is not a positive integer.
     """
     if not isinstance(radius, int) or radius < 1:
-        raise ValueError(f"Invalid radius: {radius}. Must be a positive integer.")
+        raise ValueError(
+            f"Invalid radius: {radius}. Must be a positive integer."
+        )
 
 
 def median_smoothing(
@@ -72,6 +80,7 @@ def median_smoothing(
     radius: int = 3,
     valid: jnp.ndarray | None = None,
     state: History | None = None,
+    **kwargs: Any,
 ) -> tuple[jnp.ndarray, jnp.ndarray | None, History | None]:
     """Sliding-window median filter (channel-wise).
 
@@ -82,6 +91,7 @@ def median_smoothing(
         valid:
             Optional mask of shape (B, H, W) where 1 means valid.
         state: Current state of the estimator.
+        **kwargs: Additional keyword arguments.
 
     Returns:
         Smoothed flow with the same shape as the input.
@@ -117,7 +127,9 @@ def gaussian_smoothing_validate_params(sigma: float, truncate: float = 4.0):
     if not isinstance(sigma, (int, float)) or sigma <= 0:
         raise ValueError(f"Invalid sigma: {sigma}. Must be a positive number.")
     if not isinstance(truncate, (int, float)) or truncate <= 0:
-        raise ValueError(f"Invalid truncate: {truncate}. Must be a positive number.")
+        raise ValueError(
+            f"Invalid truncate: {truncate}. Must be a positive number."
+        )
 
 
 def gaussian_smoothing(
@@ -126,7 +138,8 @@ def gaussian_smoothing(
     truncate: float = 4.0,
     valid: jnp.ndarray | None = None,
     state: History | None = None,
-    mode: str = "same",
+    mode: Literal["same", "valid", "reflect"] = "same",
+    **kwargs: Any,
 ) -> tuple[jnp.ndarray, jnp.ndarray | None, History | None]:
     """Gaussian smoothing (channel-wise).
 
@@ -135,8 +148,9 @@ def gaussian_smoothing(
         sigma: Standard deviation of the Gaussian kernel.
         truncate: Truncate the kernel at this many standard deviations.
         valid: Optional mask of shape (B, H, W) where 1 means valid.
-        mode: Padding mode, either "same" or "reflect".
         state: Current state of the estimator.
+        mode: Padding mode, either "same" or "reflect".
+        **kwargs: Additional keyword arguments.
 
     Returns:
         Smoothed flow with the same shape as the input.

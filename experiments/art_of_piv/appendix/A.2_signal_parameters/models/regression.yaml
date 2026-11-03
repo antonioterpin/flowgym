@@ -1,0 +1,14 @@
+# Regression router on the 20-model DIS library. Files
+# models/regression/<target>.yaml extend this one and set the target.
+extends: experiments/art_of_piv/models/router/regression.yaml
+study:
+  name: art_of_piv/appendix/A.2_signal_parameters
+  tags:
+    signal: regression
+config:
+  estimators_list_path: experiments/art_of_piv/libraries/abl_n20.yaml
+# Score the best checkpoint on the val split instead of test.
+dataset_overrides:
+  test:
+    num_batches: 66
+    dataset: experiments/art_of_piv/datasets/val_bs20.yaml

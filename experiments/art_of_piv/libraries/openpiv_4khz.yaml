@@ -1,0 +1,14 @@
+# Library of the openpiv_4khz row: the 10 OpenPIV configs selected for the paper
+# under the 4 kHz budget (paper eq. library).
+cache_id_base: piv-class1-openpiv
+estimators:
+  - experiments/art_of_piv/models/openpiv/ws16_ss16_np3_circ_para_s2n.yaml
+  - experiments/art_of_piv/models/openpiv/ws16_ss21_np2_lin_para_s2n.yaml
+  - experiments/art_of_piv/models/openpiv/ws16_ss16_np3_lin_gauss.yaml
+  - experiments/art_of_piv/models/openpiv/ws16_ss16_np3_circ_gauss_s2n.yaml
+  - experiments/art_of_piv/models/openpiv/ws16_ss27_np3_lin_para_s2n.yaml
+  - experiments/art_of_piv/models/openpiv/ws16_ss16_np3_lin_para.yaml
+  - experiments/art_of_piv/models/openpiv/ws20_ss20_np2_lin_para_s2n.yaml
+  - experiments/art_of_piv/models/openpiv/ws32_ss32_np2_circ_para.yaml
+  - experiments/art_of_piv/models/openpiv/ws24_ss24_np3_circ_para_s2n.yaml
+  - experiments/art_of_piv/models/openpiv/ws24_ss24_np2_lin_para.yaml

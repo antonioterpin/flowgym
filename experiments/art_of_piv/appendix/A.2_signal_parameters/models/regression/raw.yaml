@@ -1,0 +1,8 @@
+# Regression router on the raw cached EPEs.
+extends: experiments/art_of_piv/appendix/A.2_signal_parameters/models/regression.yaml
+study:
+  tags:
+    target: raw
+config:
+  target_transform_config:
+    name: identity

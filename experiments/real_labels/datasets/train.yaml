@@ -1,0 +1,46 @@
+# Router training on data/real_labels, written by
+# scripts/build_label_dataset.py. Every frame hits the label cache, so no DIS
+# runs: val/ mean_error is the router's error rate on the labels, and the
+# kept checkpoint is the best on val/.
+seed: 0
+batch_size: 16
+flow_fields_per_batch: 16
+include_images: true
+loop: true
+randomize: true
+buffer_size: 64
+worker_count: 8
+episode_length: 0
+# The frame size build_label_dataset.py prints; other sizes are resized.
+image_shape: [256, 256]
+min_speed_x: 0
+max_speed_x: 0
+min_speed_y: 0
+max_speed_y: 0
+output_units: "pixels"
+# Randomise the lighting of every training pair (see
+# flowgym.common.augment.photometric_augment): a gain and an offset shared by
+# both frames, plus a small gain per frame, since the two laser pulses are
+# never equally bright. Needed for the router to transfer across recordings.
+photometric_augmentation:
+  gain_range: [0.4, 1.6]
+  offset_range: [-20.0, 20.0]
+  frame_gain_range: [0.9, 1.1]
+  max_value: 255.0
+scheduler_class: ".mat"
+file_list:
+  - data/real_labels/train
+
+caching:
+  root_dir: data/real_labels/cache
+  cache_id: art_of_piv
+  warm_start: all
+
+num_batches: 3000
+save_every: 500
+save_only_best: true
+log_every: 50
+validation:
+  interval: 500
+  num_batches: all  # every val pair once
+  dataset: experiments/real_labels/datasets/val.yaml

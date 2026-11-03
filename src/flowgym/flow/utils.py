@@ -4,37 +4,31 @@ import jax.numpy as jnp
 from jax import lax
 
 
-def compute_gradients(field):
+def compute_gradients(field: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Compute discrete-difference gradients of a scalar field.
 
     Args:
-        field (jnp.ndarray): Input field of shape (B, H, W).
+        field: Input field of shape (B, H, W).
 
     Returns:
-        df_dx (jnp.ndarray): Gradient in x-direction of shape (B, H, W).
-        df_dy (jnp.ndarray): Gradient in y-direction of shape (B, H, W).
+        Tuple of gradients in x and y directions, each of shape (B, H-2, W-2).
     """
-    # wrap around with periodic boundary conditions
-    # df_dx = (jnp.roll(field, -1, axis=2) - jnp.roll(field, 1, axis=2)) / (2 * dx)
-    # df_dy = (jnp.roll(field, -1, axis=1) - jnp.roll(field, 1, axis=1)) / (2 * dy)
-
-    # ignore boundary pixels
+    # Ignore boundary pixels; use centered finite differences
     df_dx = (field[:, :, 2:] - field[:, :, :-2]) / 2
     df_dy = (field[:, 2:, :] - field[:, :-2, :]) / 2
     return df_dx[:, 1:-1, :], df_dy[:, :, 1:-1]
 
 
-def compute_divergence_and_vorticity(flow):
+def compute_divergence_and_vorticity(
+    flow: jnp.ndarray,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Computes divergence and vorticity of a 2D flow field.
 
     Args:
-        flow (jnp.ndarray): Flow field of shape (B, H, W, 2).
-        dx (float): Grid spacing in x-direction.
-        dy (float): Grid spacing in y-direction.
+        flow: Flow field of shape (B, H, W, 2).
 
     Returns:
-        divergence (jnp.ndarray): Divergence of the flow field of shape (B, H, W).
-        vorticity (jnp.ndarray): Vorticity of the flow field of shape (B, H, W).
+        Tuple of divergence and vorticity fields, each shape (B, H-2, W-2).
     """
     u = flow[..., 0]
     v = flow[..., 1]
@@ -54,22 +48,27 @@ def hessian(
     """Compute the Hessian matrix for each patch.
 
     Args:
-        Ix (jnp.ndarray): x gradient of the image
-        Iy (jnp.ndarray): y gradient of the image
-        patch_size (int): size of the patches to extract
-        patch_stride (int): stride between patches
+        Ix: x gradient of the image.
+        Iy: y gradient of the image.
+        patch_size: size of the patches to extract.
+        patch_stride: stride between patches.
 
     Returns:
-        H (jnp.ndarray): Hessian matrix of shape (num_patches, 2, 2)
+        Hessian matrix of shape (num_patches, 2, 2).
     """
     win = (patch_size, patch_size)
     st = (patch_stride, patch_stride)
 
-    def wsum(x):
-        """Helper that computes the sum of all values within a sliding window."""
-        return lax.reduce_window(
-            x, 0.0, lax.add, win, st, "VALID"
-        )  # img is already padded
+    def wsum(x: jnp.ndarray) -> jnp.ndarray:
+        """Sum all values within a sliding window.
+
+        Args:
+            x: Input array.
+
+        Returns:
+            Summed array from reduce_window operation.
+        """
+        return lax.reduce_window(x, 0.0, lax.add, win, st, "VALID")
 
     Sxx = wsum(Ix * Ix)
     Syy = wsum(Iy * Iy)
@@ -81,25 +80,36 @@ def hessian(
 
 
 def inv_hessian(
-    Ix: jnp.ndarray, Iy: jnp.ndarray, patch_size: int, patch_stride: int, eps: float
+    Ix: jnp.ndarray,
+    Iy: jnp.ndarray,
+    patch_size: int,
+    patch_stride: int,
+    eps: float,
 ) -> jnp.ndarray:
     """Compute the inverse of the Hessian matrix for each patch.
 
     Args:
-        Ix (jnp.ndarray): x gradient of the image
-        Iy (jnp.ndarray): y gradient of the image
-        patch_size (int): size of the patches to extract
-        patch_stride (int): stride between patches
-        eps (float): small value to avoid division by zero in the hessian inversion
+        Ix: x gradient of the image.
+        Iy: y gradient of the image.
+        patch_size: size of the patches to extract.
+        patch_stride: stride between patches.
+        eps: small value to avoid division by zero in inversion.
 
     Returns:
-        invH (jnp.ndarray): inverted Hessian matrix of shape (num_patches, 2, 2)
+        Inverted Hessian matrix of shape (num_patches, 2, 2).
     """
     win = (patch_size, patch_size)
     st = (patch_stride, patch_stride)
 
-    def wsum(x):
-        """Helper that computes the sum of all values within a sliding window."""
+    def wsum(x: jnp.ndarray) -> jnp.ndarray:
+        """Sum all values within a sliding window.
+
+        Args:
+            x: Input array.
+
+        Returns:
+            Summed array from reduce_window operation.
+        """
         return lax.reduce_window(x, 0.0, lax.add, win, st, "VALID")
 
     # Construct the Hessian matrices and invert them
@@ -117,15 +127,16 @@ def inv_hessian(
     return invH
 
 
-def compute_vector_gradients(flow: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+def compute_vector_gradients(
+    flow: jnp.ndarray,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Compute centered discrete gradients for multi-channel fields.
 
     Args:
-        flow (jnp.ndarray): Flow field of shape (B, H, W) or (B, H, W, C)
+        flow: Flow field of shape (B, H, W) or (B, H, W, C).
 
     Returns:
-        df_dx (jnp.ndarray): Gradient in x-direction of shape (B, H-2, W-2, C)
-        df_dy (jnp.ndarray): Gradient in y-direction of shape (B, H-2, W-2, C)
+        Tuple of gradients in x and y directions, each shape (B, H-2, W-2, C).
     """
     if flow.ndim == 3:
         # (B, H, W) -> (B, H, W, 1)
@@ -142,36 +153,29 @@ def compute_vector_gradients(flow: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarra
     return df_dx, df_dy
 
 
-def compute_divergence(flow) -> jnp.ndarray:
-    """Compute divergence of a batch of flow fields with shape (B, H, W, 2).
+def compute_divergence(flow: jnp.ndarray) -> jnp.ndarray:
+    """Compute divergence of a batch of flow fields.
 
     Args:
-        flow (jnp.ndarray): Flow field of shape (B, H, W, 2).
+        flow: Flow field of shape (B, H, W, 2).
 
     Returns:
-        jnp.ndarray: Divergence of the flow field of shape (B, H-2, W-2).
+        Divergence of the flow field of shape (B, H-2, W-2).
     """
-    # Compute gradients using centered differences
     dfx, dfy = compute_vector_gradients(flow)
-
-    du_x_dx = dfx[..., 0]  # Gradient in x-direction for u
-    du_y_dy = dfy[..., 1]  # Gradient in y-direction for v
-
-    return du_x_dx + du_y_dy  # Shape: (B, H-2, W-2)
+    return dfx[..., 0] + dfy[..., 1]
 
 
-# TODO: consider using a more efficient implementation,
-# i.e. using jax.lax.conv_general_dilated
-def compute_laplacian(flow):
-    """Compute the Laplacian of a (B, H, W, 2) flow field.
+def compute_laplacian(flow: jnp.ndarray) -> jnp.ndarray:
+    """Compute the Laplacian of a flow field.
 
     Args:
-        flow (jnp.ndarray): Flow field of shape (B, H, W, 2).
+        flow: Flow field of shape (B, H, W, 2).
 
     Returns:
-        jnp.ndarray: Laplacian of the flow field of shape (B, H-2, W-2, 2).
+        Laplacian of the flow field of shape (B, H-2, W-2, 2).
     """
-    # Pad for boundary conditions (Neumann/reflective)
+    # Neumann boundary conditions via finite differences
     lap = (
         flow[:, 2:, 1:-1, :]  # down
         + flow[:, :-2, 1:-1, :]  # up

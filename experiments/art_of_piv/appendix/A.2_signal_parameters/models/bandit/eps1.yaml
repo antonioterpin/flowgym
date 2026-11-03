@@ -1,0 +1,6 @@
+# Bandit router, exploration epsilon starting at 1 (the shared bandit router's
+# schedule) and decaying linearly to 0 over 4000 steps.
+extends: experiments/art_of_piv/appendix/A.2_signal_parameters/models/bandit.yaml
+study:
+  tags:
+    epsilon: 1.0

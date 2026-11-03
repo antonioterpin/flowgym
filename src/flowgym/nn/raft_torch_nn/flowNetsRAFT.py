@@ -1,4 +1,4 @@
-"""Copyright (c) 2020-2021, Christian Lagemann
+"""Copyright (c) 2020-2021, Christian Lagemann.
 
 Portions of this code copyright 2020, princeton-vl
 In the framework of:
@@ -7,8 +7,8 @@ URL: https://github.com/princeton-vl/RAFT
 """
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
 from flowgym.nn.raft_torch_nn.submodules_RAFT_extractor import BasicEncoder
 from flowgym.nn.raft_torch_nn.submodules_RAFT_GRU import BasicUpdateBlock
@@ -29,7 +29,7 @@ except:
 
 
 def bilinear_sampler(img, coords, mode="bilinear", mask=False):
-    """Wrapper for grid_sample, uses pixel coordinates"""
+    """Wrapper for grid_sample, uses pixel coordinates."""
     H, W = img.shape[-2:]
     xgrid, ygrid = coords.split([1, 1], dim=-1)
     xgrid = 2 * xgrid / (W - 1) - 1
@@ -69,7 +69,7 @@ class CorrBlock:
         corr = corr.reshape(batch * h1 * w1, dim, h2, w2)
 
         self.corr_pyramid.append(corr)
-        for i in range(self.num_levels - 1):
+        for _i in range(self.num_levels - 1):
             corr = F.avg_pool2d(corr, 2, stride=2)
             self.corr_pyramid.append(corr)
 
@@ -83,7 +83,9 @@ class CorrBlock:
             corr = self.corr_pyramid[i]
             dx = torch.linspace(-r, r, 2 * r + 1)
             dy = torch.linspace(-r, r, 2 * r + 1)
-            delta = torch.stack(torch.meshgrid(dy, dx), axis=-1).to(coords.device)
+            delta = torch.stack(torch.meshgrid(dy, dx), axis=-1).to(
+                coords.device
+            )
 
             centroid_lvl = coords.reshape(batch * h1 * w1, 1, 1, 2) / 2**i
             delta_lvl = delta.view(1, 2 * r + 1, 2 * r + 1, 2)
@@ -108,7 +110,7 @@ class CorrBlock:
 
 
 def sequence_loss(flow_preds, flow_gt):
-    """Loss function defined over sequence of flow predictions"""
+    """Loss function defined over sequence of flow predictions."""
     n_predictions = len(flow_preds)
     flow_loss = 0.0
 
@@ -131,7 +133,7 @@ def sequence_loss(flow_preds, flow_gt):
 
 
 class RAFT(nn.Module):
-    """RAFT"""
+    """RAFT."""
 
     def __init__(self):
         super().__init__()
@@ -141,7 +143,9 @@ class RAFT(nn.Module):
         self.corr_levels = 4
         self.corr_radius = 4
 
-        self.fnet = BasicEncoder(output_dim=256, norm_fn="instance", dropout=0.0)
+        self.fnet = BasicEncoder(
+            output_dim=256, norm_fn="instance", dropout=0.0
+        )
         self.cnet = BasicEncoder(
             output_dim=self.hidden_dim + self.context_dim,
             norm_fn="instance",
@@ -154,7 +158,7 @@ class RAFT(nn.Module):
         )
 
     def initialize_flow(self, img):
-        """Flow is represented as difference between two coordinate grids flow = coords1 - coords0"""
+        """Flow is represented as difference between two coordinate grids flow = coords1 - coords0."""
         N, _, H, W = img.shape
         coords0 = coords_grid(N, H, W).to(img.device)
         coords1 = coords_grid(N, H, W).to(img.device)
@@ -175,7 +179,9 @@ class RAFT(nn.Module):
 
         with autocast(enabled=args.amp):
             cnet = self.cnet(img1)
-            net, inp = torch.split(cnet, [self.hidden_dim, self.context_dim], dim=1)
+            net, inp = torch.split(
+                cnet, [self.hidden_dim, self.context_dim], dim=1
+            )
             net = torch.tanh(net)
             inp = torch.relu(inp)
 

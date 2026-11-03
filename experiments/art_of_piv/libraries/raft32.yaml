@@ -1,0 +1,9 @@
+# Library of the raft32 row: RAFT32-PIV fine-tuned on each flow class.
+cache_id_base: piv-class1-raft
+estimators:
+  - experiments/art_of_piv/models/raft32/cylinder.yaml
+  - experiments/art_of_piv/models/raft32/backstep.yaml
+  - experiments/art_of_piv/models/raft32/DNS_turbulence.yaml
+  - experiments/art_of_piv/models/raft32/SQG.yaml
+  - experiments/art_of_piv/models/raft32/jhtdb.yaml
+  - experiments/art_of_piv/models/raft32/uniform.yaml

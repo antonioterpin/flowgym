@@ -1,4 +1,4 @@
-"""Copyright (c) 2020-2021, Christian Lagemann
+"""Copyright (c) 2020-2021, Christian Lagemann.
 
 Portions of this code copyright 2020, princeton-vl
 In the framework of:
@@ -7,8 +7,8 @@ URL: https://github.com/princeton-vl/RAFT
 """
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
 
 class FlowHead(nn.Module):
@@ -139,7 +139,9 @@ class SmallUpdateBlock(nn.Module):
 
 
 class BasicUpdateBlock(nn.Module):
-    def __init__(self, corr_levels=4, corr_radius=4, hidden_dim=128, input_dim=128):
+    def __init__(
+        self, corr_levels=4, corr_radius=4, hidden_dim=128, input_dim=128
+    ):
         super().__init__()
         self.corr_levels = corr_levels
         self.corr_radius = corr_radius

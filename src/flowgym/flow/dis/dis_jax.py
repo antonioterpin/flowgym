@@ -1,16 +1,30 @@
 """DISFlowFieldEstimator class."""
 
-from typing import Any
-import jax.numpy as jnp
-from enum import Enum
+from __future__ import annotations
 
+from enum import Enum
+from pathlib import Path
+from typing import Any
+
+import jax.numpy as jnp
+from goggles import get_logger
 from goggles.history.types import History
+
 from flowgym.flow.base import FlowFieldEstimator
 from flowgym.flow.dis import process
 
+logger = get_logger(__name__)
+
 
 class PresetType(Enum):
-    """DIS preset types."""
+    """DIS preset types.
+
+    Attributes:
+        ULTRAFAST: Ultrafast preset (value 0).
+        FAST: Fast preset (value 1).
+        MEDIUM: Medium preset (value 2).
+        HIGH_QUALITY: High quality preset (value 3).
+    """
 
     ULTRAFAST = 0
     FAST = 1
@@ -19,11 +33,11 @@ class PresetType(Enum):
 
 
 class DISJAXFlowFieldEstimator(FlowFieldEstimator):
-    """Dense Inverse Search (DIS) flow field estimator using two-frame history."""
+    """Dense Inverse Search (DIS) flow estimator with two-frame history."""
 
     def __init__(
         self,
-        preset: PresetType | int = 1,
+        preset: PresetType | int | str = 1,
         start_level: int = 0,
         levels: int = 4,
         level_steps: int = 1,
@@ -35,12 +49,16 @@ class DISJAXFlowFieldEstimator(FlowFieldEstimator):
         use_spatial_propagation: bool = True,
         use_temporal_propagation: bool = False,
         output_full_res: bool = True,
+        sequential_batch: bool = False,
         **kwargs: Any,
     ) -> None:
         """Initialize the DIS estimator.
 
         Args:
             preset: DIS preset (0=ultrafast,1=fast,2=medium,3=high_quality).
+                Accepts the int, a ``PresetType``, or its enum name (e.g.
+                ``"FAST"``) so a config round-tripped through
+                :meth:`get_config` re-loads directly.
             start_level: Starting level for the pyramid.
             levels: Number of levels for the pyramid.
             level_steps: Number of steps between levels.
@@ -52,21 +70,42 @@ class DISJAXFlowFieldEstimator(FlowFieldEstimator):
             use_spatial_propagation: Enable spatial propagation of flow.
             use_temporal_propagation: Enable temporal propagation of flow.
             output_full_res: Output full resolution flow field.
-            kwargs: Additional keyword arguments for the base class.
+            sequential_batch: Estimate the batch one pair at a time instead
+                of vectorizing it (lower peak memory, same result).
+            **kwargs: Additional keyword arguments for the base class.
+
+        Raises:
+            ValueError: If parameter validation fails.
+            TypeError: If preset is not an int, str, or PresetType.
         """
-        # Validate and convert preset
-        if isinstance(preset, int):
+        # Validate and convert preset. A str is treated as an enum name
+        # (PresetType.name, as emitted by get_config) so configs round-trip.
+        if isinstance(preset, str):
+            try:
+                preset_enum = PresetType[preset]
+            except KeyError:
+                preset_names = ", ".join(e.name for e in PresetType)
+                raise ValueError(
+                    f"preset={preset!r}, but a string preset must name a "
+                    f"PresetType ({preset_names})"
+                ) from None
+        elif isinstance(preset, int):
             try:
                 preset_enum = PresetType(preset)
             except ValueError:
+                preset_vals = ", ".join(
+                    f"{e.value}={e.name.lower()}" for e in PresetType
+                )
                 raise ValueError(
                     f"preset={preset}, but it must be 0, 1, 2, or 3 "
-                    f"({', '.join(f'{e.value}={e.name.lower()}' for e in PresetType)})"
-                )
+                    f"({preset_vals})"
+                ) from None
         elif isinstance(preset, PresetType):
             preset_enum = preset
         else:
-            raise TypeError(f"preset={preset}, but it must be an int or PresetType.")
+            raise TypeError(
+                f"preset={preset}, but it must be an int, str, or PresetType."
+            )
 
         self.preset = preset_enum
 
@@ -105,16 +144,25 @@ class DISJAXFlowFieldEstimator(FlowFieldEstimator):
             self.start_level = 0
             self.levels = 5
         else:
+            preset_vals = ", ".join(
+                f"{e.value}={e.name.lower()}" for e in PresetType
+            )
             raise ValueError(
-                f"preset={preset}, but it must be 0, 1, 2, or 3 "
-                f"({', '.join(f'{e.value}={e.name.lower()}' for e in PresetType)})"
+                f"preset={preset}, but it must be 0, 1, 2, or 3 ({preset_vals})"
             )
 
-        for name, val in [("patch_size", patch_size), ("patch_stride", patch_stride)]:
+        for name, val in [
+            ("patch_size", patch_size),
+            ("patch_stride", patch_stride),
+        ]:
             if not isinstance(val, int) or val <= 0:
-                raise ValueError(f"{name}={val}, but it must be a positive integer.")
+                raise ValueError(
+                    f"{name}={val}, but it must be a positive integer."
+                )
         if patch_size % 2 == 0:
-            raise ValueError(f"patch_size={patch_size}, but it must be an odd integer.")
+            raise ValueError(
+                f"patch_size={patch_size}, but it must be an odd integer."
+            )
         if patch_stride > patch_size:
             raise ValueError(
                 f"patch_stride={patch_stride}, but it must be less "
@@ -136,61 +184,151 @@ class DISJAXFlowFieldEstimator(FlowFieldEstimator):
 
         if not isinstance(start_level, int) or start_level < 0:
             raise ValueError(
-                f"start_level={start_level}, but it must be a non-negative integer."
+                f"start_level={start_level}, but it must be a "
+                "non-negative integer."
             )
         self.start_level = start_level
 
-        if not isinstance(levels, int) or levels <= 0:
-            raise TypeError(f"levels={levels}, but it must be a positive integer.")
+        if levels <= 0:
+            raise ValueError(
+                f"levels={levels}, but it must be a positive integer."
+            )
         self.levels = levels
 
-        if not isinstance(level_steps, int) or level_steps <= 0:
-            raise TypeError(
+        if level_steps <= 0:
+            raise ValueError(
                 f"level_steps={level_steps}, but it must be a positive integer."
             )
         self.level_steps = level_steps
-
-        if not isinstance(output_full_res, bool):
-            raise TypeError(
-                f"output_full_res={output_full_res}, but it must be a boolean."
-            )
-        self.output_full_res = output_full_res
-
+        self.output_full_res = bool(output_full_res)
+        self.sequential_batch = bool(sequential_batch)
         self.use_mean_normalization = bool(use_mean_normalization)
         self.use_spatial_propagation = bool(use_spatial_propagation)
         self.use_temporal_propagation = bool(use_temporal_propagation)
 
+        postprocessing_steps = kwargs.get("postprocessing_steps")
+        if isinstance(postprocessing_steps, list):
+            kwargs["postprocessing_steps"] = (
+                self._prepare_learned_oracle_postprocessing(
+                    postprocessing_steps
+                )
+            )
+
         super().__init__(**kwargs)
+
+    def _prepare_learned_oracle_postprocessing(
+        self,
+        steps: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Preload learned-oracle checkpoints to keep runtime jittable.
+
+        Args:
+            steps: Postprocessing step descriptors to scan and preload.
+
+        Returns:
+            The steps with learned-oracle state materialized in place.
+        """
+        from flowgym.flow.postprocess.data_validation import (  # noqa: PLC0415
+            preload_learned_oracle_state,
+        )
+
+        prepared_steps: list[dict[str, Any]] = []
+        for step in steps:
+            if not isinstance(step, dict):
+                prepared_steps.append(step)
+                continue
+            if step.get("name") != "learned_oracle_threshold":
+                prepared_steps.append(step)
+                continue
+            if step.get("oracle_trainable_state") is not None:
+                prepared_steps.append(step)
+                continue
+
+            load_from = step.get("load_from")
+            if not isinstance(load_from, str):
+                prepared_steps.append(step)
+                continue
+
+            checkpoint_path = Path(load_from)
+            if not checkpoint_path.exists():
+                prepared_steps.append(step)
+                continue
+
+            try:
+                oracle_state = preload_learned_oracle_state(
+                    load_from=load_from,
+                    features=step.get("features"),
+                    include_image_pair=bool(
+                        step.get("include_image_pair", False)
+                    ),
+                )
+            except Exception as exc:
+                # Keep original config as fallback (non-jittable runtime load),
+                # but surface why so a genuine load failure isn't silently
+                # downgraded to a slow path.
+                logger.warning(
+                    f"Failed to preload learned-oracle state from {load_from}; "
+                    f"falling back to runtime (non-jittable) load: {exc}"
+                )
+                prepared_steps.append(step)
+                continue
+
+            preloaded_step = dict(step)
+            preloaded_step["oracle_trainable_state"] = oracle_state
+            preloaded_step.pop("load_from", None)
+            prepared_steps.append(preloaded_step)
+        return prepared_steps
 
     def _estimate(
         self,
         image: jnp.ndarray,
         state: History,
         _: None,
-        __: None,
+        extras: dict,
     ) -> tuple[jnp.ndarray, dict, dict]:
         """Compute the flow field between the two most recent frames.
 
         Args:
             image: Current batch of frames, shape (B, H, W).
             state: Contains history_images of shape (B, 1, H, W).
-            _: Unused parameter.
-            __: Unused parameter.
+            extras: Additional data from history fields, may contain
+                cache_payload.
 
         Returns:
             - Flow field of shape (B, H, W, 2) as float32.
             - placeholder for additional output.
             - placeholder for metrics.
         """
+        cache_payload = extras.get("cache_payload")
+        if (
+            cache_payload is not None
+            and getattr(cache_payload, "has_precomputed_errors", False)
+            and getattr(cache_payload, "epe", None) is not None
+        ):
+            B, H, W = image.shape
+            if self.use_temporal_propagation:
+                flows = state["estimates"][:, -1, ...]
+            else:
+                flows = jnp.zeros((B, H, W, 2), dtype=jnp.float32)
+
+            metrics: dict[str, jnp.ndarray] = {
+                "errors": jnp.asarray(cache_payload.epe)
+            }
+            relative_epe = getattr(cache_payload, "relative_epe", None)
+            if relative_epe is not None:
+                metrics["relative_errors"] = jnp.asarray(relative_epe)
+            return flows, {}, metrics
+
         # Convert to
         prev = state["images"][:, 0, ...]
         curr = image
         if self.use_temporal_propagation:
             flow = state["estimates"][:, -1, ...]
         else:
-            # Initialize flow to zeros of the same shape as prev but with 2 channels
+            # Initialize flow to zeros of same shape as prev with 2 channels
             flow = jnp.zeros(
-                (prev.shape[0], prev.shape[1], prev.shape[2], 2), dtype=jnp.float32
+                (*prev.shape[:3], 2),
+                dtype=jnp.float32,
             )
 
         # Process the images to estimate the flow
@@ -206,5 +344,44 @@ class DISJAXFlowFieldEstimator(FlowFieldEstimator):
             output_full_res=self.output_full_res,
             starting_flow=flow,
             var_refine_iters=self.var_refine_iters,
+            sequential=self.sequential_batch,
         )
         return flows, {}, {}
+
+    def get_config(self) -> dict[str, Any]:
+        """Get the configuration of the estimator.
+
+        ``sequential_batch`` is left out: it changes how the batch is
+        scheduled, not the flow, so it must not rename the cache.
+
+        Returns:
+            Dictionary containing the configuration parameters.
+        """
+        return {
+            "preset": self.preset.name,
+            "start_level": self.start_level,
+            "levels": self.levels,
+            "level_steps": self.level_steps,
+            "patch_size": self.patch_size,
+            "patch_stride": self.patch_stride,
+            "grad_desc_iters": self.grad_desc_iters,
+            "var_refine_iters": self.var_refine_iters,
+            "use_mean_normalization": self.use_mean_normalization,
+            "use_spatial_propagation": self.use_spatial_propagation,
+            "use_temporal_propagation": self.use_temporal_propagation,
+            "output_full_res": self.output_full_res,
+        }
+
+    def supports_jit(self) -> bool:
+        """Disable JIT only if learned-oracle state is not preloaded.
+
+        Returns:
+            True unless a learned-oracle step lacks preloaded state.
+        """
+        for step in self.postprocessing_steps:
+            if (
+                step.keywords.get("name") == "learned_oracle_threshold"
+                and step.keywords.get("oracle_trainable_state") is None
+            ):
+                return False
+        return True

@@ -1,0 +1,7 @@
+# Classification router on the 3-model DIS library.
+extends: experiments/art_of_piv/appendix/A.1_learning_signal/models/classification.yaml
+study:
+  tags:
+    models: 3
+config:
+  estimators_list_path: experiments/art_of_piv/libraries/abl_n3.yaml

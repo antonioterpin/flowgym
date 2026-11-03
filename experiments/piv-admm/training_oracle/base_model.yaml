@@ -1,0 +1,14 @@
+estimator: learned_oracle_threshold
+estimate_type: flow
+out_dir: "results/training_oracle/output"
+run_name: "piv_admm_training_oracle"
+config:
+  jit: true
+  threshold: 0.5
+  oracle_epe_threshold: 1.0
+  estimator_list: src/flowgym/config/estimators/flow/piv_dataset/consensus/dis_list.yaml
+  features: [16, 32]
+  history_size: 1
+  optimizer_config:
+    name: adam
+    learning_rate: 0.001

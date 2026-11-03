@@ -1,0 +1,8 @@
+# Baseline: the single DIS config every library starts from, i.e. the oracle
+# on the 1-model library.
+extends: experiments/art_of_piv/appendix/A.1_learning_signal/models/oracle.yaml
+study:
+  tags:
+    signal: baseline
+config:
+  estimators_list_path: experiments/art_of_piv/libraries/abl_n1.yaml

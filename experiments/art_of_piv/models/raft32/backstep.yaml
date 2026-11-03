@@ -1,0 +1,3 @@
+# RAFT32-PIV fine-tuned on the backstep flow class (paper appendix C).
+extends: experiments/art_of_piv/models/raft32/base.yaml
+load_from: hf://activefluidcontrol/art-of-piv-models@f7c95aff1fb5ff46c276925bd78a74051e6ca57c/raft32/backstep

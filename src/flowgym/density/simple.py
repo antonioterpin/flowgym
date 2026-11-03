@@ -1,13 +1,14 @@
 """Simple density estimator using a threshold discrimination."""
 
 from typing import Any
+
 import jax.numpy as jnp
+from goggles.history.types import History
 
 from flowgym.common.base import (
-    EstimatorTrainableState,
     Estimator,
+    EstimatorTrainableState,
 )
-from goggles.history.types import History
 
 
 class SimpleDensityEstimator(Estimator):
@@ -22,7 +23,10 @@ class SimpleDensityEstimator(Estimator):
 
         Args:
             threshold: Threshold for considering a pixel as occupied.
-            kwargs: Additional keyword arguments.
+            **kwargs: Additional keyword arguments.
+
+        Raises:
+            ValueError: If threshold is not in the range [0, 255].
         """
         if not (0 <= threshold <= 255):
             raise ValueError("threshold must be a float in the range [0, 255].")
@@ -41,14 +45,11 @@ class SimpleDensityEstimator(Estimator):
 
         Args:
             img: Input image.
-            state: Current state of the estimator.
-            _: Unused parameter.
-            __: Unused parameter.
-            ___: Unused parameter.
 
         Returns:
             - Computed density.
-            - None placeholder for additional outputs.
+            - Empty dict for cache outputs.
+            - Empty dict for extras.
         """
         return (
             (

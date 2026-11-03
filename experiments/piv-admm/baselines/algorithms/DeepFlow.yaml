@@ -1,0 +1,6 @@
+estimator: deepflow
+estimate_type: flow
+config:
+    jit: false
+    preprocess: src/flowgym/config/estimators/pre-processing/common.yaml
+    postprocess: src/flowgym/config/estimators/post-processing/common.yaml

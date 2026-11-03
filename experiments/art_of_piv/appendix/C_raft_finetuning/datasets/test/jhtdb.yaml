@@ -1,0 +1,8 @@
+# Test split of the jhtdb class (153 frames), in 51 batches of 3.
+extends: experiments/art_of_piv/appendix/C_raft_finetuning/datasets/test/base.yaml
+num_batches: 51
+file_list:
+  - hf://activefluidcontrol/piv-class1@ccc784ebbe86f16121bdc51ccb20b4cdf6b6a150:test/JHTDB_channel
+  - hf://activefluidcontrol/piv-class1@ccc784ebbe86f16121bdc51ccb20b4cdf6b6a150:test/JHTDB_channel_hd
+  - hf://activefluidcontrol/piv-class1@ccc784ebbe86f16121bdc51ccb20b4cdf6b6a150:test/JHTDB_isotropic1024_hd
+  - hf://activefluidcontrol/piv-class1@ccc784ebbe86f16121bdc51ccb20b4cdf6b6a150:test/JHTDB_mhd1024_hd

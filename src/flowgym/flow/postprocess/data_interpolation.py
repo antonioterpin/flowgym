@@ -1,9 +1,10 @@
 """Interpolation for optical-flow tensors with missing/outlier vectors."""
 
-import jax.numpy as jnp
-from jax import lax
+from typing import Any, cast
 
+import jax.numpy as jnp
 from goggles.history.types import History
+from jax import lax
 
 
 def tile_average_interpolation_validate_params(radius: int):
@@ -16,7 +17,9 @@ def tile_average_interpolation_validate_params(radius: int):
         ValueError: If radius is not a positive integer.
     """
     if not isinstance(radius, int) or radius < 1:
-        raise ValueError(f"Invalid radius: {radius}. Must be a positive integer.")
+        raise ValueError(
+            f"Invalid radius: {radius}. Must be a positive integer."
+        )
 
 
 def tile_average_interpolation(
@@ -24,6 +27,7 @@ def tile_average_interpolation(
     valid: jnp.ndarray,
     radius: int,
     state: History | None = None,
+    **kwargs: Any,
 ) -> tuple[jnp.ndarray, jnp.ndarray | None, History | None]:
     """Fill outliers with the average of their surrounding tile.
 
@@ -32,6 +36,7 @@ def tile_average_interpolation(
         valid: Mask of shape (B, H, W) where 1 means valid.
         radius: Radius of the tile to average over.
         state: Current state of the estimator.
+        **kwargs: Additional keyword arguments.
 
     Returns:
         Interpolated flow tensor of the same shape as `flow`.
@@ -43,7 +48,9 @@ def tile_average_interpolation(
     valid_f = valid[..., None].astype(flow.dtype)
     masked = flow * valid_f
 
-    sum_valid = lax.reduce_window(valid_f, 0.0, lax.add, window, strides, "SAME")
+    sum_valid = lax.reduce_window(
+        valid_f, 0.0, lax.add, window, strides, "SAME"
+    )
 
     sum_flow = lax.reduce_window(masked, 0.0, lax.add, window, strides, "SAME")
 
@@ -51,7 +58,7 @@ def tile_average_interpolation(
     avg = sum_flow / denom
 
     return (
-        jnp.where(valid_f, flow, avg),
+        cast(jnp.ndarray, jnp.where(valid_f, flow, avg)),
         jnp.logical_or(valid_f, sum_valid > 0.1).squeeze(-1),
         state,
     )
@@ -87,7 +94,9 @@ def laplace_interpolation_validate_params(num_iter: int):
         ValueError: If num_iter is not a positive integer.
     """
     if not isinstance(num_iter, int) or num_iter < 1:
-        raise ValueError(f"Invalid num_iter: {num_iter}. Must be a positive integer.")
+        raise ValueError(
+            f"Invalid num_iter: {num_iter}. Must be a positive integer."
+        )
 
 
 def laplace_interpolation(
@@ -95,6 +104,7 @@ def laplace_interpolation(
     valid: jnp.ndarray,
     num_iter: int = 512,
     state: History | None = None,
+    **kwargs: Any,
 ) -> tuple[jnp.ndarray, jnp.ndarray | None, History | None]:
     """Solve Laplace equation with fixed boundary via Jacobi relaxation.
 
@@ -103,6 +113,7 @@ def laplace_interpolation(
         valid: Mask of shape (B, H, W) where 1 means valid.
         num_iter: Number of Jacobi iterations to perform.
         state: Current state of the estimator.
+        **kwargs: Additional keyword arguments.
 
     Returns:
         - Interpolated flow tensor of the same shape as `flow`.

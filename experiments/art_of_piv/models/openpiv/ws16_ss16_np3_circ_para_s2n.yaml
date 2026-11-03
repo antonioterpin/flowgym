@@ -1,0 +1,11 @@
+# In the openpiv_4khz library; also the best single estimator of both OpenPIV
+# rows (table_1/models/best_single_openpiv.yaml).
+extends: experiments/art_of_piv/models/openpiv/base.yaml
+config:
+  window_size: 16
+  overlap: 8
+  search_size: 16
+  n_passes: 3
+  correlation_method: circular
+  subpixel_method: parabolic
+  sig2noise_threshold: 1.3

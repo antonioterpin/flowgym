@@ -1,0 +1,4 @@
+# val.yaml with batches of 64.
+extends: experiments/art_of_piv/datasets/val.yaml
+batch_size: 64
+flow_fields_per_batch: 64

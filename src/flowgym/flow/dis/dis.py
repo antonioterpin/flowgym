@@ -1,16 +1,17 @@
 """DISFlowFieldEstimator class."""
 
 from typing import Any
+
 import cv2
-import numpy as np
 import jax.numpy as jnp
+import numpy as np
+from goggles.history.types import History
 
 from flowgym.flow.base import FlowFieldEstimator
-from goggles.history.types import History
 
 
 class DISFlowFieldEstimator(FlowFieldEstimator):
-    """Dense Inverse Search (DIS) flow field estimator using two-frame history."""
+    """Dense Inverse Search (DIS) flow estimator with two-frame history."""
 
     def __init__(
         self,
@@ -41,24 +42,32 @@ class DISFlowFieldEstimator(FlowFieldEstimator):
             use_mean_normalization: Enable mean normalization of patches.
             use_spatial_propagation: Enable spatial propagation of flow.
             finest_scale: Finest scale for multi-scale processing.
-            kwargs: Additional keyword arguments for the base class.
+            **kwargs: Additional keyword arguments for the base class.
+
+        Raises:
+            ValueError: If any parameter validation fails.
         """
         # Validate DIS specific parameters
         if preset is not None and preset not in (0, 1, 2, 3):
             raise ValueError(f"preset {preset} must be 0,1,2, or 3.")
-        self.dis = cv2.DISOpticalFlow_create(preset)  # type: ignore
+        # DISOpticalFlow_create is available in cv2 but not typed in stubs
+        self.dis = cv2.DISOpticalFlow_create(preset)  # pyright: ignore[reportAttributeAccessIssue]
 
         if patch_size is not None and (
             not isinstance(patch_size, int) or patch_size <= 0
         ):
-            raise ValueError(f"patch_size {patch_size} must be a positive integer.")
+            raise ValueError(
+                f"patch_size {patch_size} must be a positive integer."
+            )
         if patch_size is not None:
             self.dis.setPatchSize(patch_size)
 
         if patch_stride is not None and (
             not isinstance(patch_stride, int) or patch_stride <= 0
         ):
-            raise ValueError(f"patch_stride {patch_stride} must be a positive integer.")
+            raise ValueError(
+                f"patch_stride {patch_stride} must be a positive integer."
+            )
         if patch_stride is not None:
             self.dis.setPatchStride(patch_stride)
 
@@ -66,7 +75,8 @@ class DISFlowFieldEstimator(FlowFieldEstimator):
             not isinstance(grad_desc_iters, int) or grad_desc_iters < 0
         ):
             raise ValueError(
-                f"grad_desc_iters {grad_desc_iters} must be a non-negative integer."
+                f"grad_desc_iters {grad_desc_iters} must be a "
+                "non-negative integer."
             )
         if grad_desc_iters is not None:
             self.dis.setGradientDescentIterations(grad_desc_iters)
@@ -75,7 +85,8 @@ class DISFlowFieldEstimator(FlowFieldEstimator):
             not isinstance(var_refine_iters, int) or var_refine_iters < 0
         ):
             raise ValueError(
-                f"var_refine_iters {var_refine_iters} must be a non-negative integer."
+                f"var_refine_iters {var_refine_iters} must be a "
+                "non-negative integer."
             )
         if var_refine_iters is not None:
             self.dis.setVariationalRefinementIterations(var_refine_iters)
@@ -84,7 +95,8 @@ class DISFlowFieldEstimator(FlowFieldEstimator):
             use_mean_normalization, bool
         ):
             raise ValueError(
-                f"use_mean_normalization {use_mean_normalization} must be a boolean."
+                f"use_mean_normalization {use_mean_normalization} must "
+                "be a boolean."
             )
         if use_mean_normalization is not None:
             self.dis.setUseMeanNormalization(bool(use_mean_normalization))
@@ -93,7 +105,8 @@ class DISFlowFieldEstimator(FlowFieldEstimator):
             use_spatial_propagation, bool
         ):
             raise ValueError(
-                f"use_spatial_propagation {use_spatial_propagation} must be a boolean."
+                f"use_spatial_propagation {use_spatial_propagation} "
+                "must be a boolean."
             )
         if use_spatial_propagation is not None:
             self.dis.setUseSpatialPropagation(bool(use_spatial_propagation))
@@ -148,8 +161,6 @@ class DISFlowFieldEstimator(FlowFieldEstimator):
         Args:
             image: Current batch of frames, shape (B, H, W).
             state: Contains history_images of shape (B, 1, H, W).
-            _: Unused parameter.
-            __: Unused parameter.
 
         Returns:
             Flow field of shape (B, H, W, 2) as float32.

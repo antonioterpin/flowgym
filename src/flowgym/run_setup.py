@@ -1,0 +1,501 @@
+"""Per-run setup: config parsing, output directories, W&B wiring."""
+
+from __future__ import annotations
+
+import argparse
+import copy
+import os
+import shutil
+from datetime import datetime
+from pathlib import Path
+
+import goggles as gg
+
+from flowgym.experiments import (
+    build_study_run_name,
+    validate_scalar_tags,
+    wandb_git_diff_capture,
+    wandb_run_tags,
+)
+from flowgym.utils import dump_yaml, load_configuration
+
+logger = gg.get_logger("flowgym", with_metrics=True)
+
+
+def apply_cache_cli_overrides(
+    caching_config: dict | None,
+    cache_root: str | None,
+    cache_id: str | None,
+) -> dict | None:
+    """Override the cache ``root_dir`` / ``cache_id`` from CLI flags.
+
+    The cache ``spec`` stays declarative in the dataset config; these
+    flags only redirect where a cache lands and how it is named, so one
+    dataset config can fill many caches (e.g. one per estimator in a sweep).
+
+    Args:
+        caching_config: Parsed caching block from the dataset config, or
+            None when the dataset declares no caching.
+        cache_root: Override for the cache root directory, or None.
+        cache_id: Override for the base cache id, or None.
+
+    Returns:
+        The (possibly updated) caching config.
+
+    Raises:
+        ValueError: If an override is given but the dataset config has no
+            caching block to supply the required ``spec``.
+    """
+    if cache_root is None and cache_id is None:
+        return caching_config
+    if caching_config is None:
+        raise ValueError(
+            "--cache-root/--cache-id require a `caching:` block (with at "
+            "least a `spec`) in the dataset config."
+        )
+    if cache_root is not None:
+        caching_config["root_dir"] = str(cache_root)
+    if cache_id is not None:
+        caching_config["cache_id"] = cache_id
+    return caching_config
+
+
+def prepare_configs(
+    args: argparse.Namespace,
+) -> tuple[
+    dict,
+    dict | None,
+    dict,
+    str | None,
+    dict | None,
+    dict | None,
+    dict | None,
+    dict,
+]:
+    """Prepare dataset and estimator configurations from CLI arguments.
+
+    Args:
+        args: Parsed command line arguments.
+
+    Returns:
+        Tuple containing:
+            - Dataset configuration dictionary.
+            - Second dataset configuration dictionary for comparison,
+                if in compare mode.
+            - Estimator configuration dictionary.
+            - Output directory path if in training mode, else None.
+            - Validation settings dictionary, if validation is enabled.
+            - Test settings dictionary, if a test split is configured.
+            - Caching configuration dictionary, if caching is enabled.
+            - W&B setup dictionary.
+
+    Raises:
+        ValueError: If validation configuration is invalid or missing.
+    """
+    # Load the dataset
+    dataset_config = load_configuration(args.dataset)
+    dataset_config2 = None
+    validation_settings = None
+    test_settings = None
+    caching_config = None
+    dataset_tags = None
+
+    # Load the estimator
+    estimator_config = load_configuration(args.estimator)
+
+    # output directory
+    out_dir = None
+
+    if args.mode == "compare-samplers":
+        dataset_config["randomize"] = False
+        dataset_config["include_images"] = False
+    if args.mode not in ["train", "train-supervised"]:
+        dataset_config["loop"] = False
+
+    validation_spec = dataset_config.pop("validation", None)
+    if validation_spec is not None:
+        val_dataset_config, num_batches = _eval_split(
+            validation_spec, "validation"
+        )
+
+        interval = validation_spec.get("interval")
+        if interval is not None:
+            try:
+                interval = int(interval)
+            except (TypeError, ValueError):
+                raise ValueError(
+                    "`validation.interval` must be convertible to an integer."
+                ) from None
+            if interval <= 0:
+                raise ValueError(
+                    "`validation.interval` must be a positive integer."
+                )
+
+        validation_settings = {
+            "dataset_config": val_dataset_config,
+            "interval": interval,
+            "num_batches": num_batches,
+        }
+
+    test_spec = dataset_config.pop("test", None)
+    if test_spec is not None:
+        test_dataset_config, test_num_batches = _eval_split(test_spec, "test")
+        test_settings = {
+            "dataset_config": test_dataset_config,
+            "num_batches": test_num_batches,
+        }
+    # Handle the seed for reproducibility
+    if "seed" not in dataset_config or not isinstance(
+        dataset_config["seed"], int
+    ):
+        logger.warning(
+            "Dataset configuration does not contain a valid integer seed."
+            " Defaulting to 0"
+        )
+        dataset_config["seed"] = 0
+
+    raw_dataset_tags = dataset_config.pop("tags", None)
+    if raw_dataset_tags is not None:
+        dataset_tags = validate_scalar_tags(
+            raw_dataset_tags, "dataset_config['tags']"
+        )
+
+    # Parse Caching Configuration
+    if "caching" in dataset_config:
+        caching_config = dataset_config["caching"]
+        if "spec" in caching_config:
+            # Parse spec from list/tuple format to (dtype, shape) tuple
+            parsed_spec = {}
+            for k, v in caching_config["spec"].items():
+                dtype_str = v[0]
+                shape = tuple(v[1])
+                parsed_spec[k] = (dtype_str, shape)
+            caching_config["spec"] = parsed_spec
+
+    # CLI flags override where the cache lands / its base id (spec stays
+    # in the dataset config). Lets one dataset config fill many caches.
+    caching_config = apply_cache_cli_overrides(
+        caching_config,
+        getattr(args, "cache_root", None),
+        getattr(args, "cache_id", None),
+    )
+
+    if args.mode == "compare-samplers":
+        # create a second sampler to load real images from files
+        dataset_config2 = load_configuration(args.dataset)
+        dataset_config2["include_images"] = True
+        dataset_config2["loop"] = False
+        dataset_config2["randomize"] = False
+
+    log_estimator_config = {**estimator_config}
+    log_estimator_config["config"] = {**estimator_config["config"]}
+    for k, v in log_estimator_config["config"].items():
+        if isinstance(v, str) and v.endswith(".yaml"):
+            log_estimator_config["config"][k] = load_configuration(v)
+
+    group: str | None = None
+    study_logged: dict[str, object] | None = None
+    study_tags: dict | None = None
+
+    study = estimator_config.get("study")
+    if study is not None:
+        if not isinstance(study, dict):
+            raise ValueError("estimator_config['study'] must be a dict.")
+        if "run_name" in estimator_config:
+            raise ValueError(
+                "Do not set run_name in estimator config for study runs."
+            )
+
+        study_name = study.get("name")
+        if not isinstance(study_name, str) or not study_name:
+            raise ValueError(
+                "estimator_config['study']['name'] must be a string."
+            )
+
+        study_tags = validate_scalar_tags(
+            study.get("tags"), "estimator_config['study']['tags']"
+        )
+        seed = dataset_config["seed"]
+        group = study_name
+        estimator_config["run_name"] = build_study_run_name(study_tags, seed)
+
+        # Git state is collected once later in setup_study_run, while
+        # wandb_git_diff_capture is active, so the state_label in the
+        # W&B config matches the one used for the run output directory.
+        study_logged = {
+            "name": study_name,
+            "tags": dict(study_tags),
+            "seed": seed,
+        }
+
+    if args.mode in {"train", "train-supervised"} and study_logged is None:
+        out_dir = estimator_config.get("out_dir", "output")
+        # One directory per run, so reruns never mix their checkpoints
+        out_dir = os.path.join(
+            out_dir,
+            estimator_config["estimator"],
+            str(dataset_config["seed"]),
+            datetime.now().strftime("%Y-%m-%d_%H-%M-%S"),
+        )
+        os.makedirs(out_dir)
+        _create_run_outputs(
+            args, out_dir, estimator_config, dataset_config, validation_settings
+        )
+    # For study training runs, out_dir/configs are created later inside
+    # setup_study_run, which derives state_label from the captured git state.
+
+    project = estimator_config.get("project", "FlowGym")
+    if not isinstance(project, str) or not project:
+        raise ValueError(
+            "estimator_config['project'] must be a non-empty string."
+        )
+
+    if study_logged is None and estimator_config.get("run_name") is None:
+        dataset_stem = Path(args.dataset).stem
+        estimator_config["run_name"] = (
+            f"{args.mode}_{estimator_config['estimator']}_{dataset_stem}"
+        )
+
+    run_tags = wandb_run_tags(study_tags, dataset_tags)
+    wandb_setup = {
+        "project": project,
+        "run_name": estimator_config["run_name"],
+        "group": group,
+        "config": {
+            "estimator_config": log_estimator_config,
+            "dataset_config": dataset_config,
+            "dataset_config2": dataset_config2,
+            "validation": validation_settings,
+            "mode": args.mode,
+            "out_dir": out_dir,
+            **({"study": study_logged} if study_logged is not None else {}),
+            **(
+                {"dataset_tags": dataset_tags}
+                if dataset_tags is not None
+                else {}
+            ),
+        },
+        **({"tags": run_tags} if run_tags else {}),
+    }
+
+    return (
+        dataset_config,
+        dataset_config2,
+        estimator_config,
+        out_dir,
+        validation_settings,
+        test_settings,
+        caching_config,
+        wandb_setup,
+    )
+
+
+def setup_study_run(
+    args: argparse.Namespace,
+    wandb_setup: dict,
+    dataset_config: dict,
+    dataset_config_to_compare: dict | None,
+    estimator_config: dict,
+    validation_settings: dict | None,
+) -> str | None:
+    """Materialize study run outputs and W&B inside one git capture context.
+
+    Collects git state once via ``wandb_git_diff_capture`` and, while the
+    temporary git index is live, builds the study output directory using
+    ``state_label``, persists resolved configs, enriches the W&B study config
+    with git metadata, attaches the W&B handler with native code capture,
+    and logs initial artifacts so ``wandb.init`` records the matching diff.
+
+    Args:
+        args: Parsed command line arguments.
+        wandb_setup: W&B handler configuration; mutated to inject git fields
+            into ``config['study']`` and to record the resolved ``out_dir``.
+        dataset_config: Resolved primary dataset config.
+        dataset_config_to_compare: Optional secondary dataset config.
+        estimator_config: Resolved estimator config.
+        validation_settings: Optional validation settings.
+
+    Returns:
+        Output directory for training modes, otherwise ``None``.
+    """
+    with wandb_git_diff_capture() as state_label:
+        out_dir: str | None = None
+        if args.mode in {"train", "train-supervised"}:
+            study = wandb_setup["config"]["study"]
+            out_dir = os.path.join(
+                "experiments",
+                str(study["name"]),
+                "runs",
+                f"state={state_label}",
+                wandb_setup["run_name"],
+            )
+            _create_run_outputs(
+                args,
+                out_dir,
+                estimator_config,
+                dataset_config,
+                validation_settings,
+            )
+        wandb_setup["config"]["study"] = {
+            **wandb_setup["config"]["study"],
+            "state_label": state_label,
+        }
+        wandb_setup["config"]["out_dir"] = out_dir
+        _attach_wandb_handler(wandb_setup, save_code=True)
+        log_initial_config_artifacts(
+            dataset_config,
+            dataset_config_to_compare,
+            estimator_config,
+            validation_settings,
+        )
+    return out_dir
+
+
+def log_initial_config_artifacts(
+    dataset_config: dict,
+    dataset_config_to_compare: dict | None,
+    estimator_config: dict,
+    validation_settings: dict | None,
+) -> None:
+    """Log initial configuration artifacts after W&B is attached.
+
+    Args:
+        dataset_config: Resolved primary dataset config to log.
+        dataset_config_to_compare: Optional secondary dataset config.
+        estimator_config: Resolved estimator config to log.
+        validation_settings: Optional validation settings.
+    """
+    if hasattr(logger, "artifact"):
+        logger.artifact(
+            data=dataset_config,
+            name="dataset_config",
+            format="yaml",
+            step=0,
+        )
+        logger.artifact(
+            data=estimator_config,
+            name="estimator_config",
+            format="yaml",
+            step=0,
+        )
+        if dataset_config_to_compare is not None:
+            logger.artifact(
+                data=dataset_config_to_compare,
+                name="dataset_config_to_compare",
+                format="yaml",
+                step=0,
+            )
+        if validation_settings is not None:
+            logger.artifact(
+                data=validation_settings["dataset_config"],
+                name="val_dataset_config",
+                format="yaml",
+                step=0,
+            )
+    else:
+        logger.warning(
+            "Logger does not support artifact logging. "
+            "Configuration artifacts will not be logged."
+        )
+
+
+def _eval_split(spec: object, name: str) -> tuple[dict, int | None]:
+    """Parse a ``validation``/``test`` block of a dataset config.
+
+    Args:
+        spec: The block: ``dataset`` (YAML path or dict) and ``num_batches``
+            (``all`` evaluates every sample once; the dataset must not loop).
+        name: Block name, for error messages.
+
+    Returns:
+        The split's dataset config and its number of batches (``None`` for
+        all).
+
+    Raises:
+        ValueError: If the block is malformed.
+    """
+    if not isinstance(spec, dict):
+        raise ValueError(f"`{name}` entry must be a dictionary if provided.")
+    dataset_spec = spec.get("dataset")
+    if dataset_spec is None:
+        raise ValueError(f"`{name}.dataset` must be specified.")
+    if isinstance(dataset_spec, str):
+        dataset_config = load_configuration(dataset_spec)
+    elif isinstance(dataset_spec, dict):
+        dataset_config = copy.deepcopy(dataset_spec)
+    else:
+        raise ValueError(
+            f"`{name}.dataset` must be either a path to a YAML file "
+            "or a configuration dict."
+        )
+    if dataset_config is None:
+        raise ValueError(f"`{name}` dataset configuration could not be loaded.")
+    dataset_config.setdefault("loop", False)
+    dataset_config.setdefault("randomize", False)
+    dataset_config.setdefault("include_images", False)
+
+    if spec.get("num_batches") == "all":
+        if dataset_config["loop"]:
+            raise ValueError(
+                f"`{name}.num_batches: all` needs `loop: false` in the dataset."
+            )
+        return dataset_config, None
+
+    try:
+        num_batches = int(spec.get("num_batches", 1))
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"`{name}.num_batches` must be convertible to an integer."
+        ) from None
+    if num_batches <= 0:
+        raise ValueError(f"`{name}.num_batches` must be a positive integer.")
+    return dataset_config, num_batches
+
+
+def _create_run_outputs(
+    args: argparse.Namespace,
+    out_dir: str,
+    estimator_config: dict,
+    dataset_config: dict,
+    validation_settings: dict | None,
+) -> None:
+    """Create ``out_dir`` and persist resolved configs under ``configs/``.
+
+    Args:
+        args: Parsed command line arguments.
+        out_dir: Run output directory; created if missing.
+        estimator_config: Resolved estimator config to persist.
+        dataset_config: Resolved dataset config to persist.
+        validation_settings: Optional validation settings to persist.
+    """
+    os.makedirs(out_dir, exist_ok=True)
+    cfg_dir = os.path.join(out_dir, "configs")
+    os.makedirs(cfg_dir, exist_ok=True)
+    shutil.copy2(args.estimator, os.path.join(cfg_dir, "estimator.yaml"))
+    shutil.copy2(args.dataset, os.path.join(cfg_dir, "dataset.yaml"))
+    dump_yaml(
+        os.path.join(cfg_dir, "estimator_resolved.yaml"), estimator_config
+    )
+    dump_yaml(os.path.join(cfg_dir, "dataset_resolved.yaml"), dataset_config)
+    if validation_settings is not None:
+        dump_yaml(
+            os.path.join(cfg_dir, "val_dataset_resolved.yaml"),
+            validation_settings["dataset_config"],
+        )
+
+
+def _attach_wandb_handler(wandb_setup: dict, *, save_code: bool) -> None:
+    handler_kwargs: dict = {
+        "project": wandb_setup["project"],
+        "run_name": wandb_setup["run_name"],
+        "group": wandb_setup["group"],
+        "config": wandb_setup["config"],
+    }
+    if wandb_setup.get("tags"):
+        handler_kwargs["tags"] = wandb_setup["tags"]
+    if save_code:
+        handler_kwargs["wandb_init_kwargs"] = {
+            "save_code": True,
+            "settings": {"code_dir": "."},
+        }
+    gg.attach(gg.WandBHandler(**handler_kwargs), scopes=["global"])

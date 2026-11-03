@@ -1,0 +1,11 @@
+project: flowgym
+estimator: dummy
+estimate_type: flow
+config:
+  jit: true
+
+study:
+  name: example_experiment
+  tags:
+    estimator: dummy
+    variant: b
