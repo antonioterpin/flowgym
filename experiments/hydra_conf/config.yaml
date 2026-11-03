@@ -1,0 +1,18 @@
+# Hydra is optional: uv run --extra experiments python -m experiments.run_hydra
+exp: ???
+exp_root: experiments
+seed: null
+models: null
+debug: false
+experiment_overrides: {}
+model_overrides: {}
+dataset_overrides: {}
+
+hydra:
+  job:
+    chdir: false
+  run:
+    dir: outputs/experiments/${exp}/${now:%Y-%m-%d_%H-%M-%S-%f}
+  sweep:
+    dir: multirun/experiments/${exp}/${now:%Y-%m-%d_%H-%M-%S-%f}
+    subdir: ${hydra.job.num}

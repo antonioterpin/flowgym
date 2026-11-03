@@ -12,6 +12,7 @@ import os
 import statistics
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -50,27 +51,51 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def main() -> None:
-    """Run every model of the experiment once per seed, then collect results.
+def run_experiment(
+    exp: str,
+    exp_root: str | Path = "experiments",
+    *,
+    selected_models: list[str] | None = None,
+    debug: bool = False,
+    spec_overrides: dict[str, Any] | None = None,
+    model_overrides: dict[str, Any] | None = None,
+    dataset_overrides: dict[str, Any] | None = None,
+    output_dir: Path | None = None,
+    project_root: Path | None = None,
+) -> None:
+    """Run an experiment, optionally isolating a composed sweep job.
+
+    Args:
+        exp: Experiment folder name.
+        exp_root: Parent directory of experiment folders.
+        selected_models: Optional subset of the model entries.
+        debug: Enable debug mode in child processes.
+        spec_overrides: Overrides for exp.yaml, such as seeds or mode.
+        model_overrides: Nested overrides applied to each model config.
+        dataset_overrides: Nested overrides applied after model-specific ones.
+        output_dir: Isolated job directory, or the experiment folder by default.
+        project_root: Root for relative dataset and entrypoint paths.
 
     Raises:
-        ValueError: If ``exp.yaml`` or a model config is malformed.
+        ValueError: If the experiment or a model config is malformed.
         FileNotFoundError: If the entrypoint is missing.
     """
-    args = parse_args()
-    exp_dir = (Path(args.exp_root) / args.exp).resolve()
-    spec = _load_yaml(exp_dir / "exp.yaml")
+    root = Path.cwd() if project_root is None else project_root.resolve()
+    exp_dir = (root / exp_root / exp).resolve()
+    spec = deep_merge(_load_yaml(exp_dir / "exp.yaml"), spec_overrides or {})
+    destination = exp_dir if output_dir is None else output_dir.resolve()
+    destination.mkdir(parents=True, exist_ok=True)
     project = spec.get("project", DEFAULT_PROJECT)
     seeds = [int(seed) for seed in spec.get("seeds", [0])]
     metrics = list(spec.get("metrics", ["mean_epe"]))
-    selected = args.models or spec["models"]
+    selected = selected_models or spec["models"]
     unknown = sorted(set(selected) - set(spec["models"]))
     if unknown:
         raise ValueError(f"--models not in exp.yaml: {unknown}")
-    entry_path = Path.cwd() / spec.get("entrypoint", "src/main.py")
+    entry_path = root / spec.get("entrypoint", "src/main.py")
     if not entry_path.exists():
         raise FileNotFoundError(f"Entrypoint not found at {entry_path}")
-    generated_dir = exp_dir / "_generated"
+    generated_dir = destination / "_generated"
     # Runs are separate processes: let them reuse compiled XLA programs
     os.environ.setdefault(
         "JAX_COMPILATION_CACHE_DIR", str(Path.home() / ".cache/flowgym/jax")
@@ -81,8 +106,10 @@ def main() -> None:
     # repository root) with any overrides
     models: list[tuple[str, str, Path, dict[str, Any], dict[str, Any]]] = []
     for model in spec["models"]:
-        model_cfg = _load_yaml(exp_dir / model)
-        validate_model_study(model_cfg, args.exp)
+        model_cfg = deep_merge(
+            _load_yaml(exp_dir / model), model_overrides or {}
+        )
+        validate_model_study(model_cfg, exp)
         model_cfg["project"] = project
         model_mode = model_cfg.pop("mode", spec["mode"])
         dataset = model_cfg.pop("dataset", spec.get("dataset"))
@@ -91,9 +118,14 @@ def main() -> None:
                 f"{model} sets no dataset and exp.yaml has no default."
             )
         dataset_cfg = deep_merge(
-            _load_yaml(Path(dataset)),
-            model_cfg.pop("dataset_overrides", {}),
+            deep_merge(
+                _load_yaml(root / dataset),
+                model_cfg.pop("dataset_overrides", {}),
+            ),
+            dataset_overrides or {},
         )
+        if output_dir is not None:
+            model_cfg["out_dir"] = str(destination / "runs" / model)
         model_path = generated_dir / "models" / model
         if model in selected:
             dump_yaml(model_path, model_cfg)
@@ -105,7 +137,7 @@ def main() -> None:
     def dataset_path(model: str, seed: int) -> Path:
         return generated_dir / "datasets" / model / f"seed{seed}.yaml"
 
-    results_path = exp_dir / "results.json"
+    results_path = destination / "results.json"
     results_path.unlink(missing_ok=True)
     for seed in seeds:
         for model, model_mode, model_path, _, dataset_cfg in models:
@@ -127,9 +159,21 @@ def main() -> None:
                 "--summary-out",
                 str(summary),
             ]
-            if args.debug:
+            if debug:
                 cmd.append("--debug")
-            subprocess.check_call(cmd)
+            if output_dir is None:
+                subprocess.check_call(cmd)
+            else:
+                # Every job and child owns a logging socket, including when
+                # a Hydra launcher schedules several workers concurrently.
+                with tempfile.TemporaryDirectory(
+                    prefix="flowgym-goggles-"
+                ) as log_dir:
+                    env = {
+                        **os.environ,
+                        "GOGGLES_SOCKET": str(Path(log_dir) / "log.sock"),
+                    }
+                    subprocess.check_call(cmd, cwd=root, env=env)
 
     # Mean and population std over seeds of each listed metric, for every
     # model with all its summaries (also those run by another launcher)
@@ -169,7 +213,16 @@ def main() -> None:
                 }
     if results:
         results_path.write_text(json.dumps(results, indent=2) + "\n")
-        update_readme_results(exp_dir / "README.md")
+        if output_dir is None:
+            update_readme_results(exp_dir / "README.md")
+
+
+def main() -> None:
+    """Run the original experiment CLI using the shared launcher."""
+    args = parse_args()
+    run_experiment(
+        args.exp, args.exp_root, selected_models=args.models, debug=args.debug
+    )
 
 
 if __name__ == "__main__":

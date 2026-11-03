@@ -323,9 +323,10 @@ def setup_study_run(
         if args.mode in {"train", "train-supervised"}:
             study = wandb_setup["config"]["study"]
             out_dir = os.path.join(
-                "experiments",
-                str(study["name"]),
-                "runs",
+                estimator_config.get(
+                    "out_dir",
+                    os.path.join("experiments", str(study["name"]), "runs"),
+                ),
                 f"state={state_label}",
                 wandb_setup["run_name"],
             )

@@ -158,3 +158,43 @@ For exact signatures, see the
 - [Estimator API overview](estimator-api.md)
 - [Configuration and data flow](configuration-and-data.md)
 - [Example workflows](../examples/index.md)
+
+## Hydra experiment sweeps
+
+The optional Hydra entrypoint reuses the experiment launcher while adding
+configuration composition and multirun overrides. The original
+`uv run python experiments/run.py --exp example_experiment` command keeps
+its existing behavior.
+
+From the repository root:
+
+```bash
+uv run --extra experiments python -m experiments.run_hydra \
+  exp=example_experiment --multirun seed=0,1,2 \
+  '+model_overrides.config.jit=true,false'
+```
+
+`exp` selects an existing experiment folder. `exp_root` defaults to
+`experiments`; `models=[models/dummy_a.yaml]` selects a subset. `seed=null`
+uses the experiment's seeds, while a concrete `seed` runs just that seed.
+Use `+experiment_overrides.<key>`, `+model_overrides.<key>`, and
+`+dataset_overrides.<key>` for nested overrides. Dataset overrides apply
+after model-specific dataset overrides; the selected seed takes precedence
+at execution time. Each selected model receives the model overrides.
+
+Each Hydra job stores its resolved configuration in `.hydra/`, generated
+model/dataset YAML and summaries in `_generated/`, and aggregate metrics in
+`results.json`. Training artifacts go under that job's `runs/` directory.
+Source experiment YAML, README results, and existing generated files are
+left untouched. Relative dataset, estimator-library, and entrypoint paths
+still resolve from the repository root, including with `hydra.job.chdir=true`.
+Each child process uses a separate Goggles socket.
+
+Hydra's default launcher runs jobs serially. Install and select an appropriate
+Hydra launcher plugin for local parallel or cluster execution; allocate GPUs
+through that launcher or its worker environment. Custom Hydra config groups
+can represent conditional model configurations using `--config-dir` and
+`--config-name`, with `hydra_conf/config.yaml` as the starting schema. A flat
+comma-separated sweep is a Cartesian product and does not infer conditions.
+See the [Hydra multirun documentation](https://hydra.cc/docs/1.3/tutorials/basic/running_your_app/multi-run/)
+for composition, sweepers, and launcher plugins.
