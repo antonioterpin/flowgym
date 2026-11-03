@@ -113,6 +113,7 @@ def admm_consensus(
         - Metrics including final stopping time.
 
     Raises:
+        TypeError: If rho is not a number.
         ValueError: If any of the configuration parameters are invalid.
     """
     # Copy the configuration to avoid modifying the original

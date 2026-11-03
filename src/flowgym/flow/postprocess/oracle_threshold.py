@@ -36,7 +36,19 @@ def _binary_classification_metrics(
     preds: jnp.ndarray,
     labels: jnp.ndarray,
 ) -> dict[str, np.ndarray]:
-    """Per-sample binary classification metrics over trailing axes."""
+    """Per-sample binary classification metrics over trailing axes.
+
+    Args:
+        preds: Predicted boolean mask of shape (B, ...).
+        labels: Ground-truth boolean mask with the same shape as ``preds``.
+
+    Returns:
+        Mapping from metric name (accuracy, precision, recall, specificity,
+        balanced accuracy, F1, IoU) to per-sample values of shape (B,).
+
+    Raises:
+        ValueError: If shapes differ or the arrays have fewer than 2 dims.
+    """
     preds = jnp.asarray(preds, dtype=jnp.bool_)
     labels = jnp.asarray(labels, dtype=jnp.bool_)
     if preds.shape != labels.shape:
@@ -98,6 +110,9 @@ class LearnedOracleThresholdEstimator(Estimator):
             include_image_pair: Whether to append the current image pair
                 (previous/current grayscale frames) as additional channels.
             **kwargs: Additional keyword arguments for the base estimator.
+
+        Raises:
+            ValueError: If any of the configuration parameters are invalid.
         """
         if not isinstance(threshold, (int, float)) or not (
             0.0 < threshold < 1.0
@@ -142,7 +157,18 @@ class LearnedOracleThresholdEstimator(Estimator):
         self,
         estimator_list: str | dict[str, Any] | list[Any] | None,
     ) -> list[dict[str, Any]]:
-        """Normalize estimator-list configuration into a list of configs."""
+        """Normalize estimator-list configuration into a list of configs.
+
+        Args:
+            estimator_list: List of estimator configs, a dict with an
+                ``estimators`` key, a YAML path to either, or None.
+
+        Returns:
+            List of estimator config dictionaries (empty if None).
+
+        Raises:
+            ValueError: If the configuration cannot be loaded or is malformed.
+        """
         if estimator_list is None:
             return []
         raw: Any = estimator_list
@@ -178,7 +204,15 @@ class LearnedOracleThresholdEstimator(Estimator):
         self,
         estimator_list: list[dict[str, Any]],
     ) -> tuple[list[Callable], bool]:
-        """Create sub-estimator callables and check JIT compatibility."""
+        """Create sub-estimator callables and check JIT compatibility.
+
+        Args:
+            estimator_list: Normalized sub-estimator configurations.
+
+        Returns:
+            Tuple of the sub-estimator callables and whether all of them
+            support JIT compilation.
+        """
         if not estimator_list:
             return [], True
         # Local import to avoid circular dependency at module import time.
@@ -217,7 +251,18 @@ class LearnedOracleThresholdEstimator(Estimator):
         images: jnp.ndarray,
         state: History,
     ) -> jnp.ndarray:
-        """Run all configured sub-estimators and stack their flow outputs."""
+        """Run all configured sub-estimators and stack their flow outputs.
+
+        Args:
+            images: Current batch of images.
+            state: Current estimator history.
+
+        Returns:
+            Stacked flow fields of shape (B, K, H, W, 2).
+
+        Raises:
+            ValueError: If no sub-estimators are configured.
+        """
         if self.num_sub_estimators == 0:
             raise ValueError("No sub-estimators configured.")
 
@@ -256,7 +301,21 @@ class LearnedOracleThresholdEstimator(Estimator):
         flow_field: jnp.ndarray,
         flow_gt: jnp.ndarray,
     ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-        """Align flow/GT shapes, flatten K, and return estimator indices."""
+        """Align flow/GT shapes, flatten K, and return estimator indices.
+
+        Args:
+            flow_field: Predicted flow of shape (B, H, W, 2) or
+                (B, K, H, W, 2).
+            flow_gt: Ground-truth flow of shape (B, H, W, 2) or matching
+                ``flow_field``.
+
+        Returns:
+            Tuple of flattened flow, flattened ground truth, and the
+            estimator index of each flattened sample.
+
+        Raises:
+            ValueError: If the flow and ground-truth shapes cannot be aligned.
+        """
         if flow_field.ndim == 5 and flow_gt.ndim == 4:
             flow_gt = jnp.broadcast_to(flow_gt[:, None, ...], flow_field.shape)
         if flow_field.shape != flow_gt.shape:
@@ -293,6 +352,17 @@ class LearnedOracleThresholdEstimator(Estimator):
         Training feeds the full index range ``0..K-1`` per batch, so the
         shared builder's ``estimator_count=None`` path normalizes by
         ``max(index) == K-1`` — matching the inference postprocess step.
+
+        Args:
+            flow_field: Flow field of shape (B, H, W, 2).
+            estimator_indices: Optional estimator index per sample.
+            previous_image: Optional previous frame, used when the image
+                pair is included.
+            current_image: Optional current frame, used when the image pair
+                is included.
+
+        Returns:
+            Model input with the flow, index, and optional image channels.
         """
         return build_oracle_model_input(
             flow_for_model=flow_field,
@@ -309,7 +379,20 @@ class LearnedOracleThresholdEstimator(Estimator):
         previous_image: jnp.ndarray,
         current_image: jnp.ndarray,
     ) -> tuple[jnp.ndarray, jnp.ndarray]:
-        """Align image-pair shape to match flattened flow tensor."""
+        """Align image-pair shape to match flattened flow tensor.
+
+        Args:
+            flow_field: Flow of shape (B, H, W, 2) or (B, K, H, W, 2).
+            previous_image: Previous frame of shape (B, H, W) or (B, H, W, 1).
+            current_image: Current frame of shape (B, H, W) or (B, H, W, 1).
+
+        Returns:
+            Tuple of previous and current images with shape (B, H, W), or
+            (B * K, H, W) when ``flow_field`` has a K axis.
+
+        Raises:
+            ValueError: If the image and flow shapes are incompatible.
+        """
         prev = jnp.asarray(previous_image)
         curr = jnp.asarray(current_image)
         if prev.ndim == 4 and prev.shape[-1] == 1:
@@ -346,7 +429,18 @@ class LearnedOracleThresholdEstimator(Estimator):
         )
 
     def _coerce_logits(self, output: Any) -> jnp.ndarray:
-        """Convert model output to logits with shape (B, H, W)."""
+        """Convert model output to logits with shape (B, H, W).
+
+        Args:
+            output: Raw model output, optionally a tuple whose first element
+                holds the logits.
+
+        Returns:
+            Logits of shape (B, H, W).
+
+        Raises:
+            ValueError: If the logits cannot be reshaped to (B, H, W).
+        """
         logits = output[0] if isinstance(output, tuple) else output
         logits = jnp.asarray(logits)
         if logits.ndim == 4 and logits.shape[-1] == 1:
@@ -364,7 +458,20 @@ class LearnedOracleThresholdEstimator(Estimator):
         state: History,
         extras: dict[str, Any],
     ) -> jnp.ndarray:
-        """Extract a flow field from cache payload or estimator history."""
+        """Extract a flow field from cache payload or estimator history.
+
+        Args:
+            images: Current batch of images (unused).
+            state: Current estimator history, used as the fallback source.
+            extras: Extra inputs, possibly holding ``cache_payload`` or
+                ``flow_field``.
+
+        Returns:
+            Flow field of shape (B, H, W, 2) or (B, K, H, W, 2).
+
+        Raises:
+            ValueError: If the extracted flow field has an invalid shape.
+        """
         cache_payload = extras.get("cache_payload")
         flow_field: jnp.ndarray | None = None
         if cache_payload is not None:
@@ -401,6 +508,9 @@ class LearnedOracleThresholdEstimator(Estimator):
 
         Returns:
             Initialized neural-network trainable state.
+
+        Raises:
+            ValueError: If ``dummy_input`` has an invalid shape.
         """
         if dummy_input.ndim == 3:
             dummy_flow = jnp.zeros((*dummy_input.shape, 2), dtype=jnp.float32)
@@ -439,7 +549,21 @@ class LearnedOracleThresholdEstimator(Estimator):
         trainable_state: NNEstimatorTrainableState,
         extras: dict[str, Any],
     ) -> tuple[jnp.ndarray, dict[str, Any], dict[str, jnp.ndarray]]:
-        """Estimate a flow field and emit the learned inlier mask metric."""
+        """Estimate a flow field and emit the learned inlier mask metric.
+
+        Args:
+            images: Current batch of images.
+            state: Current estimator history.
+            trainable_state: Trainable state of the oracle mask model.
+            extras: Extra inputs (cached payload, flow field, valid mask).
+
+        Returns:
+            Tuple of the flow field, an empty state update, and metrics
+            holding the predicted inlier ``mask``.
+
+        Raises:
+            ValueError: If the learned oracle step returns no mask.
+        """
         flow_field = self._extract_flow_field(images, state, extras)
         metrics: dict[str, jnp.ndarray] = {}
         cache_payload = extras.get("cache_payload")
@@ -502,7 +626,17 @@ class LearnedOracleThresholdEstimator(Estimator):
         flow_field: jnp.ndarray | None = None,
         flow_field_gt: jnp.ndarray | None = None,
     ) -> Metrics:
-        """Process metrics and emit per-sample mask classification scores."""
+        """Process metrics and emit per-sample mask classification scores.
+
+        Args:
+            metrics: Raw metrics dictionary produced by ``_estimate``.
+            flow_field: Final flow field estimate.
+            flow_field_gt: Ground-truth flow field.
+
+        Returns:
+            Processed metrics, extended with mask classification scores when
+            ground truth is available.
+        """
         processed = dict(
             super().process_metrics(
                 metrics,
@@ -560,15 +694,27 @@ class LearnedOracleThresholdEstimator(Estimator):
         return processed
 
     def checkpoint_metric(self) -> tuple[str, bool]:
-        """Select the best checkpoint by mask F1 (higher is better)."""
+        """Select the best checkpoint by mask F1.
+
+        Returns:
+            The metric name and whether higher is better.
+        """
         return ("mask_f1", True)
 
     def supports_jit(self) -> bool:
-        """Jittable iff all configured sub-estimators are jittable."""
+        """Return whether the estimator can be JIT-compiled.
+
+        Returns:
+            True only if all configured sub-estimators are jittable.
+        """
         return self._inner_estimators_support_jit
 
     def supports_train_step_jit(self) -> bool:
-        """Train step stays jittable via host-side precomputation."""
+        """Return whether the train step can be JIT-compiled.
+
+        Returns:
+            True, since non-jittable work is precomputed on the host.
+        """
         return True
 
     def prepare_experience_for_training(
@@ -576,7 +722,17 @@ class LearnedOracleThresholdEstimator(Estimator):
         experience: SupervisedExperience,
         trainable_state: NNEstimatorTrainableState,
     ) -> SupervisedExperience:
-        """Precompute non-jittable sub-estimator flows before train step."""
+        """Precompute non-jittable sub-estimator flows before train step.
+
+        Args:
+            experience: Supervised experience to prepare.
+            trainable_state: Trainable state of the oracle mask model
+                (unused).
+
+        Returns:
+            The experience, with sub-estimator flows stored in its cache
+            payload when they had to be computed on the host.
+        """
         del trainable_state
         if self.num_sub_estimators <= 0 or self._inner_estimators_support_jit:
             return experience
@@ -610,7 +766,12 @@ class LearnedOracleThresholdEstimator(Estimator):
         )
 
     def create_train_step(self) -> SupervisedTrainStep:
-        """Create a supervised train step for oracle-mask learning."""
+        """Create a supervised train step for oracle-mask learning.
+
+        Returns:
+            Train step mapping trainable state and experience to the loss,
+            the updated trainable state, and training metrics.
+        """
 
         def train_step(
             trainable_state: NNEstimatorTrainableState,

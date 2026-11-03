@@ -1,13 +1,12 @@
 """Types used in the flowgym package."""
 
 from dataclasses import dataclass, field, fields
-from typing import Any, Protocol, TypeAlias, runtime_checkable
+from typing import Any, Protocol, Self, TypeAlias, runtime_checkable
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 from goggles.history.types import History
-from typing_extensions import Self
 
 from flowgym.common.base.trainable_state import (
     EstimatorTrainableState,
