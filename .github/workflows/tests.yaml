@@ -1,20 +1,35 @@
 name: Tests
 
-# Runs on PRs and on pushes to the integration branches only — not on every
-# feature-branch push — because the full jax-CPU suite is slow (~40 min).
+# Runs on PRs and on pushes to main. Pushes to dev are not tested again:
+# every change reaches dev through a PR that already ran this workflow.
+# A new push to a PR cancels that PR's in-flight run.
 on:
     pull_request:
+        # Skip PRs that only touch prose or repo metadata. Experiment READMEs
+        # are not ignored: tests check that they match their results files.
+        paths-ignore:
+            - 'docs/**'
+            - '*.md'
+            - 'LICENSE'
+            - '*.jpg'
+            - '.readthedocs.yaml'
+            - '.gitlint'
+            - '.gitmessage'
+            - '.github/ISSUE_TEMPLATE/**'
+            - '.github/pull_request_template.md'
+            - '.github/CODEOWNERS'
+            - '.github/dependabot.yml'
     push:
-        branches: [main, dev]
+        branches: [main]
+    workflow_dispatch:
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: true
 
 jobs:
     tests:
         runs-on: ubuntu-latest
-
-        strategy:
-            fail-fast: false
-            matrix:
-                python-version: ['3.11', '3.12']
 
         steps:
             - name: Check out code
@@ -23,7 +38,7 @@ jobs:
             - name: Install uv
               uses: astral-sh/setup-uv@v7
               with:
-                  python-version: ${{ matrix.python-version }}
+                  python-version: '3.12'
                   enable-cache: true
 
             # Public git deps were moved to PyPI, so no SSH key is needed.
@@ -32,5 +47,7 @@ jobs:
             - name: Install dependencies
               run: uv sync --group dev
 
+            # One pytest-xdist worker per runner core; --durations keeps the
+            # slowest tests visible in the log.
             - name: Run pytest
-              run: uv run pytest
+              run: uv run pytest -n auto --durations=30
