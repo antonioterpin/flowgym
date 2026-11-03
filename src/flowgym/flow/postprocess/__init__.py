@@ -254,7 +254,14 @@ def apply_postprocessing(
 
 
 def is_outlier_rejection_step(name: str) -> bool:
-    """Return whether the named postprocessing step rejects outliers."""
+    """Return whether the named postprocessing step rejects outliers.
+
+    Args:
+        name: Name of the postprocessing step.
+
+    Returns:
+        True if the step is flagged as an outlier-rejection step.
+    """
     fn = globals().get(name)
     return bool(getattr(fn, "is_outlier_rejection", False))
 

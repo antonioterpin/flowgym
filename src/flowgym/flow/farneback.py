@@ -35,6 +35,7 @@ class FarnebackEstimator(FlowFieldEstimator):
             **kwargs: Additional arguments passed to FlowFieldEstimator.
 
         Raises:
+            TypeError: If levels is not an integer.
             ValueError: If parameters are out of valid range.
         """
         if pyr_scale < 0.0 or pyr_scale > 1.0:
@@ -68,7 +69,12 @@ class FarnebackEstimator(FlowFieldEstimator):
         super().__init__(**kwargs)
 
     def supports_jit(self) -> bool:
-        """Farneback relies on OpenCV/NumPy and cannot run under JAX tracing."""
+        """Return whether the estimator can be JIT-compiled.
+
+        Returns:
+            False, since Farneback relies on OpenCV/NumPy and cannot run
+            under JAX tracing.
+        """
         return False
 
     def _estimate(
