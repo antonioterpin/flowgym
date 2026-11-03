@@ -1,10 +1,10 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.13' and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and sys_platform == 'linux'",
     "python_full_version >= '3.13' and sys_platform != 'linux'",
+    "python_full_version == '3.12.*' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and sys_platform != 'linux'",
     "python_full_version < '3.12' and sys_platform == 'linux'",
     "python_full_version < '3.12' and sys_platform != 'linux'",
@@ -2830,14 +2830,17 @@ wheels = [
 
 [[package]]
 name = "pyoptflow"
-version = "1.4.0"
+version = "1.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "imageio" },
     { name = "numpy" },
     { name = "scipy" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/68/6f/a91dd3f83e7b97822883ea942913fa4a46ec10943c2fad90a0686b3f7003/pyoptflow-1.4.0.tar.gz", hash = "sha256:0e91eb67c56cae6fc8d52d52b1b23eb495089668cf965f11f60eb5f11df778b7", size = 8622, upload-time = "2021-10-18T06:12:27.257Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/44/37/3949516fb83e80143abf495e1a20667bb91422586a93c3941a5ed583e5f2/pyoptflow-1.5.0.tar.gz", hash = "sha256:16ee5daa230c03820372a1d156626fcaf27897592127c9e7cb81c49fa0b0cd1e", size = 8942, upload-time = "2026-03-11T22:25:49.805Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/da/75/e4de2b9105713931b1b3386372a13ce24ef08d2513e91204fee0ccf4c16e/pyoptflow-1.5.0-py3-none-any.whl", hash = "sha256:5f58a99fbb90c3228d1673d66afb6bd9f6d75b314284d2f92c2145213f355359", size = 9616, upload-time = "2026-03-11T22:25:48.332Z" },
+]
 
 [[package]]
 name = "pyparsing"
