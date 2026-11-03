@@ -221,3 +221,10 @@ instead of an inline list — see
 - [API reference](../api/index.md)
 - [Configuration and data flow](configuration-and-data.md)
 - [Training and evaluation workflows](training-and-evaluation.md)
+
+## OpenPIV method selection
+
+OpenPIV processing uses typed method selectors so a type checker can catch
+misspelled names. Runtime validation remains enabled for strings originating
+in configuration files. See [OpenPIV JAX method selectors](../api/estimators/openpiv-jax.md#method-selectors-and-array-types)
+for the shared aliases, parsing helpers, and boolean outlier-mask contract.
