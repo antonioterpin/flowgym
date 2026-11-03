@@ -78,7 +78,7 @@ dev-cuda12 = [
 [project.optional-dependencies]
 docs = [
     "Sphinx==7.4.7",
-    "myst-parser==3.0.1",
+    "myst-parser==5.1.0",
     "sphinx-rtd-theme==2.0.0",
 ]
 
