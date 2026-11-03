@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from flowgym.common import base as base_mod
+from flowgym.common import preprocess as preprocess_mod
 from flowgym.common.base import Estimator, EstimatorTrainableState
 
 
@@ -85,11 +85,9 @@ def test_init_with_no_preprocessing(monkeypatch):
         apply_calls.append(kwargs)
         return images
 
+    monkeypatch.setattr(preprocess_mod, "validate_params", fake_validate_params)
     monkeypatch.setattr(
-        base_mod.estimator, "validate_params", fake_validate_params
-    )
-    monkeypatch.setattr(
-        base_mod.estimator, "apply_preprocessing", fake_apply_preprocessing
+        preprocess_mod, "apply_preprocessing", fake_apply_preprocessing
     )
 
     # Act
@@ -104,11 +102,9 @@ def test_init_with_no_preprocessing(monkeypatch):
 def test_init_raises_on_non_dict_preprocessing_step(monkeypatch):
     """A non-dict preprocessing step raises ValueError on construction."""
     # Arrange
+    monkeypatch.setattr(preprocess_mod, "validate_params", lambda *a, **k: None)
     monkeypatch.setattr(
-        base_mod.estimator, "validate_params", lambda *a, **k: None
-    )
-    monkeypatch.setattr(
-        base_mod.estimator,
+        preprocess_mod,
         "apply_preprocessing",
         lambda images, **kwargs: images,
     )
@@ -121,11 +117,9 @@ def test_init_raises_on_non_dict_preprocessing_step(monkeypatch):
 def test_init_raises_on_missing_name_key(monkeypatch):
     """A preprocessing step dict without 'name' raises ValueError."""
     # Arrange
+    monkeypatch.setattr(preprocess_mod, "validate_params", lambda *a, **k: None)
     monkeypatch.setattr(
-        base_mod.estimator, "validate_params", lambda *a, **k: None
-    )
-    monkeypatch.setattr(
-        base_mod.estimator,
+        preprocess_mod,
         "apply_preprocessing",
         lambda images, **kwargs: images,
     )
@@ -151,11 +145,9 @@ def test_init_valid_preprocessing_builds_partials_and_validates(monkeypatch):
         # Return a clearly modified tensor to ensure it is used.
         return images + 1.0
 
+    monkeypatch.setattr(preprocess_mod, "validate_params", fake_validate_params)
     monkeypatch.setattr(
-        base_mod.estimator, "validate_params", fake_validate_params
-    )
-    monkeypatch.setattr(
-        base_mod.estimator, "apply_preprocessing", fake_apply_preprocessing
+        preprocess_mod, "apply_preprocessing", fake_apply_preprocessing
     )
 
     step_cfg = {"name": "normalize", "alpha": 0.1, "beta": 0.2}
@@ -402,11 +394,9 @@ def test_call_applies_preprocessing_and_updates_history(monkeypatch):
         return images * 2.0
 
     # validate_params is required during __init__, but behavior is simple here.
+    monkeypatch.setattr(preprocess_mod, "validate_params", lambda *a, **k: None)
     monkeypatch.setattr(
-        base_mod.estimator, "validate_params", lambda *a, **k: None
-    )
-    monkeypatch.setattr(
-        base_mod.estimator, "apply_preprocessing", fake_apply_preprocessing
+        preprocess_mod, "apply_preprocessing", fake_apply_preprocessing
     )
 
     step_cfg = {"name": "scale", "factor": 2.0}
@@ -473,11 +463,9 @@ def test_call_applies_preprocessing_and_updates_history(monkeypatch):
 def test_call_uses_state_without_preprocessing(monkeypatch):
     """Images pass through unchanged to _estimate when no steps are set."""
     # Arrange
+    monkeypatch.setattr(preprocess_mod, "validate_params", lambda *a, **k: None)
     monkeypatch.setattr(
-        base_mod.estimator, "validate_params", lambda *a, **k: None
-    )
-    monkeypatch.setattr(
-        base_mod.estimator,
+        preprocess_mod,
         "apply_preprocessing",
         lambda images, **kwargs: images,
     )
