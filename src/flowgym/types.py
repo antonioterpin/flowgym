@@ -1,13 +1,12 @@
 """Types used in the flowgym package."""
 
 from dataclasses import dataclass, field, fields
-from typing import Any, Protocol, TypeAlias, runtime_checkable
+from typing import Any, Protocol, Self, TypeAlias, runtime_checkable
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 from goggles.history.types import History
-from typing_extensions import Self
 
 from flowgym.common.base.trainable_state import (
     EstimatorTrainableState,
@@ -336,3 +335,61 @@ class CompiledComputeEstimateFn(Protocol):
             Updated state and metrics dict.
         """
         ...
+
+
+class CompiledPreprocessFn(Protocol):
+    """Protocol for the compiled image preprocessing function."""
+
+    def __call__(self, images: jnp.ndarray) -> jnp.ndarray:
+        """Preprocess images.
+
+        Args:
+            images: Raw batched images.
+
+        Returns:
+            Images after all configured preprocessing steps.
+        """
+        ...
+
+
+class CompiledPostprocessFn(Protocol):
+    """Protocol for the compiled flow postprocessing function."""
+
+    def __call__(
+        self,
+        flow_field: jnp.ndarray,
+        image: jnp.ndarray,
+        state: History,
+        trainable_state: EstimatorTrainableState,
+    ) -> tuple[jnp.ndarray, dict]:
+        """Postprocess a raw flow estimate.
+
+        Args:
+            flow_field: Raw batched flow, before postprocessing.
+            image: Current image after preprocessing.
+            state: History with preprocessed previous images and estimates.
+            trainable_state: Parameters used by learned postprocessing steps.
+
+        Returns:
+            Processed flow and the postprocessing metrics.
+        """
+        ...
+
+
+@dataclass(frozen=True)
+class CompiledEstimator:
+    """Entry points of an estimator, each JIT-compiled when it supports it.
+
+    Attributes:
+        create_state: Creates the estimator state, or None when no example
+            estimates were given to size it.
+        compute_estimate: Preprocesses, estimates, and postprocesses.
+        preprocess: Applies only the preprocessing pipeline.
+        postprocess: Applies only the flow postprocessing pipeline, or None
+            for estimators that do not produce flow.
+    """
+
+    create_state: CompiledCreateStateFn | None
+    compute_estimate: CompiledComputeEstimateFn
+    preprocess: CompiledPreprocessFn
+    postprocess: CompiledPostprocessFn | None

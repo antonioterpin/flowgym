@@ -18,6 +18,7 @@ from flowgym.common.base import (
 )
 from flowgym.flow.postprocess import (
     apply_postprocessing,
+    is_jittable_step,
     is_outlier_rejection_step,
     validate_params,
 )
@@ -219,76 +220,105 @@ class FlowFieldEstimator(Estimator):
                 image, state, trainable_state, extras
             )
 
-            if len(self.postprocessing_steps) == 0:
-                # If no postprocessing steps are defined, return the flow as is.
-                return flow_field, out_extras, metrics
-            valid = jnp.ones_like(flow_field[..., 0], dtype=jnp.bool_)
-            combined_rejected_mask: jnp.ndarray | None = None
-            for idx, step in enumerate(self.postprocessing_steps):
-                step_name = step.keywords.get("name", f"step_{idx}")
-                flow_field, valid, state = step(
-                    flow=flow_field,
-                    valid=valid,
-                    state=state,
-                    trainable_state=trainable_state,
-                    previous_image=state["images"][:, -1, ...],
-                    current_image=image,
-                )
-                if valid is not None:
-                    # NOTE: validation steps return a boolean mask where
-                    # True marks valid/inlier pixels, False marks
-                    # rejected/outlier.
-                    outlier_frac = 1.0 - jnp.mean(
-                        valid.astype(jnp.float32), axis=(1, 2)
-                    )
-                    metric_prefix = (
-                        f"postprocess_{step_name}_{idx}_outlier_percentage"
-                    )
-                    metrics[metric_prefix] = outlier_frac * 100.0
-
-                    if is_outlier_rejection_step(step_name):
-                        metrics[
-                            f"postprocess_{step_name}_{idx}_rejected_percentage"
-                        ] = outlier_frac * 100.0
-                        if combined_rejected_mask is None:
-                            combined_rejected_mask = jnp.logical_not(
-                                valid.astype(jnp.bool_)
-                            )
-                        else:
-                            combined_rejected_mask = jnp.logical_or(
-                                combined_rejected_mask,
-                                jnp.logical_not(valid.astype(jnp.bool_)),
-                            )
-
-                if DEBUG:
-                    logger.debug(
-                        f"Flow field shape after filtering: {flow_field.shape}"
-                    )
-                    if valid is not None:
-                        # ``valid`` is True for inliers, so outliers are its
-                        # complement.
-                        n_outliers = jnp.mean(jnp.sum(~valid, axis=(1, 2)))
-                        outlier_pct = jnp.mean(
-                            (
-                                1.0
-                                - jnp.mean(
-                                    valid.astype(jnp.float32), axis=(1, 2)
-                                )
-                            )
-                            * 100.0
-                        )
-                        logger.debug(
-                            f"Average number of outliers per field: "
-                            f"{n_outliers}"
-                        )
-                        logger.debug(
-                            f"Average outlier percentage after "
-                            f"{step_name}: {outlier_pct:.4f}%"
-                        )
-            if combined_rejected_mask is not None:
-                metrics["postprocess_combined_rejected_mask"] = (
-                    combined_rejected_mask
-                )
-            return flow_field, out_extras, metrics
+            flow_field, postprocess_metrics = self.postprocess(
+                flow_field, image, state, trainable_state
+            )
+            return flow_field, out_extras, {**metrics, **postprocess_metrics}
 
         return call
+
+    def supports_postprocess_jit(self) -> bool:
+        """Return whether the postprocessing pipeline can be JIT-compiled.
+
+        Returns:
+            True if every configured postprocessing step is jittable.
+        """
+        return all(
+            is_jittable_step(step.keywords["name"])
+            for step in self.postprocessing_steps
+        )
+
+    def postprocess(
+        self,
+        flow_field: jnp.ndarray,
+        image: jnp.ndarray,
+        state: History,
+        trainable_state: EstimatorTrainableState,
+    ) -> tuple[jnp.ndarray, dict]:
+        """Apply configured flow filters and collect their diagnostic metrics.
+
+        Args:
+            flow_field: Raw batched flow, before postprocessing.
+            image: Current image after preprocessing.
+            state: History with preprocessed previous images and estimates.
+            trainable_state: Parameters used by learned postprocessing steps.
+
+        Returns:
+            Processed flow and the postprocessing metrics.
+        """
+        metrics = {}
+        if len(self.postprocessing_steps) == 0:
+            # If no postprocessing steps are defined, return the flow as is.
+            return flow_field, metrics
+        valid = jnp.ones_like(flow_field[..., 0], dtype=jnp.bool_)
+        combined_rejected_mask: jnp.ndarray | None = None
+        for idx, step in enumerate(self.postprocessing_steps):
+            step_name = step.keywords.get("name", f"step_{idx}")
+            flow_field, valid, state = step(
+                flow=flow_field,
+                valid=valid,
+                state=state,
+                trainable_state=trainable_state,
+                previous_image=state["images"][:, -1, ...],
+                current_image=image,
+            )
+            if valid is not None:
+                # NOTE: validation steps return a boolean mask where
+                # True marks valid/inlier pixels, False marks
+                # rejected/outlier.
+                outlier_frac = 1.0 - jnp.mean(
+                    valid.astype(jnp.float32), axis=(1, 2)
+                )
+                metric_prefix = (
+                    f"postprocess_{step_name}_{idx}_outlier_percentage"
+                )
+                metrics[metric_prefix] = outlier_frac * 100.0
+
+                if is_outlier_rejection_step(step_name):
+                    metrics[
+                        f"postprocess_{step_name}_{idx}_rejected_percentage"
+                    ] = outlier_frac * 100.0
+                    if combined_rejected_mask is None:
+                        combined_rejected_mask = jnp.logical_not(
+                            valid.astype(jnp.bool_)
+                        )
+                    else:
+                        combined_rejected_mask = jnp.logical_or(
+                            combined_rejected_mask,
+                            jnp.logical_not(valid.astype(jnp.bool_)),
+                        )
+
+            if DEBUG:
+                logger.debug(
+                    f"Flow field shape after filtering: {flow_field.shape}"
+                )
+                if valid is not None:
+                    # ``valid`` is True for inliers, so outliers are its
+                    # complement.
+                    n_outliers = jnp.mean(jnp.sum(~valid, axis=(1, 2)))
+                    outlier_pct = jnp.mean(
+                        (1.0 - jnp.mean(valid.astype(jnp.float32), axis=(1, 2)))
+                        * 100.0
+                    )
+                    logger.debug(
+                        f"Average number of outliers per field: {n_outliers}"
+                    )
+                    logger.debug(
+                        f"Average outlier percentage after "
+                        f"{step_name}: {outlier_pct:.4f}%"
+                    )
+        if combined_rejected_mask is not None:
+            metrics["postprocess_combined_rejected_mask"] = (
+                combined_rejected_mask
+            )
+        return flow_field, metrics

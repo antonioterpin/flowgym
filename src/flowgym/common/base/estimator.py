@@ -28,6 +28,9 @@ from typeguard import TypeCheckError, check_type
 
 from flowgym.common.base.trainable_state import EstimatorTrainableState
 from flowgym.common.preprocess import build_preprocessing_steps
+from flowgym.common.preprocess import (
+    is_jittable_step as is_jittable_preprocessing_step,
+)
 from flowgym.types import CachePayload, PRNGKey, TrainStep
 from flowgym.utils import load_configuration
 
@@ -88,6 +91,19 @@ class Estimator(abc.ABC):
             f"{self.__class__.__name__} initialized with parameters:\n"
             f"{pformat(param_log)}"
         )
+
+    def preprocess(self, images: jnp.ndarray) -> jnp.ndarray:
+        """Apply the configured preprocessing pipeline to batched images.
+
+        Args:
+            images: Input images before preprocessing.
+
+        Returns:
+            Images after all configured preprocessing steps.
+        """
+        for step in self.preprocessing_steps:
+            images = step(images)
+        return images
 
     def create_state(
         self,
@@ -175,8 +191,7 @@ class Estimator(abc.ABC):
             )
 
         # Apply preprocessing to images
-        for step in self.preprocessing_steps:
-            images = step(images)
+        images = self.preprocess(images)
 
         B, H, W = images.shape
 
@@ -335,8 +350,7 @@ class Estimator(abc.ABC):
             )
 
         # Preprocess images
-        for step in self.preprocessing_steps:
-            images = step(images)
+        images = self.preprocess(images)
 
         # Handle per-batch RNG keys if present
         have_keys = "keys" in state
@@ -767,6 +781,20 @@ class Estimator(abc.ABC):
             True if the supervised train step can be JIT-compiled.
         """
         return self.supports_jit()
+
+    def supports_preprocess_jit(self) -> bool:
+        """Return whether the preprocessing pipeline can be JIT-compiled.
+
+        Independent of :meth:`supports_jit`: a NumPy/OpenCV estimator can
+        still preprocess its images with pure-JAX steps.
+
+        Returns:
+            True if every configured preprocessing step is jittable.
+        """
+        return all(
+            is_jittable_preprocessing_step(step.keywords["name"])
+            for step in self.preprocessing_steps
+        )
 
     @classmethod
     def get_init_param_names(cls) -> set[str]:

@@ -182,9 +182,9 @@ def test_postprocess_config(B, N, seed):
     # Instantiate the dummy estimator
     estimator = DummyEstimator.from_config(post_process_config)
     trainable_state = estimator.create_trainable_state(image, key)
-    create_state_fn, compute_estimate_fn = compile_model(
-        estimator, flow_reference, False
-    )
+    compiled = compile_model(estimator, flow_reference, False)
+    create_state_fn = compiled.create_state
+    compute_estimate_fn = compiled.compute_estimate
     # Create the state
     state = create_state_fn(image, key)
     state, _ = compute_estimate_fn(image, state, trainable_state)
@@ -271,9 +271,9 @@ def test_postprocess_jit(B, H, time_limit, seed):
     # Instantiate the dummy estimator
     estimator = DummyEstimator.from_config(post_process_config)
     trainable_state = estimator.create_trainable_state(image, key=key)
-    create_state_fn, compute_estimate_fn = compile_model(
-        estimator, jnp.zeros((*image.shape, 2)), True
-    )
+    compiled = compile_model(estimator, jnp.zeros((*image.shape, 2)), True)
+    create_state_fn = compiled.create_state
+    compute_estimate_fn = compiled.compute_estimate
     # Warm up
     state = create_state_fn(image, key)
     state, _ = compute_estimate_fn(image, state, trainable_state)

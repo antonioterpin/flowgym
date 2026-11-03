@@ -464,6 +464,20 @@ def apply_preprocessing(
     return globals()[name](image, **kwargs)
 
 
+def is_jittable_step(name: str) -> bool:
+    """Return whether the named preprocessing step can be JIT-compiled.
+
+    Steps are pure JAX unless their function sets ``jittable = False``.
+
+    Args:
+        name: Name of the preprocessing step.
+
+    Returns:
+        True if the step can be traced by JAX.
+    """
+    return bool(getattr(globals().get(name), "jittable", True))
+
+
 def build_preprocessing_steps(
     steps: Sequence[dict[str, Any]] | None,
 ) -> list[Callable[[jnp.ndarray], jnp.ndarray]]:
