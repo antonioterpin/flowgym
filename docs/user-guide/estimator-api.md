@@ -221,3 +221,34 @@ instead of an inline list — see
 - [API reference](../api/index.md)
 - [Configuration and data flow](configuration-and-data.md)
 - [Training and evaluation workflows](training-and-evaluation.md)
+
+## Access preprocessing and postprocessing
+
+The model returned by `make_estimator` exposes the same processing pipelines
+used during state creation and estimation. Compile them independently when
+saving preprocessed images or filtering externally computed flow:
+
+```python
+from flowgym.make import compile_preprocess, compile_postprocess
+
+preprocess = compile_preprocess(model)
+processed_images = preprocess(raw_images)
+
+# For flow estimators; state contains already preprocessed previous images.
+postprocess = compile_postprocess(model)
+filtered_flow, metrics = postprocess(
+    raw_flow, processed_images, state, trained_state
+)
+```
+
+Both helpers enable JIT by default (except in global debug mode). Pass
+`jit=False` for eager execution or custom steps that are not JAX compatible.
+Empty pipelines return their input unchanged. Postprocessing also returns
+the same diagnostic metrics as a normal estimation call, including rejection
+masks. It does not advance history. The existing `make_estimator` and
+`compile_model` return tuples are unchanged.
+
+Continue to pass **raw images** to `create_state_fn` and `compute_estimate_fn`:
+those functions apply preprocessing themselves. Likewise, pass **raw flow**
+to `postprocess`, since an estimate from `compute_estimate_fn` has already
+been postprocessed.

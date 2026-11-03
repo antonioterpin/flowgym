@@ -17,7 +17,9 @@ Use this when you want to see the names re-exported at the top level of
 ## Factory helpers
 
 Use this section when you want to understand how estimators are created,
-compiled, saved, or restored.
+compiled, saved, or restored. `compile_preprocess(model)` and
+`compile_postprocess(model)` expose independently compiled processing
+pipelines; see [the usage guide](../user-guide/estimator-api.md#access-preprocessing-and-postprocessing).
 
 ```{eval-rst}
 .. automodule:: flowgym.make

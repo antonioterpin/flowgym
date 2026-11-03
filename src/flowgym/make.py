@@ -5,11 +5,14 @@ from __future__ import annotations
 import contextlib
 import os
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
 if TYPE_CHECKING:
     from synthpix.types import SynthpixBatch
+
+    from flowgym.flow.base import FlowFieldEstimator
 
 try:
     import torch
@@ -136,6 +139,43 @@ def compile_model(
             jax.jit(create_state_fn) if create_state_fn is not None else None
         ), jax.jit(compute_estimate_fn)
     return create_state_fn, compute_estimate_fn
+
+
+def compile_preprocess(
+    model: Estimator, jit: bool = True
+) -> Callable[[jnp.ndarray], jnp.ndarray]:
+    """Expose the model's configured image preprocessing function.
+
+    Args:
+        model: An estimator, such as the final result of make_estimator.
+        jit: Compile with JAX unless global debug mode is enabled.
+
+    Returns:
+        A function accepting raw batched images and returning processed images.
+    """
+    return jax.jit(model.preprocess) if jit and not DEBUG else model.preprocess
+
+
+def compile_postprocess(
+    model: FlowFieldEstimator, jit: bool = True
+) -> Callable[
+    [jnp.ndarray, jnp.ndarray, History, EstimatorTrainableState],
+    tuple[jnp.ndarray, dict],
+]:
+    """Expose the model's configured flow postprocessing function.
+
+    Args:
+        model: A flow estimator, such as the final result of make_estimator.
+        jit: Compile with JAX unless global debug mode is enabled. Disable
+            this for custom steps that cannot be traced by JAX.
+
+    Returns:
+        A function accepting raw flow, preprocessed current images, history,
+        and trainable state, returning processed flow and diagnostic metrics.
+    """
+    return (
+        jax.jit(model.postprocess) if jit and not DEBUG else model.postprocess
+    )
 
 
 def build_save_args(
