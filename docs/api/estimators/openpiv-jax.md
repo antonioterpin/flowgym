@@ -19,3 +19,10 @@ image velocimetry
 .. automodule:: flowgym.flow.open_piv.openpiv_jax
    :members:
 ```
+
+## Method selectors
+
+Method arguments are typed with the `Literal` aliases in
+`flowgym.flow.open_piv.types` (`SubpixelMethod`, `CorrelationMethod`,
+`SignalToNoiseMethod`); `from_config` rejects other values from YAML.
+`sig2noise_val` returns a boolean mask where `True` marks an outlier.

@@ -28,7 +28,9 @@ The top-level keys split between two consumers:
 - `estimator` and `config` are read by `flowgym.make.make_estimator`.
   The string in `estimator` selects the class
   (e.g. `dis_jax` → `DISJAXFlowFieldEstimator`) and the `config` dict
-  is forwarded to its `from_config(...)` factory.
+  is forwarded to its `from_config(...)` factory, which checks each
+  value against the type hint of the matching `__init__` parameter and
+  raises `ValueError` on a mismatch (e.g. a misspelled method name).
 - `estimate_type` and `estimate_shape` are read by the orchestration
   layer in `src/main.py` to drive ground-truth selection and shape
   inference. They are not consumed by `make_estimator` itself.

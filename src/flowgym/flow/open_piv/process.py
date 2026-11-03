@@ -1,12 +1,17 @@
 """Module for OpenPIV processing in JAX."""
 
 from collections.abc import Callable
-from typing import overload
+from typing import assert_never, overload
 
 import jax
 import jax.numpy as jnp
 from jax import lax
 
+from flowgym.flow.open_piv.types import (
+    CorrelationMethod,
+    SignalToNoiseMethod,
+    SubpixelMethod,
+)
 from flowgym.flow.process import img_resize
 from flowgym.utils import DEBUG
 
@@ -73,8 +78,8 @@ def extended_search_area_piv(
     overlap: int | tuple[int, int],
     sig2noise_method: None = None,
     width: int = 2,
-    subpixel_method: str = "gaussian",
-    correlation_method: str = "circular",
+    subpixel_method: SubpixelMethod = "gaussian",
+    correlation_method: CorrelationMethod = "circular",
 ) -> jnp.ndarray: ...
 
 
@@ -85,10 +90,10 @@ def extended_search_area_piv(
     window_size: int | tuple[int, int],
     search_area_size: int | tuple[int, int],
     overlap: int | tuple[int, int],
-    sig2noise_method: str,
+    sig2noise_method: SignalToNoiseMethod,
     width: int = 2,
-    subpixel_method: str = "gaussian",
-    correlation_method: str = "circular",
+    subpixel_method: SubpixelMethod = "gaussian",
+    correlation_method: CorrelationMethod = "circular",
 ) -> tuple[jnp.ndarray, jnp.ndarray]: ...
 
 
@@ -98,10 +103,10 @@ def extended_search_area_piv(
     window_size: int | tuple[int, int],
     search_area_size: int | tuple[int, int],
     overlap: int | tuple[int, int],
-    sig2noise_method: str | None = None,
+    sig2noise_method: SignalToNoiseMethod | None = None,
     width: int = 2,
-    subpixel_method: str = "gaussian",
-    correlation_method: str = "circular",
+    subpixel_method: SubpixelMethod = "gaussian",
+    correlation_method: CorrelationMethod = "circular",
 ) -> jnp.ndarray | tuple[jnp.ndarray, jnp.ndarray]:
     """Batched PIV cross-correlation algorithm.
 
@@ -279,8 +284,10 @@ def get_field_shape(
 
 
 def fft_correlate_images(
-    aa: jnp.ndarray, bb: jnp.ndarray, correlation_method: str = "circular"
-):
+    aa: jnp.ndarray,
+    bb: jnp.ndarray,
+    correlation_method: CorrelationMethod = "circular",
+) -> jnp.ndarray:
     """Perform FFT-based cross-correlation on batched windows.
 
     Mirrors openpiv's ``fft_correlate_images`` with normalized correlation.
@@ -298,22 +305,13 @@ def fft_correlate_images(
     Note:
         ``correlation_method`` is a Python string that selects a code path,
         so under ``jax.jit`` it must be marked static (e.g.
-        ``static_argnames="correlation_method"``). The ``ValueError`` below
-        only fires when the value is concrete; passing it as a traced
-        argument instead raises an opaque tracer ``TypeError``.
+        ``static_argnames="correlation_method"``). An unsupported value
+        fails ``assert_never`` only when it is concrete; passing it as a
+        traced argument instead raises an opaque tracer ``TypeError``.
 
     Returns:
         Cross-correlation result (..., height, width).
-
-    Raises:
-        ValueError: If ``correlation_method`` is not implemented (only when
-            the argument is a concrete Python string, not a tracer).
     """
-    if correlation_method not in ("circular", "linear"):
-        raise ValueError(
-            f"Unknown correlation_method {correlation_method!r}; expected "
-            "one of 'circular', 'linear'."
-        )
 
     aa = normalize_intensity(aa)
     bb = normalize_intensity(bb)
@@ -344,11 +342,13 @@ def fft_correlate_images(
             (fsize[0] - s1[0]) // 2 : (fsize[0] + s1[0]) // 2,
             (fsize[1] - s1[1]) // 2 : (fsize[1] + s1[1]) // 2,
         ]
-    else:  # circular
+    elif correlation_method == "circular":
         f2a = jnp.conj(jnp.fft.rfft2(aa, axes=(-2, -1)))
         f2b = jnp.fft.rfft2(bb, axes=(-2, -1))
         corr = jnp.fft.irfft2(f2a * f2b, axes=(-2, -1))
         corr = jnp.fft.fftshift(corr, axes=(-2, -1))
+    else:
+        assert_never(correlation_method)
 
     corr = corr / (s2[0] * s2[1])
     corr = jnp.clip(corr, 0, 1)
@@ -437,7 +437,7 @@ def find_all_second_peaks(
 
 def sig2noise_ratio(
     corr: jnp.ndarray,
-    sig2noise_method: str = "peak2peak",
+    sig2noise_method: SignalToNoiseMethod = "peak2peak",
     width: int = 2,
 ) -> jnp.ndarray:
     """Compute the signal-to-noise ratio of batched correlation maps.
@@ -464,12 +464,7 @@ def sig2noise_ratio(
     Returns:
         Signal-to-noise ratios of shape ``corr.shape[:-2]``, with flagged
         windows set to 0.
-
-    Raises:
-        ValueError: If ``sig2noise_method`` is not supported.
     """
-    if sig2noise_method not in ("peak2peak", "peak2mean"):
-        raise ValueError(f"sig2noise_method not supported: {sig2noise_method}")
     if DEBUG:
         assert corr.ndim >= 2, (
             f"Correlation must be (..., height, width), instead {corr.shape}"
@@ -500,8 +495,10 @@ def sig2noise_ratio(
             | (peaks2_j == W - 1)
         )
         noise = peaks2
-    else:
+    elif sig2noise_method == "peak2mean":
         noise = jnp.abs(jnp.nanmean(corr, axis=(-2, -1)))
+    else:
+        assert_never(sig2noise_method)
 
     # Reference: np.divide(..., out=zeros, where=noise > 0). The guarded
     # denominator keeps the division NaN-free under jit.
@@ -545,7 +542,7 @@ def subpixel_displacement(
     peaks_j: jnp.ndarray,
     mask_width: int = 1,
     eps: float = 1e-7,
-    subpixel_method: str = "gaussian",
+    subpixel_method: SubpixelMethod = "gaussian",
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Compute subpixel displacements from correlation maps.
 
@@ -575,15 +572,7 @@ def subpixel_displacement(
 
     Returns:
         Subpixel displacements (disp_vx, disp_vy).
-
-    Raises:
-        ValueError: If ``subpixel_method`` is not implemented.
     """
-    if subpixel_method not in ("gaussian", "parabolic", "centroid"):
-        raise ValueError(
-            f"Unknown subpixel_method {subpixel_method!r}; expected one of "
-            "'gaussian', 'parabolic', 'centroid'."
-        )
     if DEBUG:
         assert corr.ndim == 3, (
             "Correlation must be (batch_size * n_windows, height, width), "
@@ -679,7 +668,7 @@ def subpixel_displacement(
         shift_j = (cd - cu) / (2 * cd - 4 * c + 2 * cu)
         disp_vy = shift_i + safe_i - jnp.floor(H / 2)
         disp_vx = shift_j + safe_j - jnp.floor(W / 2)
-    else:  # gaussian
+    elif subpixel_method == "gaussian":
         # Detect any non-positive values -> fallback to 3-point parabolic.
         inv = (c <= 0) | (cl <= 0) | (cr <= 0) | (cd <= 0) | (cu <= 0)
 
@@ -705,6 +694,8 @@ def subpixel_displacement(
 
         disp_vy = shift_i + safe_i - jnp.floor(H / 2)
         disp_vx = shift_j + safe_j - jnp.floor(W / 2)
+    else:
+        assert_never(subpixel_method)
 
     # 8) Mask out the originally invalid peaks → NaN
     disp_vx = jnp.where(invalid, jnp.nan, disp_vx)
@@ -741,8 +732,8 @@ def sliding_window_array(
     half_h, half_w = window_size[0] // 2, window_size[1] // 2
     coords = jnp.stack([ys - half_h, xs - half_w], axis=-1).astype(jnp.int32)
 
-    def extract_windows_single(img):
-        def slice_one(coord):
+    def extract_windows_single(img: jnp.ndarray) -> jnp.ndarray:
+        def slice_one(coord: jnp.ndarray) -> jnp.ndarray:
             return lax.dynamic_slice(img, (coord[0], coord[1]), window_size)
 
         return jax.vmap(slice_one)(coords)
@@ -928,8 +919,8 @@ def multipass_deform(
     overlap: int | tuple[int, int],
     n_passes: int,
     between_passes: Callable[[jnp.ndarray, int], jnp.ndarray] | None = None,
-    subpixel_method: str = "gaussian",
-    correlation_method: str = "circular",
+    subpixel_method: SubpixelMethod = "gaussian",
+    correlation_method: CorrelationMethod = "circular",
 ) -> jnp.ndarray:
     """Iterative window-deformation PIV at a fixed grid resolution.
 
@@ -990,14 +981,18 @@ def multipass_deform(
             "n_passes must be a positive integer."
         )
 
-    piv_kwargs = {
-        "window_size": window_size,
-        "search_area_size": search_area_size,
-        "overlap": overlap,
-        "subpixel_method": subpixel_method,
-        "correlation_method": correlation_method,
-    }
-    flow = extended_search_area_piv(img1, img2, **piv_kwargs)
+    def correlate(first: jnp.ndarray, second: jnp.ndarray) -> jnp.ndarray:
+        return extended_search_area_piv(
+            first,
+            second,
+            window_size=window_size,
+            search_area_size=search_area_size,
+            overlap=overlap,
+            subpixel_method=subpixel_method,
+            correlation_method=correlation_method,
+        )
+
+    flow = correlate(img1, img2)
     if n_passes <= 1:
         return flow
 
@@ -1011,7 +1006,9 @@ def multipass_deform(
     x_grid = xs.reshape(n_rows, n_cols)
     y_grid = ys.reshape(n_rows, n_cols)
 
-    def deform_batch(frame, u, v):
+    def deform_batch(
+        frame: jnp.ndarray, u: jnp.ndarray, v: jnp.ndarray
+    ) -> jnp.ndarray:
         # "second image" method: deform with -v so frame_b is sampled at
         # (y + v, x + u), the current displacement estimate.
         return _deform_windows(frame, x_grid, y_grid, u, -v)
@@ -1019,7 +1016,7 @@ def multipass_deform(
     flow = jnp.nan_to_num(flow)
     for i in range(n_passes - 1):
         img2_def = jax.vmap(deform_batch)(img2, flow[..., 0], flow[..., 1])
-        residual = extended_search_area_piv(img1, img2_def, **piv_kwargs)
+        residual = correlate(img1, img2_def)
         flow = flow + jnp.nan_to_num(residual)
         if between_passes is not None:
             flow = between_passes(flow, i + 1)
