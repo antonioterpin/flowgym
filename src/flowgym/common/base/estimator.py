@@ -27,6 +27,9 @@ from goggles.history.types import History
 
 from flowgym.common.base.trainable_state import EstimatorTrainableState
 from flowgym.common.preprocess import build_preprocessing_steps
+from flowgym.common.preprocess import (
+    is_jittable_step as is_jittable_preprocessing_step,
+)
 from flowgym.types import CachePayload, PRNGKey, TrainStep
 from flowgym.utils import load_configuration
 
@@ -777,6 +780,20 @@ class Estimator(abc.ABC):
             True if the supervised train step can be JIT-compiled.
         """
         return self.supports_jit()
+
+    def supports_preprocess_jit(self) -> bool:
+        """Return whether the preprocessing pipeline can be JIT-compiled.
+
+        Independent of :meth:`supports_jit`: a NumPy/OpenCV estimator can
+        still preprocess its images with pure-JAX steps.
+
+        Returns:
+            True if every configured preprocessing step is jittable.
+        """
+        return all(
+            is_jittable_preprocessing_step(step.keywords["name"])
+            for step in self.preprocessing_steps
+        )
 
     @classmethod
     def get_init_param_names(cls) -> set[str]:
