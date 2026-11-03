@@ -63,6 +63,7 @@ dev = [
     "pyarrow>=23.0.0",
     "ruff>=0.14.14",
     "pytest-cov>=7.0.0",
+    "hydra-core>=1.3.2,<1.4",
 ]
 
 synthpix-cuda12 = [
