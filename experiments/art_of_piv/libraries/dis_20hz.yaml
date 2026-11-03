@@ -1,0 +1,14 @@
+# Library of the dis_20hz row: the 10 DIS configs selected for the paper
+# under the 20 Hz budget (paper eq. library).
+cache_id_base: piv-class1-dis
+estimators:
+  - experiments/art_of_piv/models/dis/ps13_st2_gd8_lv3.yaml
+  - experiments/art_of_piv/models/dis/ps11_st2_gd4_lv3.yaml
+  - experiments/art_of_piv/models/dis/ps9_st2_gd4_lv3.yaml
+  - experiments/art_of_piv/models/dis/ps7_st2_gd4_lv3.yaml
+  - experiments/art_of_piv/models/dis/ps9_st1_gd6_lv1.yaml
+  - experiments/art_of_piv/models/dis/ps31_st2_gd4_lv3.yaml
+  - experiments/art_of_piv/models/dis/ps11_st2_gd8_lv3.yaml
+  - experiments/art_of_piv/models/dis/ps15_st2_gd16_lv3.yaml
+  - experiments/art_of_piv/models/dis/ps19_st2_gd8_lv3.yaml
+  - experiments/art_of_piv/models/dis/ps9_st2_gd8_lv3.yaml

@@ -356,3 +356,30 @@ def test_multipass_between_passes_hook():
     assert not np.allclose(
         np.asarray(out_clean), np.asarray(out_plain), atol=1e-3
     )
+
+
+def test_multipass_forwards_rect_sizes_and_piv_options():
+    """Rectangular sizes and sub-pixel/correlation options reach every pass."""
+    from flowgym.flow.open_piv.process import extended_search_area_piv
+
+    img1, img2, _, _ = _warped_pair(128, 128, seed=2)
+    a, b = jnp.asarray(img1)[None], jnp.asarray(img2)[None]
+    kwargs = {
+        "window_size": (16, 24),
+        "search_area_size": (21, 29),
+        "overlap": (8, 12),
+        "subpixel_method": "parabolic",
+        "correlation_method": "linear",
+    }
+    single = np.asarray(extended_search_area_piv(a, b, **kwargs))
+    multi1 = np.asarray(multipass_deform(a, b, n_passes=1, **kwargs))
+    np.testing.assert_array_equal(single, multi1)
+
+    multi2 = np.asarray(multipass_deform(a, b, n_passes=2, **kwargs))
+    gauss2 = np.asarray(
+        multipass_deform(
+            a, b, n_passes=2, **{**kwargs, "subpixel_method": "gaussian"}
+        )
+    )
+    assert multi2.shape == single.shape
+    assert not np.allclose(multi2, gauss2)

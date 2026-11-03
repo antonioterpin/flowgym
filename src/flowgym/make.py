@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
+import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
@@ -23,7 +25,6 @@ from goggles import get_logger
 from goggles.history.types import History
 
 # Models
-from flowgym._synthpix_compat import install_restore_state_shim
 from flowgym.checkpoint_source import resolve_checkpoint_source
 from flowgym.common.base import Estimator
 from flowgym.common.base.trainable_state import (
@@ -40,11 +41,6 @@ from flowgym.types import (
 from flowgym.utils import DEBUG, MissingDependency
 
 logger = get_logger(__name__)
-
-# Patch synthpix's restore_state once at import time: it substitutes a
-# NaN-shape ShapeDtypeStruct placeholder that orbax 0.11+ chokes on.
-# See ``flowgym._synthpix_compat`` for the full rationale.
-install_restore_state_shim()
 
 
 def make_manager(ckpt_dir: Path, keep: int = 3) -> ocp.CheckpointManager:
@@ -110,9 +106,12 @@ def compile_model(
     if estimates is not None:
 
         def create_state_fn_impl(images: jnp.ndarray, rng: PRNGKey) -> History:
+            # Size the state from the images so any batch size works
             return model.create_state(
                 images,
-                estimates=estimates,
+                estimates=jnp.zeros(
+                    (images.shape[0], *estimates.shape[1:]), estimates.dtype
+                ),
                 image_history_size=history_size,
                 estimate_history_size=history_size,
                 rng=rng,
@@ -277,15 +276,26 @@ def load_model(
 
     # If ckpt_dir is a specific step directory (e.g. ends in a number),
     # point the manager to the parent directory and restore that specific step.
+    step_link = None
     if ckpt_dir.name.isdigit():
         mngr_dir = ckpt_dir.parent
         step = int(ckpt_dir.name)
+    elif (ckpt_dir / "_CHECKPOINT_METADATA").exists():
+        # One step saved under another name (e.g. a W&B checkpoint
+        # artifact): expose it to the manager as step 0.
+        step_link = tempfile.TemporaryDirectory()
+        mngr_dir = Path(step_link.name)
+        (mngr_dir / "0").symlink_to(ckpt_dir)
+        step = 0
     else:
         mngr_dir = ckpt_dir
         step = None
 
     # Use a context manager for the manager
-    with make_manager(mngr_dir, keep=1) as mngr:
+    with (
+        step_link or contextlib.nullcontext(),
+        make_manager(mngr_dir, keep=1) as mngr,
+    ):
         if step is None:
             step = mngr.latest_step()
 

@@ -28,6 +28,26 @@ def test_build_identity():
     assert jnp.allclose(transform(x), x)
 
 
+def test_build_per_frame_mean():
+    """per_frame_mean divides each row by its mean over the last axis."""
+    transform = build_target_transform_from_config({"name": "per_frame_mean"})
+    # (batch, num_estimators): each row normalized by its own mean.
+    x = jnp.array([[1.0, 2.0, 3.0], [2.0, 2.0, 2.0]])
+    out = transform(x)
+    assert jnp.allclose(jnp.mean(out, axis=-1), 1.0, atol=1e-5)
+    assert jnp.allclose(out[0], jnp.array([0.5, 1.0, 1.5]), atol=1e-5)
+    assert jnp.allclose(out[1], jnp.array([1.0, 1.0, 1.0]), atol=1e-5)
+    # Per-frame argmin is preserved (selection target unchanged).
+    assert int(jnp.argmin(x[0])) == int(jnp.argmin(out[0]))
+
+
+def test_per_frame_mean_rejects_selected_errors():
+    """A (batch,) vector of selected errors has no per-frame mean."""
+    transform = build_target_transform_from_config({"name": "per_frame_mean"})
+    with pytest.raises(ValueError, match="num_estimators"):
+        transform(jnp.array([0.1, 0.2]))
+
+
 def test_build_log1p():
     """log1p transform applies jnp.log1p(x + eps) element-wise."""
     config = {"name": "log1p", "eps": 1e-8}

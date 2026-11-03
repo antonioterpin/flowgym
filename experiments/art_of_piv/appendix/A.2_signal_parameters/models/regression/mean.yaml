@@ -1,0 +1,9 @@
+# Regression router on each frame's EPEs divided by their mean over the
+# library (the paper's per-pair mean).
+extends: experiments/art_of_piv/appendix/A.2_signal_parameters/models/regression.yaml
+study:
+  tags:
+    target: mean
+config:
+  target_transform_config:
+    name: per_frame_mean

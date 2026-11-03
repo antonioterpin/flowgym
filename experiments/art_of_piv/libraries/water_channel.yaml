@@ -1,0 +1,9 @@
+# Library of the water-channel selection agent (appendix F): one DIS config
+# per actuation setting. Label 0 is DIS A (+150 rpm, larger displacements),
+# label 1 is DIS B (-150 rpm, smaller displacements). The cache id base is
+# the one of the published label caches
+# (hf://datasets/activefluidcontrol/art-of-piv-water-channel).
+cache_id_base: pinball-dis-expert-labels
+estimators:
+  - experiments/art_of_piv/models/dis/water_channel_a.yaml
+  - experiments/art_of_piv/models/dis/water_channel_b.yaml

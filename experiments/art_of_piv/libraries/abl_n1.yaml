@@ -1,0 +1,5 @@
+# Library of the single DIS config the learning-signal ablation starts from
+# (appendix A.1 baseline); the first member of every abl_n<K> library.
+cache_id_base: piv-class1-dis
+estimators:
+  - experiments/art_of_piv/models/dis/ps9_st1_gd6_lv3.yaml

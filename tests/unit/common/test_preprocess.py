@@ -10,10 +10,13 @@ import pytest
 from skimage import exposure
 
 from flowgym.common.preprocess import (
+    background_subtraction,
     clahe,
+    gaussian_blur,
     high_pass_filter,
     intensity_capping,
     intensity_clipping,
+    stretch_contrast,
 )
 
 
@@ -151,6 +154,33 @@ def test_intensity_capping_n_zero_behaviour():
     assert out[0, 0, 0] == pytest.approx(10.0)
     # values above should be exactly capped
     assert out[0, 1, 1] == pytest.approx(25.0)
+
+
+def test_stretch_contrast_scale():
+    """Each frame is stretched to [0, scale]."""
+    img = jnp.array([[[0.0, 1.0], [2.0, 4.0]], [[10.0, 12.0], [14.0, 18.0]]])
+    out = stretch_contrast(img, scale=255.0)
+    assert jnp.allclose(out.min(axis=(1, 2)), 0.0)
+    assert jnp.allclose(out.max(axis=(1, 2)), 255.0)
+
+
+def test_gaussian_blur_spreads_a_point_and_keeps_its_mass():
+    """A single bright pixel is widened, not moved or amplified."""
+    img = jnp.zeros((1, 15, 15)).at[0, 7, 7].set(1.0)
+    out = gaussian_blur(img, sigma=1.0)
+    assert out[0, 7, 7] < 1.0
+    assert out[0, 7, 8] > 0.0
+    assert jnp.argmax(out) == jnp.argmax(img)
+    assert out.sum() == pytest.approx(1.0, rel=1e-3)
+
+
+def test_background_subtraction(tmp_path):
+    """The stored background is removed per frame and clamped at zero."""
+    path = tmp_path / "bg.npy"
+    np.save(path, np.array([[1.0, 5.0], [0.0, 2.0]]))
+    img = jnp.array([[[3.0, 4.0], [1.0, 2.0]]] * 2)
+    out = background_subtraction(img, path=str(path))
+    assert jnp.array_equal(out, jnp.array([[[2.0, 0.0], [1.0, 0.0]]] * 2))
 
 
 def test_intensity_clipping_basic():

@@ -1,0 +1,9 @@
+# Pretrained RAFT32-PIV: the raft32 row's best single estimator
+# (table_1/models/best_single_raft32.yaml).
+# It is Lagemann et al.'s (Nature Machine Intelligence 3, 2021) and is not
+# redistributed on the Hub: get the RAFT32-PIV checkpoint from their Code
+# Ocean capsule 7226151 and convert it from the repository root:
+#   uv run --extra other_methods python scripts/convert_raft_checkpoint.py \
+#       --variant raft32 --ckpt <checkpoint> --out-root results/raft32_pretrained
+extends: experiments/art_of_piv/models/raft32/base.yaml
+load_from: results/raft32_pretrained/jax/checkpoints/0

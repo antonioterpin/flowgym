@@ -82,18 +82,28 @@ class CacheManager:
         cache_id: str,
         spec: CacheSpec,
         warm_start: Literal["none", "index", "all"] = "index",
+        read_only: bool = False,
     ) -> None:
         """Initialize the cache manager.
 
         Args:
-            root_dir: The root directory for all caches.
+            root_dir: The root directory for all caches, or an
+                ``hf://`` dataset URI.
             cache_id: Unique identifier for this cache.
             spec: Specification of the data to be cached.
             warm_start: How to warm start the cache.
                 "none": No warm start.
                 "index": Load keys only (fast).
                 "all": Load all data into memory (slow init, fast lookup).
+            read_only: If True, never persist writes. Useful when the cache is
+                only consumed for read-through aggregation (e.g. an ArtOfPIV
+                meta cache whose results already live in the sub-caches), so
+                lookups still drive computation but nothing is flushed to disk.
         """
+        if root_dir.startswith("hf://"):
+            from synthpix.data_sources import hf_resolver  # noqa: PLC0415
+
+            root_dir = str(hf_resolver.resolve_to_directory(root_dir))
         self.root_dir = Path(root_dir)
         self.cache_id = cache_id
 
@@ -111,10 +121,10 @@ class CacheManager:
         else:
             self.cache_dir = self.root_dir / cache_id
             self.source_dirs = [self.cache_dir]
-            self.read_only = False
+            self.read_only = read_only
 
         self.spec = spec
-        self.warm_start = warm_start
+        self.warm_start: Literal["none", "index", "all"] = warm_start
 
         # In-memory index of keys -> parquet file path/row location (optional)
         self.index: dict[int, tuple[str, int]] = {}
@@ -602,7 +612,10 @@ def enrich_batch(
         # Call estimator.enrich for missing entries
         try:
             payload_miss = estimator.enrich(
-                batch, miss_idxs_absolute, trainable_state=trainable_state
+                batch,
+                miss_idxs_absolute,
+                trainable_state=trainable_state,
+                cache_manager=cache_manager,
             )
         except Exception as e:
             logger.error(f"Error in estimator.enrich: {e}")

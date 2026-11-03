@@ -1,0 +1,6 @@
+# Regression router on the log of the cached EPEs (the shared regression
+# router's target).
+extends: experiments/art_of_piv/appendix/A.2_signal_parameters/models/regression.yaml
+study:
+  tags:
+    target: log

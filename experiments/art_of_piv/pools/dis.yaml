@@ -1,0 +1,40 @@
+# Candidate pool of the DIS rows of Table 1 (paper eq. library): 565 configs.
+# Each candidate is experiments/art_of_piv/models/dis/base.yaml with these
+# knobs; an entry whose knobs are lists stands for every combination of them.
+# A candidate's per-frame EPE cache is <cache_id_base><suffix of its config>.
+# Table 1's libraries are selected from it (see table_1/README.md).
+base: experiments/art_of_piv/models/dis/base.yaml
+cache_id_base: piv-class1-dis
+candidates:
+  - {patch_size: 5, patch_stride: 1, grad_desc_iters: [6, 21], levels: 2, start_level: 0}
+  - {patch_size: [7, 9], patch_stride: 1, grad_desc_iters: [1, 6], levels: 3, start_level: 0}
+  - {patch_size: 7, patch_stride: 1, grad_desc_iters: [4, 8], levels: 1, start_level: 0}
+  - {patch_size: 7, patch_stride: 1, grad_desc_iters: [4, 8, 11, 16], levels: 2, start_level: 0}
+  - {patch_size: 7, patch_stride: [1, 2, 3, 4, 5, 7], grad_desc_iters: [4, 8, 16], levels: 3, start_level: [0, 1]}
+  - {patch_size: 7, patch_stride: [2, 3], grad_desc_iters: [4, 8], levels: 2, start_level: 0}
+  - {patch_size: [7, 9], patch_stride: 2, grad_desc_iters: 16, levels: 1, start_level: 0}
+  - {patch_size: 9, patch_stride: 1, grad_desc_iters: [4, 6, 8], levels: 1, start_level: 0}
+  - {patch_size: 9, patch_stride: [1, 2, 3, 4, 7, 9], grad_desc_iters: [4, 8, 16], levels: 3, start_level: [0, 1]}
+  - {patch_size: 9, patch_stride: 1, grad_desc_iters: [6, 8, 11], levels: 2, start_level: 0}
+  - {patch_size: 9, patch_stride: 2, grad_desc_iters: [4, 8], levels: 2, start_level: 0}
+  - {patch_size: [9, 13], patch_stride: 3, grad_desc_iters: 8, levels: 2, start_level: 0}
+  - {patch_size: 11, patch_stride: [1, 2, 3, 6, 8, 11], grad_desc_iters: [4, 8, 16], levels: 3, start_level: [0, 1]}
+  - {patch_size: 11, patch_stride: 1, grad_desc_iters: [6, 11], levels: 3, start_level: 0}
+  - {patch_size: 11, patch_stride: [2, 3], grad_desc_iters: 8, levels: 2, start_level: 0}
+  - {patch_size: 13, patch_stride: [1, 2, 3, 6, 10, 13], grad_desc_iters: [4, 8, 16], levels: 3, start_level: [0, 1]}
+  - {patch_size: 15, patch_stride: [1, 2, 3, 4, 8, 11, 15], grad_desc_iters: [4, 8, 16], levels: 3, start_level: [0, 1]}
+  - {patch_size: [15, 21], patch_stride: 1, grad_desc_iters: 11, levels: 3, start_level: 0}
+  - {patch_size: 17, patch_stride: [1, 2, 3, 4, 8, 13, 17], grad_desc_iters: [4, 8, 16], levels: 3, start_level: [0, 1]}
+  - {patch_size: 19, patch_stride: [1, 2, 3, 5, 10, 14, 19], grad_desc_iters: [4, 8, 16], levels: 3, start_level: [0, 1]}
+  - {patch_size: 21, patch_stride: [1, 2, 3, 5, 10, 16, 21], grad_desc_iters: [4, 8, 16], levels: 3, start_level: [0, 1]}
+  - {patch_size: 23, patch_stride: [1, 2, 3, 6, 12, 17, 23], grad_desc_iters: [4, 8, 16], levels: 3, start_level: [0, 1]}
+  - {patch_size: 25, patch_stride: [1, 2, 3, 6, 12, 19, 25], grad_desc_iters: [4, 8, 16], levels: 3, start_level: [0, 1]}
+  - {patch_size: 27, patch_stride: [1, 2, 3, 7, 14, 20, 27], grad_desc_iters: [4, 8, 16], levels: 3, start_level: [0, 1]}
+  - {patch_size: 29, patch_stride: [1, 2, 3, 7, 14, 22, 29], grad_desc_iters: [4, 8, 16], levels: 3, start_level: [0, 1]}
+  - {patch_size: 31, patch_stride: 1, grad_desc_iters: 4, levels: 2, start_level: 0}
+  - {patch_size: 31, patch_stride: [1, 2, 3, 8, 16, 23, 31], grad_desc_iters: [4, 8, 16], levels: 3, start_level: [0, 1]}
+  - {patch_size: 31, patch_stride: [1, 2], grad_desc_iters: 8, levels: 2, start_level: 1}
+  - {patch_size: 31, patch_stride: [3, 8], grad_desc_iters: 8, levels: 2, start_level: 0}
+  - {patch_size: 31, patch_stride: 8, grad_desc_iters: 4, levels: 2, start_level: 1}
+  - {patch_size: 37, patch_stride: 5, grad_desc_iters: 1, levels: 3, start_level: 0}
+  - {patch_size: 37, patch_stride: 5, grad_desc_iters: 6, levels: 3, start_level: [0, 1]}

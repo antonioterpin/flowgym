@@ -32,6 +32,11 @@ _KNOWN_ARRAY_KEYS = {
     "estimates",
 }
 
+# Keys in enrich() result dicts that map to the typed ``is_training`` field
+# (``"train"`` is the legacy spelling kept for back-compat with callers that
+# still pass loose dict payloads).
+_IS_TRAINING_KEYS = ("is_training", "train")
+
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
@@ -50,6 +55,13 @@ class CachePayload:
         estimates: Pre-computed flow estimates (B, ...).
         extras: Opaque estimator-specific data (e.g., candidate flows for
             the critic).
+        is_training: Whether the model is in training mode. Stored as pytree
+            aux (static) so it is available as a plain Python bool inside
+            traced code; the trade-off is that the JIT cache keys on it, so
+            flipping the flag forces a recompile (acceptable since train and
+            eval each compile once per phase). Set to ``False`` during
+            evaluation so estimators (e.g. the ArtOfPIV router) can disable
+            exploration noise.
     """
 
     has_precomputed_errors: bool = False
@@ -59,6 +71,7 @@ class CachePayload:
     epe_mask: np.ndarray | None = None
     estimates: jnp.ndarray | None = None
     extras: dict[str, Any] = field(default_factory=dict)
+    is_training: bool = True
 
     @classmethod
     def from_enrich_result(
@@ -79,6 +92,12 @@ class CachePayload:
         epe = result.get("epe")
         if epe is None:
             epe = result.get("errors")
+        is_training: bool = True
+        for key in _IS_TRAINING_KEYS:
+            if key in result:
+                is_training = bool(result[key])
+                break
+        reserved = _KNOWN_ARRAY_KEYS | set(_IS_TRAINING_KEYS)
         return cls(
             has_precomputed_errors=epe is not None,
             epe=epe,
@@ -86,9 +105,8 @@ class CachePayload:
             epe_all=result.get("epe_all"),
             epe_mask=result.get("epe_mask"),
             estimates=result.get("estimates"),
-            extras={
-                k: v for k, v in result.items() if k not in _KNOWN_ARRAY_KEYS
-            },
+            extras={k: v for k, v in result.items() if k not in reserved},
+            is_training=is_training,
         )
 
     # ------------------------------------------------------------------
@@ -108,7 +126,7 @@ class CachePayload:
         )
         children: list[Any] = [getattr(self, name) for name in present]
         children.append(self.extras)
-        aux = (self.has_precomputed_errors, present)
+        aux = (self.has_precomputed_errors, self.is_training, present)
         return children, aux
 
     @classmethod
@@ -122,13 +140,14 @@ class CachePayload:
         Returns:
             An instance of CachePayload reconstructed from the fields.
         """
-        has_precomputed_errors, present = aux
+        has_precomputed_errors, is_training, present = aux
         kwargs: dict[str, Any] = {name: None for name in _ARRAY_FIELD_NAMES}
         for name, val in zip(present, children[:-1], strict=True):
             kwargs[name] = val
         kwargs["extras"] = children[-1]
         return cls(
             has_precomputed_errors=has_precomputed_errors,
+            is_training=is_training,
             **kwargs,
         )
 

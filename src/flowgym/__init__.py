@@ -5,6 +5,7 @@ __version__ = "0.1.0"
 from flowgym.common.base import Estimator
 from flowgym.density.nn import NNDensityEstimator
 from flowgym.density.simple import SimpleDensityEstimator
+from flowgym.flow.art_of_piv import ArtOfPIVEstimator, ArtOfPIVOracleEstimator
 from flowgym.flow.consensus import ConsensusFlowEstimator
 from flowgym.flow.dis import DISJAXFlowFieldEstimator
 from flowgym.flow.dummy import DummyEstimator
@@ -76,6 +77,8 @@ ALL_ESTIMATORS: dict[str, type[Estimator] | MissingDependency] = {
     "dis_jax": DISJAXFlowFieldEstimator,
     "horn_schunck": HornSchunckEstimator,
     "consensus": ConsensusFlowEstimator,
+    "art_of_piv": ArtOfPIVEstimator,
+    "oracle_art_of_piv": ArtOfPIVOracleEstimator,
     "raft_jax": RaftJaxEstimator,  # default; RAFT32-PIV (32x32 windows)
     "raft_jax_32": RaftJax32Estimator,  # explicit alias of the default
     "raft_jax_256": RaftJax256Estimator,

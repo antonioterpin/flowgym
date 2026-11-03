@@ -1,0 +1,110 @@
+{
+  "models/cylinder.yaml": {
+    "mean_epe": {
+      "mean": 0.0044278609566390514,
+      "std": 0.0,
+      "seeds": {
+        "0": 0.0044278609566390514
+      }
+    }
+  },
+  "models/backstep.yaml": {
+    "mean_epe": {
+      "mean": 0.0033433157950639725,
+      "std": 0.0,
+      "seeds": {
+        "0": 0.0033433157950639725
+      }
+    }
+  },
+  "models/DNS_turbulence.yaml": {
+    "mean_epe": {
+      "mean": 0.021533042192459106,
+      "std": 0.0,
+      "seeds": {
+        "0": 0.021533042192459106
+      }
+    }
+  },
+  "models/SQG.yaml": {
+    "mean_epe": {
+      "mean": 0.017798036336898804,
+      "std": 0.0,
+      "seeds": {
+        "0": 0.017798036336898804
+      }
+    }
+  },
+  "models/jhtdb.yaml": {
+    "mean_epe": {
+      "mean": 0.010988726280629635,
+      "std": 0.0,
+      "seeds": {
+        "0": 0.010988726280629635
+      }
+    }
+  },
+  "models/uniform.yaml": {
+    "mean_epe": {
+      "mean": 0.0027863699942827225,
+      "std": 0.0,
+      "seeds": {
+        "0": 0.0027863699942827225
+      }
+    }
+  },
+  "models/paper/cylinder.yaml": {
+    "mean_epe": {
+      "mean": 0.004428744316101074,
+      "std": 0.0,
+      "seeds": {
+        "0": 0.004428744316101074
+      }
+    }
+  },
+  "models/paper/backstep.yaml": {
+    "mean_epe": {
+      "mean": 0.0033368493895977736,
+      "std": 0.0,
+      "seeds": {
+        "0": 0.0033368493895977736
+      }
+    }
+  },
+  "models/paper/DNS_turbulence.yaml": {
+    "mean_epe": {
+      "mean": 0.021528668701648712,
+      "std": 0.0,
+      "seeds": {
+        "0": 0.021528668701648712
+      }
+    }
+  },
+  "models/paper/SQG.yaml": {
+    "mean_epe": {
+      "mean": 0.0178060382604599,
+      "std": 0.0,
+      "seeds": {
+        "0": 0.0178060382604599
+      }
+    }
+  },
+  "models/paper/jhtdb.yaml": {
+    "mean_epe": {
+      "mean": 0.010992344468832016,
+      "std": 0.0,
+      "seeds": {
+        "0": 0.010992344468832016
+      }
+    }
+  },
+  "models/paper/uniform.yaml": {
+    "mean_epe": {
+      "mean": 0.0027510139625519514,
+      "std": 0.0,
+      "seeds": {
+        "0": 0.0027510139625519514
+      }
+    }
+  }
+}

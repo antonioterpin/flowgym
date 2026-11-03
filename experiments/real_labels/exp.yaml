@@ -1,0 +1,8 @@
+# uv run --extra cuda12 --extra wandb python experiments/run.py --exp real_labels
+project: Art_of_PIV
+mode: train-supervised
+dataset: experiments/real_labels/datasets/train.yaml
+models:
+  - models/router.yaml
+seeds: [0]
+entrypoint: src/main.py

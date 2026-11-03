@@ -1,0 +1,36 @@
+# uv run python experiments/run.py --exp art_of_piv/appendix/A.1_learning_signal
+project: Art_of_PIV
+mode: train-supervised
+dataset: experiments/art_of_piv/datasets/train.yaml
+models:
+  - models/baseline.yaml
+  - models/n2/oracle.yaml
+  - models/n2/classification.yaml
+  - models/n2/regression.yaml
+  - models/n2/bandit.yaml
+  - models/n3/oracle.yaml
+  - models/n3/classification.yaml
+  - models/n3/regression.yaml
+  - models/n3/bandit.yaml
+  - models/n4/oracle.yaml
+  - models/n4/classification.yaml
+  - models/n4/regression.yaml
+  - models/n4/bandit.yaml
+  - models/n5/oracle.yaml
+  - models/n5/classification.yaml
+  - models/n5/regression.yaml
+  - models/n5/bandit.yaml
+  - models/n10/oracle.yaml
+  - models/n10/classification.yaml
+  - models/n10/regression.yaml
+  - models/n10/bandit.yaml
+  - models/n15/oracle.yaml
+  - models/n15/classification.yaml
+  - models/n15/regression.yaml
+  - models/n15/bandit.yaml
+  - models/n20/oracle.yaml
+  - models/n20/classification.yaml
+  - models/n20/regression.yaml
+  - models/n20/bandit.yaml
+seeds: [0, 1, 2]
+entrypoint: src/main.py

@@ -1,5 +1,7 @@
 """Module that implements OpenPIV for use in the Estimator framework."""
 
+from __future__ import annotations
+
 from typing import Any, ClassVar
 
 import jax.numpy as jnp
@@ -95,8 +97,41 @@ def replace_outliers(
     )
 
 
+def _as_static_pair(value: Any) -> int | tuple[int, int]:
+    """Normalize int / [h, w] / (h, w) to an int or a static tuple.
+
+    Args:
+        value: A scalar size or a two-element height/width sequence.
+
+    Returns:
+        The value as an int, or a ``(height, width)`` tuple of ints.
+
+    Raises:
+        ValueError: If a sequence does not have exactly two elements, or a
+            size is not integer-like (e.g. ``16.9``).
+    """
+    if isinstance(value, (list, tuple)):
+        if len(value) != 2:
+            raise ValueError(
+                f"Expected an int or a (height, width) pair, got {value!r}."
+            )
+        return (process._as_int(value[0]), process._as_int(value[1]))
+    return process._as_int(value)
+
+
 class OpenPIVJAXEstimator(FlowFieldEstimator):
     """OpenPIV flow field estimator implemented in JAX.
+
+    Exposes the full openPIV-JAX feature set as estimator config: sub-pixel
+    method, correlation method, rectangular windows, signal-to-noise outlier
+    rejection, and iterative window-deformation multipass
+    (:func:`process.multipass_deform`). :meth:`get_config` lists the
+    parameters, so each configuration gets its own EPE cache namespace.
+
+    ``sig2noise_threshold`` only takes effect when ``n_passes == 1``. With
+    multipass the per-pass NaNs are zeroed while accumulating and no outlier
+    mask is applied, so the threshold has no effect. Existing caches and
+    selected libraries depend on this behavior, so it is kept as is.
 
     Attributes:
         velocity_filters: Available velocity filter types.
@@ -106,42 +141,56 @@ class OpenPIVJAXEstimator(FlowFieldEstimator):
 
     def __init__(
         self,
-        window_size: int,
-        search_size: int,
-        overlap: int,
-        openpiv_outlier_replacement_kernel_size: int,
-        openpiv_outlier_replacement_n_iter: int,
+        window_size: int | tuple[int, int] = 16,
+        search_size: int | tuple[int, int] = 21,
+        overlap: int | tuple[int, int] = 8,
+        subpixel_method: str = "gaussian",
+        correlation_method: str = "circular",
+        n_passes: int = 1,
+        sig2noise_threshold: float | None = None,
+        openpiv_outlier_replacement_kernel_size: int = 3,
+        openpiv_outlier_replacement_n_iter: int = 10,
         **kwargs: Any,
     ) -> None:
         """Initialize the OpenPIVJAX estimator.
 
         Args:
-            window_size:
-                The size of each interrogation window (square).
-            search_size:
-                The size of the search area for the flow field.
-            overlap:
-                Overlap between consecutive windows.
-            openpiv_outlier_replacement_kernel_size:
-                Kernel size for outlier replacement.
-            openpiv_outlier_replacement_n_iter:
-                Number of iterations for outlier replacement.
+            window_size: Interrogation window size (int or (height, width)).
+            search_size: Search-area size (int or (height, width)).
+            overlap: Window overlap (int or (height, width)).
+            subpixel_method: Sub-pixel estimator: "gaussian", "parabolic"
+                or "centroid".
+            correlation_method: "circular" or "linear".
+            n_passes: Window-deformation passes (1 = single pass).
+            sig2noise_threshold: If set, vectors with peak-to-peak S/N below
+                this are flagged as outliers (in addition to NaNs); if None,
+                only NaN vectors are replaced.
+            openpiv_outlier_replacement_kernel_size: Local-mean fill kernel.
+            openpiv_outlier_replacement_n_iter: Local-mean fill iterations.
             **kwargs: Additional keyword arguments for the base class.
 
         Raises:
             ValueError: If any of the parameters are invalid.
         """
-        # Check class-specific input parameters
-        if (
-            openpiv_outlier_replacement_kernel_size is None
-            or openpiv_outlier_replacement_n_iter is None
-        ):
-            raise ValueError(
-                "OpenPIVJAXEstimator requires "
-                "outlier_replacement_kernel_size and "
-                "outlier_replacement_n_iter to be set."
-            )
-
+        self.window_size = _as_static_pair(window_size)
+        self.search_size = _as_static_pair(search_size)
+        self.overlap = _as_static_pair(overlap)
+        window_hw = process._as_pair(self.window_size)
+        overlap_hw = process._as_pair(self.overlap)
+        if min(window_hw) <= 0:
+            raise ValueError("window_size must be positive.")
+        if min(process._as_pair(self.search_size)) <= 0:
+            raise ValueError("search_size must be positive.")
+        if min(overlap_hw) < 0:
+            raise ValueError("overlap must be non-negative.")
+        if any(o >= w for o, w in zip(overlap_hw, window_hw, strict=True)):
+            raise ValueError("overlap must be less than window_size.")
+        if subpixel_method not in ("gaussian", "parabolic", "centroid"):
+            raise ValueError(f"Bad subpixel_method: {subpixel_method!r}")
+        if correlation_method not in ("circular", "linear"):
+            raise ValueError(f"Bad correlation_method: {correlation_method!r}")
+        if not isinstance(n_passes, int) or n_passes < 1:
+            raise ValueError("n_passes must be a positive integer.")
         if (
             not isinstance(openpiv_outlier_replacement_kernel_size, int)
             or openpiv_outlier_replacement_kernel_size <= 0
@@ -157,6 +206,12 @@ class OpenPIVJAXEstimator(FlowFieldEstimator):
             raise ValueError(
                 "openpiv_outlier_replacement_n_iter must be a positive integer."
             )
+        self.subpixel_method = subpixel_method
+        self.correlation_method = correlation_method
+        self.n_passes = n_passes
+        self.sig2noise_threshold = (
+            None if sig2noise_threshold is None else float(sig2noise_threshold)
+        )
         self.openpiv_outlier_replacement_kernel_size = (
             openpiv_outlier_replacement_kernel_size
         )
@@ -164,21 +219,35 @@ class OpenPIVJAXEstimator(FlowFieldEstimator):
             openpiv_outlier_replacement_n_iter
         )
 
-        if not isinstance(window_size, int) or window_size <= 0:
-            raise ValueError("window_size must be a positive integer.")
-        self.window_size = window_size
-
-        if not isinstance(search_size, int) or search_size <= 0:
-            raise ValueError("search_size must be a positive integer.")
-        self.search_size = search_size
-
-        if not isinstance(overlap, int) or overlap < 0:
-            raise ValueError("overlap must be a non-negative integer.")
-        if overlap >= window_size:
-            raise ValueError("overlap must be less than window_size.")
-        self.overlap = overlap
-
         super().__init__(**kwargs)
+
+    def _single_pass(
+        self, img1: jnp.ndarray, img2: jnp.ndarray
+    ) -> tuple[jnp.ndarray, jnp.ndarray]:
+        """Run one correlation pass.
+
+        Args:
+            img1: First-frame images (batch, height, width).
+            img2: Second-frame images (batch, height, width).
+
+        Returns:
+            The flow field and a boolean outlier mask.
+        """
+        piv_kwargs = {
+            "window_size": self.window_size,
+            "search_area_size": self.search_size,
+            "overlap": self.overlap,
+            "subpixel_method": self.subpixel_method,
+            "correlation_method": self.correlation_method,
+        }
+        if self.sig2noise_threshold is None:
+            flow = process.extended_search_area_piv(img1, img2, **piv_kwargs)
+            return flow, jnp.isnan(flow).any(axis=-1)
+        flow, s2n = process.extended_search_area_piv(
+            img1, img2, sig2noise_method="peak2peak", **piv_kwargs
+        )
+        mask = process.sig2noise_val(s2n, self.sig2noise_threshold)
+        return flow, mask | jnp.isnan(flow).any(axis=-1)
 
     def _estimate(
         self,
@@ -200,46 +269,58 @@ class OpenPIVJAXEstimator(FlowFieldEstimator):
         """
         image1 = state["images"][:, -1, ...]
 
-        if DEBUG:
-            logger.debug(
-                f"image1 shape: {image1.shape}, images shape: {images.shape}"
+        if self.n_passes > 1:
+            # Multipass output has no NaNs and is not masked, so
+            # sig2noise_threshold has no effect here (see class docstring).
+            flow_field = process.multipass_deform(
+                image1,
+                images,
+                self.window_size,
+                self.search_size,
+                self.overlap,
+                self.n_passes,
+                subpixel_method=self.subpixel_method,
+                correlation_method=self.correlation_method,
             )
-
-        flow_field = process.extended_search_area_piv(
-            image1,
-            images,
-            window_size=self.window_size,
-            overlap=self.overlap,
-            search_area_size=self.search_size,
-        )
-
-        if DEBUG:
-            logger.debug(f"Flow field shape: {flow_field.shape}")
-            n_outliers = jnp.sum(jnp.isnan(flow_field).any(axis=-1))
-            logger.debug(
-                f"Number of outliers before post-processing: {n_outliers}"
-            )
+            mask = jnp.zeros(flow_field.shape[:-1], dtype=bool)
+        else:
+            flow_field, mask = self._single_pass(image1, images)
 
         flow_field = replace_outliers(
             flow_field,
-            jnp.isnan(flow_field).any(axis=-1),
+            mask,
             self.openpiv_outlier_replacement_n_iter,
             self.openpiv_outlier_replacement_kernel_size,
         )
 
-        if DEBUG:
-            logger.debug(
-                f"Flow field shape after filling NaNs: {flow_field.shape}"
-            )
-            n_outliers = jnp.sum(jnp.isnan(flow_field).any(axis=-1))
-            logger.debug(f"Number of remaining outliers: {n_outliers}")
-
         flow_field = process.upsample_flow(
             flow_field, (images.shape[1], images.shape[2])
         )
-        if DEBUG:
-            logger.debug(
-                f"Flow field shape after upsampling: {flow_field.shape}"
-            )
 
         return flow_field, {}, {}
+
+    def get_config(self) -> dict[str, Any]:
+        """Return the parameter dict that namespaces the cache.
+
+        Returns:
+            A JSON-serializable parameter dictionary.
+        """
+        return {
+            "window_size": list(self.window_size)
+            if isinstance(self.window_size, tuple)
+            else self.window_size,
+            "search_size": list(self.search_size)
+            if isinstance(self.search_size, tuple)
+            else self.search_size,
+            "overlap": list(self.overlap)
+            if isinstance(self.overlap, tuple)
+            else self.overlap,
+            "subpixel_method": self.subpixel_method,
+            "correlation_method": self.correlation_method,
+            "n_passes": self.n_passes,
+            "sig2noise_threshold": self.sig2noise_threshold,
+            "outlier_kernel_size": (
+                self.openpiv_outlier_replacement_kernel_size
+            ),
+            "outlier_n_iter": self.openpiv_outlier_replacement_n_iter,
+        }

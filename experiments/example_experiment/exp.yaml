@@ -2,7 +2,7 @@
 project: flowgym
 mode: eval
 
-dataset: dataset.yaml
+dataset: experiments/example_experiment/dataset.yaml
 
 models:
   - models/dummy_a.yaml

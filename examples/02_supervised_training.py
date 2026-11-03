@@ -62,7 +62,9 @@ def run_example() -> None:
             dataset_path=dataset_path,
         )
 
-        run_root = temp_dir / "training_output" / "dummy" / "0"
+        # Each run writes to a timestamped dir under <estimator>/<seed>
+        seed_root = temp_dir / "training_output" / "dummy" / "0"
+        run_root = max(seed_root.iterdir())
         checkpoint_root = run_root / "checkpoints" / "DummyEstimator"
         checkpoints = (
             sorted(path for path in checkpoint_root.iterdir() if path.is_dir())

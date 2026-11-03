@@ -11,3 +11,6 @@ the estimator interface every method implements.
 .. automodule:: flowgym.flow.base
    :members:
 ```
+
+Cache enrichment compiles once per estimator, so discarded estimators are
+garbage-collected without clearing global JAX caches.

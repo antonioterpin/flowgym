@@ -1,0 +1,14 @@
+# openpiv_1khz with the standard router (paper ablation "Large", batch 64).
+extends: experiments/art_of_piv/models/router/standard.yaml
+dataset: experiments/art_of_piv/datasets/train_bs64.yaml
+study:
+  name: art_of_piv/appendix/A.3_agent_architecture
+  tags:
+    row: openpiv_1khz_large
+config:
+  estimators_list_path: experiments/art_of_piv/libraries/openpiv_1khz.yaml
+# Score the best checkpoint on the val split instead of test.
+dataset_overrides:
+  test:
+    num_batches: 66
+    dataset: experiments/art_of_piv/datasets/val_bs20.yaml

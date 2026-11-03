@@ -238,6 +238,10 @@ the upstream cause in a short comment.
   frameworks without a documented reason.
 - Make randomness explicit: pass keys, set seeds, keep tests
   deterministic.
+- Never put `self` in a class-level `@jax.jit` (`static_argnums=0`):
+  the global jit cache keeps every instance alive, and only
+  `jax.clear_caches()` frees it. Build the jit per instance in
+  `__init__` instead: `self._fn_jit = jax.jit(self._fn)`.
 
 ### GPU usage
 

@@ -1,0 +1,3 @@
+frame1,frame2,label,split
+frames/pair0_1.png,frames/pair0_2.png,0,train
+frames/pair1_1.png,frames/pair1_2.png,1,val

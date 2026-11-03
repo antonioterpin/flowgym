@@ -1,0 +1,20 @@
+# Oracle: per frame, the library member with the lowest cached EPE (the best
+# any selection can do). Not trained; runs on the val split. Files
+# models/n<K>/oracle.yaml extend this one and set the library.
+estimator: oracle_art_of_piv
+estimate_type: flow
+mode: eval
+dataset: experiments/art_of_piv/datasets/val_bs20.yaml
+study:
+  name: art_of_piv/appendix/A.1_learning_signal
+  tags:
+    signal: oracle
+config:
+  jit: true
+# Read the members' cached per-frame EPEs on val, as the router training does.
+dataset_overrides:
+  caching:
+    root_dir: hf://activefluidcontrol/piv-class1-caches@7068a49525da1d8c1b7bdf4027a3c3a74da5d02a
+    cache_id: art_of_piv
+    read_only: true
+    warm_start: all

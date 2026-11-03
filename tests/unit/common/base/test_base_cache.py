@@ -138,3 +138,88 @@ def test_call_does_not_persist_cache_payload(estimator):
 
     assert "transient_large_array" not in new_state
     assert "epe" not in new_state
+
+
+class ConfiguredEstimator(MockEstimator):
+    """Estimator whose output depends on one parameter."""
+
+    def __init__(self, alpha: float = 0.5, **kwargs):
+        super().__init__(**kwargs)
+        self.alpha = alpha
+
+
+def test_get_config_records_from_config_params():
+    """The default config is every constructor param from_config passes."""
+    est = ConfiguredEstimator.from_config(
+        {"alpha": 0.5, "optimizer_config": {"name": "adam"}, "unused": 1}
+    )
+    assert est.get_config() == {
+        "alpha": 0.5,
+        "optimizer_config": {"name": "adam"},
+    }
+
+
+def test_get_config_requires_from_config(estimator):
+    """Directly constructed estimators without an override cannot be hashed."""
+    with pytest.raises(NotImplementedError, match="from_config"):
+        estimator.get_config()
+    with pytest.raises(NotImplementedError):
+        estimator.get_cache_id_suffix(None)
+
+
+def test_cache_id_suffix_hashes_config():
+    """The default suffix is the md5 of the sorted-json get_config."""
+    suffix = ConfiguredEstimator.from_config(
+        {"alpha": 0.5}
+    ).get_cache_id_suffix(None)
+    # md5(json.dumps({"alpha": 0.5}, sort_keys=True))[:8]
+    assert suffix == "_c6c2e41f9"
+    other = ConfiguredEstimator.from_config({"alpha": 0.6})
+    assert suffix != other.get_cache_id_suffix(None)
+
+
+def test_cache_id_suffix_includes_preprocessing():
+    """Preprocessing changes the output, so it changes the suffix."""
+    plain = ConfiguredEstimator.from_config({"alpha": 0.5})
+    capped = ConfiguredEstimator.from_config(
+        {
+            "alpha": 0.5,
+            "preprocess": [{"name": "intensity_capping", "n": 2.0}],
+        }
+    )
+    assert plain.get_cache_id_suffix(None) != capped.get_cache_id_suffix(None)
+
+
+def test_cache_id_suffix_empty_without_params():
+    """An estimator built with no parameters keeps the bare suffix."""
+    assert MockEstimator.from_config({}).get_cache_id_suffix(None) == ""
+
+
+class HookEstimator(MockEstimator):
+    """Estimator that names its cache through the hook, like RAFT does."""
+
+    def _cache_id_suffix(self, trainable_state):
+        del trainable_state
+        return "_hook"
+
+
+def test_overriding_get_cache_id_suffix_is_rejected():
+    """Subclasses must use the hook so processing is always hashed."""
+    with pytest.raises(TypeError, match="_cache_id_suffix"):
+
+        class _Bad(MockEstimator):
+            def get_cache_id_suffix(self, trainable_state):
+                return "_bad"
+
+
+def test_hook_suffix_gets_processing_tag():
+    """A custom hook keeps its id; non-empty steps are appended to it."""
+    crop = {"name": "clahe", "clip_limit": 2.0}
+    plain = HookEstimator().get_cache_id_suffix(None)
+    capped = HookEstimator(preprocessing_steps=[crop]).get_cache_id_suffix(None)
+    other = HookEstimator(
+        preprocessing_steps=[{**crop, "clip_limit": 3.0}]
+    ).get_cache_id_suffix(None)
+    assert plain == "_hook"
+    assert capped.startswith("_hook_p")
+    assert len({plain, capped, other}) == 3

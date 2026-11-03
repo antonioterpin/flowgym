@@ -25,6 +25,7 @@ estimators/deepflow
 estimators/horn-schunck
 estimators/consensus
 estimators/admm-refinement
+estimators/art-of-piv
 estimators/dummy
 estimators/density-simple
 estimators/density-nn

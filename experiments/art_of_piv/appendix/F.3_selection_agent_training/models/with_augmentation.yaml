@@ -1,0 +1,8 @@
+# The real_labels router, trained with photometric augmentation.
+extends: experiments/real_labels/models/router.yaml
+config:
+  estimators_list_path: experiments/art_of_piv/libraries/water_channel.yaml
+study:
+  name: art_of_piv/appendix/F.3_selection_agent_training
+  tags:
+    augmentation: photometric

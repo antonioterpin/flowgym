@@ -1,0 +1,6 @@
+# The full validation split (1320 frames) as 66 batches of 20, for scoring on
+# val instead of test.
+extends: experiments/art_of_piv/datasets/val.yaml
+num_batches: 66
+batch_size: 20
+flow_fields_per_batch: 20

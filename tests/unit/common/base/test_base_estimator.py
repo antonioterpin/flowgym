@@ -130,3 +130,16 @@ def test_invalid_rng_type_raises(dummy_estimator):
         dummy_estimator.create_state(
             images, estimates, image_history_size=2, rng=bad_rng
         )
+
+
+def test_from_config_warns_on_unknown_keys(monkeypatch):
+    """from_config warns about keys no __init__ takes, not caller keys."""
+    from flowgym.common.base import estimator as estimator_mod
+
+    warnings = []
+    monkeypatch.setattr(estimator_mod.logger, "warning", warnings.append)
+    DummyEstimator.from_config(
+        {"jit": True, "rng": 0, "image_shape": None, "no_such_param": 1}
+    )
+    assert len(warnings) == 1
+    assert "no_such_param" in warnings[0]

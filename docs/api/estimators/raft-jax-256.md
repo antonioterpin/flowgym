@@ -8,7 +8,10 @@ feature and context encoders downsample each 256×256 interrogation window to
 32×32 feature maps, the recurrent (GRU) refinement runs at that resolution, and
 a learned *convex upsampling* head reconstructs the full-resolution flow at
 every iteration. It shares the parameter tree of the RAFT32-PIV variant, so the
-same PyTorch → Flax checkpoint converter applies.
+same PyTorch → Flax checkpoint converter applies:
+`scripts/convert_raft_checkpoint.py --variant raft256` turns the upstream
+pretrained checkpoint into one the trainer loads with
+`load_mode: params_only`.
 
 **References:** C. Lagemann, K. Lagemann, S. Mukherjee, W. Schröder, *Deep
 recurrent optical flow learning for particle image velocimetry data*, Nature

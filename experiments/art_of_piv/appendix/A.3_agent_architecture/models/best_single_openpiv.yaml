@@ -1,0 +1,7 @@
+# Best single estimator of the openpiv_1khz and openpiv_4khz rows.
+extends: experiments/art_of_piv/appendix/A.3_agent_architecture/models/best_single.yaml
+study:
+  tags:
+    model: openpiv_ws16_ss16_np3_circ_para_s2n
+config:
+  estimators_list_path: experiments/art_of_piv/libraries/best_single_openpiv.yaml

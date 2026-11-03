@@ -96,7 +96,45 @@ def setup_logging(
 
 GracefulShutdown = gg.GracefulShutdown
 
-load_configuration = gg.load_configuration
+
+def deep_merge(base: Mapping[str, Any], override: Mapping[str, Any]) -> dict:
+    """Merge ``override`` into ``base``, recursing into nested mappings.
+
+    Args:
+        base: The defaults.
+        override: Values that replace or extend ``base``.
+
+    Returns:
+        A new merged dict.
+    """
+    merged = dict(base)
+    for key, value in override.items():
+        if isinstance(value, Mapping) and isinstance(merged.get(key), Mapping):
+            merged[key] = deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def load_configuration(file_path: str | Path) -> gg.PrettyConfig:
+    """Load a YAML config; ``extends: <path>`` builds on another config.
+
+    The extended config (path from the repository root, like every path in a
+    config) is loaded the same way and this file's values are deep-merged
+    over it.
+
+    Args:
+        file_path: The YAML file.
+
+    Returns:
+        The loaded config.
+    """
+    config = gg.load_configuration(str(file_path))
+    parent = config.pop("extends", None)
+    if parent is None:
+        return config
+    base = load_configuration(parent)
+    return gg.PrettyConfig(deep_merge(base, config))
 
 
 def dump_yaml(path: str | Path, data: Mapping[str, Any]) -> None:

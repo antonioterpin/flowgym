@@ -1,0 +1,8 @@
+# real_labels training, plus scoring the best-on-val checkpoint on the test
+# split: the separate recording in data/real_labels/test.
+extends: experiments/real_labels/datasets/train.yaml
+test:
+  # Upper bound: the test sampler does not loop, so this scores every pair
+  # once whatever the split's size.
+  num_batches: 1000000
+  dataset: experiments/art_of_piv/appendix/F.3_selection_agent_training/datasets/test.yaml

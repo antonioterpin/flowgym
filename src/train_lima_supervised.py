@@ -43,6 +43,7 @@ def main() -> None:
         estimator_config,
         out_dir,
         validation_settings,
+        _test_settings,
         _caching_config,
         _wandb_setup,
     ) = prepare_configs(args)

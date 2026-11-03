@@ -3,15 +3,27 @@
 import contextlib
 import itertools
 import time
-from typing import Literal
+from functools import partial
+from pathlib import Path
+from typing import Literal, cast
 
 import goggles as gg
 import jax
-import numpy as np
+import jax.numpy as jnp
 from synthpix.sampler import Sampler
 
-from eval import evaluate_batches
+from eval import (
+    evaluate_batches,
+    log_eval_metrics,
+    metrics_summary,
+    scalar_metrics,
+    write_summary,
+)
 from flowgym.checkpointing import CheckpointConfig, Checkpointer
+from flowgym.common.augment import (
+    photometric_augment,
+    photometric_augment_validate_params,
+)
 from flowgym.common.base import Estimator, NNEstimatorTrainableState
 from flowgym.training.caching import CacheManager, enrich_batch
 from flowgym.training.replay import ReplayBuffer
@@ -38,7 +50,9 @@ def train_supervised(
     sampler: Sampler,
     val_sampler: Sampler | None = None,
     val_interval: int | None = None,
-    val_num_batches: int = 1,
+    val_num_batches: int | None = 1,
+    test_sampler: Sampler | None = None,
+    test_num_batches: int | None = 1,
     num_batches: int = 1000,
     estimate_type: Literal["flow", "density"] = "flow",
     save_every: int = 10000,
@@ -50,6 +64,8 @@ def train_supervised(
     prefetch_replay_size: int = 0,
     cache_manager: CacheManager | None = None,
     checkpoint_config: CheckpointConfig | None = None,
+    log_timing: bool = False,
+    photometric_augmentation: dict | None = None,
 ) -> None:
     """Train the flow estimator.
 
@@ -63,7 +79,12 @@ def train_supervised(
         sampler: The sampler to use to generate images.
         val_sampler: The sampler to use to generate images for validation.
         val_interval: Frequency to validate the estimator.
-        val_num_batches: Number of batches to validate for.
+        val_num_batches: Number of batches to validate for (``None``: all).
+        test_sampler: If given, evaluated after training on the
+            best-on-validation checkpoint (the final state without
+            validation); results are logged under ``test/`` and written to
+            ``out_dir/test_summary.json`` (EPE statistics and per-frame EPE).
+        test_num_batches: Number of batches to test on (``None``: all).
         num_batches: Number of batches to train for.
         estimate_type: Type of estimate to compute.
         save_every: Frequency to save the estimator.
@@ -80,6 +101,13 @@ def train_supervised(
             tracking, save cadence). When omitted, a default is built
             from ``save_only_best`` and the trainer routes all saves
             through ``Checkpointer``.
+        log_timing: Whether to log per-batch times. Blocks on every train
+            step so the times include device compute.
+        photometric_augmentation: If given, randomises the lighting of the
+            frames the estimator is trained on (keys of
+            ``flowgym.common.augment.photometric_augment``; ``{}`` for the
+            defaults). Labels, cached scores and the initial estimator state
+            come from the original frames.
 
     Raises:
         ValueError: If estimate_type is not "flow" or "density", or if
@@ -88,6 +116,13 @@ def train_supervised(
     """
     if key is None:
         key = jax.random.PRNGKey(0)
+
+    augment_pairs = None
+    if photometric_augmentation is not None:
+        photometric_augment_validate_params(**photometric_augmentation)
+        augment_pairs = jax.jit(
+            jax.vmap(partial(photometric_augment, **photometric_augmentation))
+        )
 
     # Create the training step function
     train_step_fn = estimator.create_train_step()
@@ -166,38 +201,12 @@ def train_supervised(
                     num_batches=val_num_batches,
                     cache_manager=cache_manager,
                 )
-                # Log all validation metrics generically
-                for metric_name, value in val_metrics.items():
-                    if metric_name == "errors":
-                        continue
-                    scalar = None
-                    if isinstance(value, (int, float)):
-                        scalar = float(value)
-                    elif isinstance(value, np.ndarray) and value.ndim == 0:
-                        scalar = float(value)
-                    if scalar is not None:
-                        logger.scalar(f"val/{metric_name}", scalar, step=0)
-
-                # Build validation message with all scalar metrics
-                mean_error = float(val_metrics.get("mean_error", float("nan")))
-                init_val_msg = (
-                    f"Initial validation (before training): "
-                    f"mean_error={mean_error:.5f}"
+                log_eval_metrics(
+                    val_metrics,
+                    prefix="val",
+                    step=0,
+                    title="Initial validation (before training)",
                 )
-                # Append all other scalar metrics
-                for k, v in val_metrics.items():
-                    if k in (
-                        "errors",
-                        "mean_error",
-                        "num_batches",
-                        "num_samples",
-                    ):
-                        continue
-                    if isinstance(v, (int, float)):
-                        init_val_msg += f", {k}={float(v):.5f}"
-                    elif isinstance(v, np.ndarray) and v.ndim == 0:
-                        init_val_msg += f", {k}={float(v):.5f}"
-                logger.info(init_val_msg)
                 # Route the baseline through on_validation so it establishes
                 # the best-metric reference (and uploads when wandb_upload is
                 # enabled).
@@ -248,10 +257,22 @@ def train_supervised(
                 key, subkey = jax.random.split(key)
                 estimator_state = create_state_fn(images1, subkey)
 
+                # Augment only what the estimator is trained on. Labels and
+                # cached scores above came from the original frames.
+                obs1, obs2 = images1, images2
+                if augment_pairs is not None:
+                    assert key is not None
+                    key, aug_key = jax.random.split(key)
+                    pairs = jnp.stack([images1, images2], axis=1)
+                    pairs = augment_pairs(
+                        pairs, jax.random.split(aug_key, pairs.shape[0])
+                    )
+                    obs1, obs2 = pairs[:, 0], pairs[:, 1]
+
                 # Create the experience object
                 experience = SupervisedExperience(
                     state=estimator_state,
-                    obs=(images1, images2),
+                    obs=(obs1, obs2),
                     ground_truth=ground_truth,
                     cache_payload=cache_payload,
                 )
@@ -264,7 +285,17 @@ def train_supervised(
                     trainable_state=trainable_state,
                     experience=experience,
                 )
-                t_train = time.time() - t
+                if log_timing:
+                    # JAX dispatches asynchronously; wait for the device
+                    jax.block_until_ready(trainable_state)
+                    t_train = time.time() - t
+                    logger.info(
+                        f"Batch {batch_idx} timing: "
+                        f"Sample={t_sample:.4f}s, "
+                        f"Enrich={t_enrich:.4f}s, "
+                        f"Train={t_train:.4f}s. "
+                        f"Total={t_sample + t_enrich + t_train:.4f}s"
+                    )
 
                 # Log filenames for debugging coverage/randomization
                 batch_files = getattr(batch, "files", [])
@@ -274,14 +305,6 @@ def train_supervised(
                         [str(f).split("/")[-1] for f in batch_files[:4]]
                     )
                     logger.info(f"Batch {batch_idx} files: {files_str}")
-
-                logger.info(
-                    f"Batch {batch_idx} timing: "
-                    f"Sample={t_sample:.4f}s, "
-                    f"Enrich={t_enrich:.4f}s, "
-                    f"Train={t_train:.4f}s. "
-                    f"Total={t_sample + t_enrich + t_train:.4f}s"
-                )
 
                 # Store experience in the replay buffer
                 if replay_buffer is not None:
@@ -374,42 +397,12 @@ def train_supervised(
                         logger.error(f"Validation failed: {e}")
                         continue
 
-                    # Log all validation metrics generically
-                    for metric_name, value in val_metrics.items():
-                        if metric_name == "errors":
-                            continue
-                        scalar = None
-                        if isinstance(value, (int, float)):
-                            scalar = float(value)
-                        elif isinstance(value, np.ndarray) and value.ndim == 0:
-                            scalar = float(value)
-                        if scalar is not None:
-                            logger.scalar(
-                                f"val/{metric_name}", scalar, step=batch_idx
-                            )
-
-                    # Build validation message with all scalar metrics
-                    mean_error = float(
-                        val_metrics.get("mean_error", float("nan"))
+                    log_eval_metrics(
+                        val_metrics,
+                        prefix="val",
+                        step=batch_idx,
+                        title=f"Validation after batch {batch_idx}",
                     )
-                    val_msg = (
-                        f"Validation after batch {batch_idx}: "
-                        f"mean_error={mean_error:.5f}"
-                    )
-                    # Append all other scalar metrics
-                    for k, v in val_metrics.items():
-                        if k in (
-                            "errors",
-                            "mean_error",
-                            "num_batches",
-                            "num_samples",
-                        ):
-                            continue
-                        if isinstance(v, (int, float)):
-                            val_msg += f", {k}={float(v):.5f}"
-                        elif isinstance(v, np.ndarray) and v.ndim == 0:
-                            val_msg += f", {k}={float(v):.5f}"
-                    logger.info(val_msg)
                     saved_path = checkpointer.on_validation(
                         trainable_state, batch_idx, val_metrics
                     )
@@ -455,62 +448,39 @@ def train_supervised(
 
         # Run final validation after training completes
         # (inside context to keep cache_manager active)
-        if val_sampler is not None and last_batch_idx >= 0:
-            logger.info("Running final validation after training...")
-            assert key is not None
-            key, val_key = jax.random.split(key)
+        if last_batch_idx >= 0:
+            # Use last_batch_idx + 1 as the step for the final save
+            # to appear after the last training batch
+            final_step = last_batch_idx + 1
+            final_val_metrics = None
+            if val_sampler is not None:
+                logger.info("Running final validation after training...")
+                assert key is not None
+                key, val_key = jax.random.split(key)
+                try:
+                    final_val_metrics = evaluate_batches(
+                        estimator=estimator,
+                        sampler=val_sampler,
+                        create_state_fn=create_state_fn,
+                        compute_estimate_fn=compute_estimate_fn,
+                        trainable_state=trainable_state,
+                        estimate_type=estimate_type,
+                        key=val_key,
+                        num_batches=val_num_batches,
+                        cache_manager=cache_manager,
+                    )
+                    log_eval_metrics(
+                        final_val_metrics,
+                        prefix="val",
+                        step=final_step,
+                        title=f"Final validation (step {final_step})",
+                    )
+                except Exception as e:
+                    logger.error(f"Final validation failed: {e}")
+                    final_val_metrics = None
+            # Finalize even without (or after a failed) validation so the
+            # end-of-run upload always happens.
             try:
-                final_val_metrics = evaluate_batches(
-                    estimator=estimator,
-                    sampler=val_sampler,
-                    create_state_fn=create_state_fn,
-                    compute_estimate_fn=compute_estimate_fn,
-                    trainable_state=trainable_state,
-                    estimate_type=estimate_type,
-                    key=val_key,
-                    num_batches=val_num_batches,
-                    cache_manager=cache_manager,
-                )
-                # Use last_batch_idx + 1 as the step for final validation
-                # to appear after the last training batch
-                final_step = last_batch_idx + 1
-
-                # Log all validation metrics generically
-                for metric_name, value in final_val_metrics.items():
-                    if metric_name == "errors":
-                        continue
-                    scalar = None
-                    if isinstance(value, (int, float)):
-                        scalar = float(value)
-                    elif isinstance(value, np.ndarray) and value.ndim == 0:
-                        scalar = float(value)
-                    if scalar is not None:
-                        logger.scalar(
-                            f"val/{metric_name}", scalar, step=final_step
-                        )
-
-                # Build validation message with all scalar metrics
-                mean_error = float(
-                    final_val_metrics.get("mean_error", float("nan"))
-                )
-                final_val_msg = (
-                    f"Final validation (step {final_step}): "
-                    f"mean_error={mean_error:.5f}"
-                )
-                # Append all other scalar metrics
-                for k, v in final_val_metrics.items():
-                    if k in (
-                        "errors",
-                        "mean_error",
-                        "num_batches",
-                        "num_samples",
-                    ):
-                        continue
-                    if isinstance(v, (int, float)):
-                        final_val_msg += f", {k}={float(v):.5f}"
-                    elif isinstance(v, np.ndarray) and v.ndim == 0:
-                        final_val_msg += f", {k}={float(v):.5f}"
-                logger.info(final_val_msg)
                 final_path = checkpointer.save_final(
                     trainable_state,
                     final_step,
@@ -525,7 +495,45 @@ def train_supervised(
                 else:
                     logger.info(f"Final checkpoint saved -> {final_path}")
             except Exception as e:
-                logger.error(f"Final validation failed: {e}")
+                logger.error(f"Final checkpoint failed: {e}")
+
+        if test_sampler is not None and last_batch_idx >= 0:
+            # Best-on-validation checkpoint if validated, else the final state
+            test_step, test_state = last_batch_idx + 1, trainable_state
+            best_step = checkpointer.best_step
+            if val_sampler is not None and best_step is not None:
+                best_state = checkpointer.restore_best(trainable_state)
+                if best_state is not None:
+                    test_step, test_state = best_step, best_state
+            assert key is not None
+            key, test_key = jax.random.split(key)
+            test_results = evaluate_batches(
+                estimator=estimator,
+                sampler=test_sampler,
+                create_state_fn=create_state_fn,
+                compute_estimate_fn=compute_estimate_fn,
+                trainable_state=test_state,
+                estimate_type=estimate_type,
+                key=test_key,
+                num_batches=test_num_batches,
+                cache_manager=cache_manager,
+            )
+            test_metrics = scalar_metrics(test_results)
+            test_metrics["step"] = float(test_step)
+            log_eval_metrics(
+                test_metrics,
+                prefix="test",
+                step=last_batch_idx + 1,
+                title=f"Test (checkpoint step {test_step})",
+            )
+            summary = metrics_summary(test_results["errors"], "epe")
+            summary["step"] = float(test_step)
+            write_summary(
+                Path(out_dir, "test_summary.json"),
+                summary,
+                files=cast("list[str]", test_results.get("files", [])),
+                errors=test_results["errors"],
+            )
 
         # Final cache flush (inside context while cache_manager is still active)
         if cache_manager is not None:
