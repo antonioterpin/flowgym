@@ -11,3 +11,9 @@ Refinement via Consensus ADMM*, 2025
 .. automodule:: flowgym.flow.consensus.consensus
    :members:
 ```
+
+## Child state and resizing
+
+Each child rebuilds its state for every image pair with its own
+`create_state`, so children may preprocess to different image sizes and the
+parent may resize its output. Child flows must share the consensus input grid.

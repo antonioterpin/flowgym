@@ -20,6 +20,7 @@ from flowgym.flow.consensus.consensus_algorithms import (
     validate_experimental_params,
 )
 from flowgym.flow.consensus.objectives import make_weights
+from flowgym.flow.postprocess import resize_flow
 from flowgym.make import make_estimator
 from flowgym.types import ExperimentParams, PRNGKey
 from flowgym.utils import append_metrics_to_csv, load_configuration
@@ -126,7 +127,7 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
         """
         estimators: list[Callable] = []
         supports_jit = True
-        for cfg in configs:
+        for index, cfg in enumerate(configs):
             if rng is not None:
                 rng, subkey = jax.random.split(rng)
             else:
@@ -144,12 +145,37 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
             trainable_state = cast(EstimatorTrainableState, trainable_state)
             supports_jit = supports_jit and estimator_model.supports_jit()
 
+            child_history_size = cfg["config"].get("history_size", 1)
+
             def estimator_fn(
-                input, estimator=compute_estimate_fn, ts=trainable_state
+                input,
+                estimator=compute_estimate_fn,
+                ts=trainable_state,
+                model=estimator_model,
+                history_size=child_history_size,
+                child_index=index,
             ) -> tuple[History, dict]:
                 image, state = input
-                state, metrics = estimator(image, state, ts)
-                return state, metrics
+                # Rebuild the child's history with its own preprocessing;
+                # the parent's estimates may be on a resized output grid.
+                initial_flow, _, _ = resize_flow(
+                    state["estimates"][:, -1],
+                    target_height=image.shape[1],
+                    target_width=image.shape[2],
+                )
+                child_state = model.create_state(
+                    state["images"][:, -1],
+                    initial_flow,
+                    image_history_size=history_size,
+                    estimate_history_size=history_size,
+                )
+                if "keys" in state:
+                    child_state["keys"] = jax.vmap(
+                        lambda key: jax.random.fold_in(key, child_index)
+                    )(state["keys"][:, -1])[:, None, :]
+                child_state, metrics = estimator(image, child_state, ts)
+                # Child histories may differ in shape; only flows are stacked.
+                return {"estimates": child_state["estimates"][:, -1:]}, metrics
 
             estimators.append(estimator_fn)
         return estimators, supports_jit
