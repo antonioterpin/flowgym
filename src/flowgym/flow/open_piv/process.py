@@ -923,11 +923,13 @@ def _deform_windows(
 def multipass_deform(
     img1: jnp.ndarray,
     img2: jnp.ndarray,
-    window_size: int,
-    search_area_size: int,
-    overlap: int,
+    window_size: int | tuple[int, int],
+    search_area_size: int | tuple[int, int],
+    overlap: int | tuple[int, int],
     n_passes: int,
     between_passes: Callable[[jnp.ndarray, int], jnp.ndarray] | None = None,
+    subpixel_method: str = "gaussian",
+    correlation_method: str = "circular",
 ) -> jnp.ndarray:
     """Iterative window-deformation PIV at a fixed grid resolution.
 
@@ -947,27 +949,35 @@ def multipass_deform(
     iterative recipe. Callers that mask on ``isfinite`` must account for this
     switch. Without between-pass outlier replacement the estimate drifts for
     ``n_passes > 2`` (it peaks at pass 2; see #65); pass ``between_passes`` to
-    clean the field between passes (e.g. an outlier replacement) to avoid this.
+    clean the field between passes (e.g. an outlier replacement). Note that
+    openpiv's own ``windef`` pipeline, which validates and replaces outliers
+    after every pass, also drifts beyond pass 2-3 on a fixed grid, so the
+    drift is a property of the fixed-grid recipe rather than of this port.
 
     Args:
         img1: First image batch of shape (B, H, W).
         img2: Second image batch of shape (B, H, W).
-        window_size: Interrogation window size.
-        search_area_size: Search area size.
-        overlap: Overlap between windows.
+        window_size: Interrogation window size (int or (height, width)).
+        search_area_size: Search area size (int or (height, width)).
+        overlap: Overlap between windows (int or (height, width)).
         n_passes: Number of passes (``1`` reduces to a single correlation).
         between_passes: Optional ``(flow, pass_index) -> flow`` callback applied
             to the accumulated field after each deformation pass (``pass_index``
             counts from 1), before the next pass deforms by it. Use it to inject
             outlier replacement and suppress the ``n_passes > 2`` drift. The
-            default ``None`` leaves the field untouched (openpiv parity).
+            default ``None`` leaves the field untouched.
+        subpixel_method: Sub-pixel peak estimator used on every pass, one of
+            ``"gaussian"``, ``"parabolic"`` or ``"centroid"``.
+        correlation_method: ``"circular"`` or ``"linear"``, used on every
+            pass.
 
     Note:
         ``window_size``, ``search_area_size``, ``overlap`` and ``n_passes``
         are baked in at trace time (the ``range(n_passes - 1)`` loop and
         ``get_field_shape``), so under ``jax.jit`` they must be marked static
         (e.g. ``static_argnames=("window_size", "search_area_size",
-        "overlap", "n_passes")``); ``between_passes`` must be static too.
+        "overlap", "n_passes")``); ``between_passes``, ``subpixel_method``
+        and ``correlation_method`` must be static too.
 
     Returns:
         Displacement field of shape (B, n_rows, n_cols, 2).
@@ -980,19 +990,20 @@ def multipass_deform(
             "n_passes must be a positive integer."
         )
 
-    flow = extended_search_area_piv(
-        img1,
-        img2,
-        window_size=window_size,
-        search_area_size=search_area_size,
-        overlap=overlap,
-    )
+    piv_kwargs = {
+        "window_size": window_size,
+        "search_area_size": search_area_size,
+        "overlap": overlap,
+        "subpixel_method": subpixel_method,
+        "correlation_method": correlation_method,
+    }
+    flow = extended_search_area_piv(img1, img2, **piv_kwargs)
     if n_passes <= 1:
         return flow
 
     height, width = img1.shape[1], img1.shape[2]
-    search_tuple = (search_area_size, search_area_size)
-    overlap_tuple = (overlap, overlap)
+    search_tuple = _as_pair(search_area_size)
+    overlap_tuple = _as_pair(overlap)
     n_rows, n_cols = get_field_shape(
         (height, width), search_tuple, overlap_tuple
     )
@@ -1008,13 +1019,7 @@ def multipass_deform(
     flow = jnp.nan_to_num(flow)
     for i in range(n_passes - 1):
         img2_def = jax.vmap(deform_batch)(img2, flow[..., 0], flow[..., 1])
-        residual = extended_search_area_piv(
-            img1,
-            img2_def,
-            window_size=window_size,
-            search_area_size=search_area_size,
-            overlap=overlap,
-        )
+        residual = extended_search_area_piv(img1, img2_def, **piv_kwargs)
         flow = flow + jnp.nan_to_num(residual)
         if between_passes is not None:
             flow = between_passes(flow, i + 1)

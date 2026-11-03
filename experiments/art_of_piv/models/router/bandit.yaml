@@ -1,0 +1,13 @@
+# Bandit variant of the standard router (DQN with discount 0): it learns only
+# the error of the member it ran. Used by the learning-signal ablation.
+extends: experiments/art_of_piv/models/router/regression.yaml
+config:
+  training_mode: bandits
+  # Epsilon-greedy: epsilon decays linearly from 1 to 0 over 4000 steps.
+  exploration_config:
+    name: epsilon_greedy
+    schedule:
+      name: linear
+      init_value: 1.0
+      end_value: 0.0
+      transition_steps: 4000

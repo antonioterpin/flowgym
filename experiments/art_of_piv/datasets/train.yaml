@@ -1,0 +1,43 @@
+# Router training run, shared by every row: train on the train split,
+# validate on val.yaml, then score the best checkpoint on test.yaml.
+seed: 0
+batch_size: 16
+flow_fields_per_batch: 16
+include_images: true
+loop: true
+randomize: true
+buffer_size: 64
+# Decode files in 8 worker processes (h5py serializes reads within one).
+worker_count: 8
+episode_length: 0
+image_shape: [256, 256]
+min_speed_x: 0
+max_speed_x: 0
+min_speed_y: 0
+max_speed_y: 0
+output_units: "pixels"
+scheduler_class: ".mat"
+file_list:
+  - hf://activefluidcontrol/piv-class1@ccc784ebbe86f16121bdc51ccb20b4cdf6b6a150:train
+
+# Labels: the library's per-frame EPEs, precomputed and read-only. The
+# router sizes the entries to its library.
+caching:
+  root_dir: hf://activefluidcontrol/piv-class1-caches@7068a49525da1d8c1b7bdf4027a3c3a74da5d02a
+  cache_id: art_of_piv
+  read_only: true
+  warm_start: all
+
+# 5000 steps; keep the checkpoint with the best validation EPE.
+num_batches: 5000
+save_every: 500
+save_only_best: true
+log_every: 200
+validation:
+  interval: 500
+  num_batches: 80
+  dataset: experiments/art_of_piv/datasets/val.yaml
+# 30 batches of 15 = the 450 test frames.
+test:
+  num_batches: 30
+  dataset: experiments/art_of_piv/datasets/test.yaml

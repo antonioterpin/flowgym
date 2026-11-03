@@ -1,0 +1,11 @@
+# DIS B of appendix F, the water channel (-150 rpm, smaller displacements):
+# coarse-to-fine pyramid that skips the finest level.
+extends: experiments/art_of_piv/models/dis/base.yaml
+config:
+  preprocess: []
+  postprocess: []
+  patch_size: 13
+  patch_stride: 9
+  grad_desc_iters: 4
+  levels: 3
+  start_level: 1

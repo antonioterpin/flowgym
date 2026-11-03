@@ -14,6 +14,7 @@ import optax
 import orbax.checkpoint as ocp
 from flax.core import FrozenDict
 
+from flowgym.checkpointing import Checkpointer
 from flowgym.common.base.estimator import Estimator
 from flowgym.common.base.trainable_state import NNEstimatorTrainableState
 from flowgym.make import load_model, make_manager, save_model
@@ -401,3 +402,53 @@ def test_checkpoint_robust_optimizer_override(clean_tmp_path):
     # Verify it still works for a step
     grads = jax.tree_util.tree_map(jnp.ones_like, params)
     _ = restored.apply_gradients(grads=grads)
+
+
+def test_restore_best_loads_best_on_validation_params(clean_tmp_path):
+    """``restore_best`` returns the weights of the best-validation step."""
+
+    def state(w):
+        return NNEstimatorTrainableState.create(
+            apply_fn=simple_apply_fn,
+            params=FrozenDict({"w": jnp.array(w), "b": jnp.array(0.0)}),
+            tx=optax.sgd(0.1),
+            extras={},
+        )
+
+    with Checkpointer(clean_tmp_path, MockEstimator()) as ckpt:
+        for step, error in [(1, 0.5), (2, 0.2), (3, 0.4)]:
+            ckpt.on_validation(state(step), step, {"mean_error": error})
+            ckpt.save_periodic(state(step), step)
+        restored = ckpt.restore_best(state(0.0))
+
+    assert restored is not None
+    assert float(restored.params["w"]) == 2.0
+
+
+def test_load_model_from_step_dir_with_any_name(clean_tmp_path):
+    """A saved step loads from a directory not named after its step.
+
+    W&B checkpoint artifacts download one step's contents into a directory
+    named after the artifact (e.g. ``model-ckpt:v8``).
+    """
+    params = make_simple_params()
+    with make_manager(clean_tmp_path / "ckpts", keep=1) as mngr:
+        mngr.save(
+            0,
+            args=ocp.args.Composite(
+                state=ocp.args.PyTreeSave({"params": params})
+            ),
+        )
+        mngr.wait_until_finished()
+    artifact = clean_tmp_path / "model-ckpt:v8"
+    (clean_tmp_path / "ckpts" / "0").rename(artifact)
+    template = NNEstimatorTrainableState.create(
+        apply_fn=simple_apply_fn,
+        params=params,
+        tx=optax.sgd(learning_rate=0.1),
+        extras=None,
+    )
+
+    restored = load_model(artifact, template, mode="params_only")
+
+    assert_trees_allclose(restored.params, params)

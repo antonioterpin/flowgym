@@ -1,0 +1,7 @@
+# Greedy library of the first 3 DIS configs, for the learning-signal
+# ablation (appendix A.1). Each abl_n<K> library is a prefix of abl_n20.
+cache_id_base: piv-class1-dis
+estimators:
+  - experiments/art_of_piv/models/dis/ps9_st1_gd6_lv3.yaml
+  - experiments/art_of_piv/models/dis/ps7_st1_gd8_lv2.yaml
+  - experiments/art_of_piv/models/dis/ps17_st1_gd8_lv3.yaml

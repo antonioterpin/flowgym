@@ -1,0 +1,13 @@
+# Region-selection library of the water channel (appendix F): the same DIS
+# configuration on three 256 x 256 regions of the frame, labelled by the
+# actuation setting (0: +150,+150,+150 rpm, 1: +150,-150,+150, 2: -150,+150,+150).
+# For training only: the router is trained from cached labels, which never run
+# the members. Running it on frames needs the crop-aware inference adapter of
+# FlowGames (the router's shared history does not match the members' crops).
+# The cache id base is the one of the published label caches
+# (hf://datasets/activefluidcontrol/art-of-piv-water-channel, roi/).
+cache_id_base: pinball-roi-expert-labels
+estimators:
+  - experiments/art_of_piv/models/dis/water_channel_roi_0.yaml
+  - experiments/art_of_piv/models/dis/water_channel_roi_1.yaml
+  - experiments/art_of_piv/models/dis/water_channel_roi_2.yaml

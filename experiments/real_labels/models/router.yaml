@@ -1,0 +1,18 @@
+# Standard ART of PIV router on library.yaml. Its labels are the 0/1 costs
+# scripts/build_label_dataset.py stores in the epe column of each member's
+# cache. To feed the router a crop of the frames, add router_preprocess.
+extends: experiments/art_of_piv/models/router/standard.yaml
+config:
+  estimators_list_path: experiments/real_labels/library.yaml
+  # Every frame must hit the label caches: a computed error would be scored
+  # against the placeholder zero flow.
+  require_cached_labels: true
+  # Constant learning rate, as for the deployed water-channel router
+  # (paper appendix F.3).
+  optimizer_config:
+    hyperparams:
+      learning_rate: 0.001
+study:
+  name: real_labels
+  tags:
+    labels: best_member

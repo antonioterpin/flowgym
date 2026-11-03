@@ -16,6 +16,7 @@ from flowgym.common.preprocess import (
     background_suppression,
     clahe,
     crop_special,
+    gaussian_blur,
     high_pass_filter,
     intensity_capping,
     intensity_clipping,
@@ -58,6 +59,7 @@ all_pre = [
     (background_suppression, {"threshold": 1}),
     (background_suppression, {"threshold": 5}),
     (stretch_contrast, {}),
+    (stretch_contrast, {"scale": 255.0}),
     (intensity_capping, {"n": 2.0}),
     (intensity_capping, {"n": 1.0}),
     (intensity_capping, {"n": 3.0}),
@@ -69,6 +71,7 @@ all_pre = [
     (clahe, {"clip_limit": 0.1, "tile_grid_size": (2, 2), "nbins": 128}),
     (high_pass_filter, {"sigma": 1.0}),
     (high_pass_filter, {"sigma": 2.0, "truncate": 6.0}),
+    (gaussian_blur, {"sigma": 1.0}),
 ]
 
 bad_params = [
@@ -96,6 +99,7 @@ bad_params = [
     (clahe, {"clip_limit": -1.0, "tile_grid_size": (4, 4), "nbins": 0}),
     (high_pass_filter, {"sigma": "string_value"}),
     (high_pass_filter, {"sigma": 1.0, "truncate": -5}),
+    (gaussian_blur, {"sigma": 0}),
 ]
 
 
@@ -217,9 +221,7 @@ def test_preprocess_jit(B, H, time_limit, seed):
     # Instantiate the dummy estimator
     estimator = DummyEstimator.from_config(pre_processing_config)
     trainable_state = estimator.create_trainable_state(image, key)
-    create_state_fn, compute_estimate_fn = compile_model(
-        estimator, image, True
-    )
+    create_state_fn, compute_estimate_fn = compile_model(estimator, image, True)
     # Warm up
     state = create_state_fn(image, key)
     state, _ = compute_estimate_fn(image, state, trainable_state)

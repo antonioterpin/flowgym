@@ -7,16 +7,16 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
+import os
+import statistics
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
-from flowgym.experiments import (
-    validate_model_study,
-    validate_scalar_tags,
-)
-from flowgym.utils import dump_yaml, load_configuration
+from flowgym.experiments import update_readme_results, validate_model_study
+from flowgym.utils import deep_merge, dump_yaml, load_configuration
 
 DEFAULT_PROJECT = "flowgym"
 
@@ -29,7 +29,11 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 
 
 def parse_args() -> argparse.Namespace:
-    """Parse command-line arguments for the experiment launcher."""
+    """Parse command-line arguments for the experiment launcher.
+
+    Returns:
+        The parsed arguments.
+    """
     p = argparse.ArgumentParser()
     p.add_argument("--exp", required=True)
     p.add_argument("--exp-root", default="experiments")
@@ -38,158 +42,134 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Enable debug mode in the underlying main.py runs.",
     )
+    p.add_argument(
+        "--models",
+        nargs="+",
+        help="Run only these entries of exp.yaml's models list.",
+    )
     return p.parse_args()
 
 
 def main() -> None:
-    """Expand the experiment matrix and shell out to the entrypoint per cell."""
+    """Run every model of the experiment once per seed, then collect results.
+
+    Raises:
+        ValueError: If ``exp.yaml`` or a model config is malformed.
+        FileNotFoundError: If the entrypoint is missing.
+    """
     args = parse_args()
     exp_dir = (Path(args.exp_root) / args.exp).resolve()
-    spec_path = exp_dir / "exp.yaml"
-    spec = _load_yaml(spec_path)
-
+    spec = _load_yaml(exp_dir / "exp.yaml")
     project = spec.get("project", DEFAULT_PROJECT)
-    mode = spec["mode"]
     seeds = [int(seed) for seed in spec.get("seeds", [0])]
-
-    if not isinstance(project, str) or not project:
-        raise ValueError("exp.yaml: project must be a non-empty string.")
-    if not isinstance(mode, str) or not mode:
-        raise ValueError("exp.yaml: mode must be a non-empty string.")
-
-    if "dataset" in spec and "datasets" in spec:
-        raise ValueError(
-            "exp.yaml: Cannot specify both 'dataset' and 'datasets'."
-        )
-    if "dataset" in spec:
-        dataset_specs = [spec["dataset"]]
-    elif "datasets" in spec:
-        dataset_specs = spec["datasets"]
-    else:
-        dataset_specs = None
-
-    dataset_infos: list[tuple[Path, dict[str, Any]]] = []
-    if dataset_specs is not None:
-        for ds_spec in dataset_specs:
-            if isinstance(ds_spec, str):
-                ds_path = (exp_dir / ds_spec).resolve()
-                ds_tags: dict[str, Any] = {}
-            elif isinstance(ds_spec, dict):
-                if "path" not in ds_spec:
-                    raise ValueError("Dataset dict must contain 'path' field.")
-                ds_path = (exp_dir / ds_spec["path"]).resolve()
-                raw_tags = ds_spec.get("tags", {})
-                ds_tags = (
-                    validate_scalar_tags(raw_tags, "dataset.tags")
-                    if raw_tags
-                    else {}
-                )
-            else:
-                raise ValueError(
-                    "Dataset must be a string path or dict with 'path'."
-                )
-
-            if not ds_path.exists():
-                raise FileNotFoundError(ds_path)
-            dataset_infos.append((ds_path, ds_tags))
-
-    base_datasets = {
-        idx: _load_yaml(ds_path)
-        for idx, (ds_path, _) in enumerate(dataset_infos)
-    }
-    dataset_tags = {idx: tags for idx, (_, tags) in enumerate(dataset_infos)}
-
-    model_rel_paths = [Path(path) for path in spec["models"]]
-    model_paths = [(exp_dir / path).resolve() for path in model_rel_paths]
-    for model_path in model_paths:
-        if not model_path.exists():
-            raise FileNotFoundError(model_path)
-
-    generated_dir = exp_dir / "_generated"
-    generated_models = generated_dir / "models"
-    generated_datasets = generated_dir / "datasets"
-
-    patched_models: list[tuple[Path, Path]] = []
-    model_dataset_overrides: dict[Path, str] = {}
-    for model_rel_path, model_path in zip(
-        model_rel_paths, model_paths, strict=True
-    ):
-        model_cfg = _load_yaml(model_path)
-        validate_model_study(model_cfg, args.exp)
-        model_cfg["project"] = project
-
-        if "dataset" in model_cfg:
-            model_dataset_overrides[model_rel_path] = model_cfg.pop("dataset")
-
-        out_model_path = generated_models / model_rel_path
-        dump_yaml(out_model_path, model_cfg)
-        patched_models.append((out_model_path, model_rel_path))
-
-    per_seed_datasets: dict[int, dict[int, Path]] = {}
-    if dataset_infos:
-        for seed in seeds:
-            per_seed_datasets[seed] = {}
-            for ds_idx in range(len(dataset_infos)):
-                dataset_cfg = dict(base_datasets[ds_idx])
-                dataset_cfg["seed"] = seed
-                if dataset_tags[ds_idx]:
-                    dataset_cfg["tags"] = dataset_tags[ds_idx]
-                out_dataset_path = (
-                    generated_datasets / f"dataset{ds_idx}_seed{seed}.yaml"
-                )
-                dump_yaml(out_dataset_path, dataset_cfg)
-                per_seed_datasets[seed][ds_idx] = out_dataset_path
-
-    entry = spec.get("entrypoint", "src/main.py")
-    entry_path = Path.cwd() / entry
+    metrics = list(spec.get("metrics", ["mean_epe"]))
+    selected = args.models or spec["models"]
+    unknown = sorted(set(selected) - set(spec["models"]))
+    if unknown:
+        raise ValueError(f"--models not in exp.yaml: {unknown}")
+    entry_path = Path.cwd() / spec.get("entrypoint", "src/main.py")
     if not entry_path.exists():
         raise FileNotFoundError(f"Entrypoint not found at {entry_path}")
+    generated_dir = exp_dir / "_generated"
+    # Runs are separate processes: let them reuse compiled XLA programs
+    os.environ.setdefault(
+        "JAX_COMPILATION_CACHE_DIR", str(Path.home() / ".cache/flowgym/jax")
+    )
+    os.environ.setdefault("JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS", "0")
 
-    commands: list[list[str]] = []
+    # Per model: its mode and config, and its dataset (path from the
+    # repository root) with any overrides
+    models: list[tuple[str, str, Path, dict[str, Any], dict[str, Any]]] = []
+    for model in spec["models"]:
+        model_cfg = _load_yaml(exp_dir / model)
+        validate_model_study(model_cfg, args.exp)
+        model_cfg["project"] = project
+        model_mode = model_cfg.pop("mode", spec["mode"])
+        dataset = model_cfg.pop("dataset", spec.get("dataset"))
+        if dataset is None:
+            raise ValueError(
+                f"{model} sets no dataset and exp.yaml has no default."
+            )
+        dataset_cfg = deep_merge(
+            _load_yaml(Path(dataset)),
+            model_cfg.pop("dataset_overrides", {}),
+        )
+        model_path = generated_dir / "models" / model
+        if model in selected:
+            dump_yaml(model_path, model_cfg)
+        models.append((model, model_mode, model_path, model_cfg, dataset_cfg))
+
+    def summary_path(model: str, seed: int) -> Path:
+        return generated_dir / "summaries" / model / f"seed{seed}.json"
+
+    def dataset_path(model: str, seed: int) -> Path:
+        return generated_dir / "datasets" / model / f"seed{seed}.yaml"
+
+    results_path = exp_dir / "results.json"
+    results_path.unlink(missing_ok=True)
     for seed in seeds:
-        for model_path, model_rel_path in patched_models:
-            if model_rel_path in model_dataset_overrides:
-                override_path = (
-                    exp_dir / model_dataset_overrides[model_rel_path]
-                ).resolve()
-                override_dataset = dict(_load_yaml(override_path))
-                override_dataset["seed"] = seed
-                out_dataset_path = (
-                    generated_datasets
-                    / model_rel_path.parent
-                    / f"{model_rel_path.stem}_seed{seed}.yaml"
-                )
-                dump_yaml(out_dataset_path, override_dataset)
-                datasets_to_use = [out_dataset_path]
-            elif dataset_infos:
-                datasets_to_use = [
-                    per_seed_datasets[seed][idx]
-                    for idx in range(len(dataset_infos))
-                ]
-            else:
-                raise ValueError(
-                    f"Model {model_rel_path} does not specify a "
-                    "'dataset' field, "
-                    "and exp.yaml does not provide a default dataset."
-                )
+        for model, model_mode, model_path, _, dataset_cfg in models:
+            if model not in selected:
+                continue
+            dump_yaml(dataset_path(model, seed), {**dataset_cfg, "seed": seed})
+            summary = summary_path(model, seed)
+            summary.parent.mkdir(parents=True, exist_ok=True)
+            summary.unlink(missing_ok=True)
+            cmd = [
+                sys.executable,
+                str(entry_path),
+                "--mode",
+                model_mode,
+                "--estimator",
+                str(model_path),
+                "--dataset",
+                str(dataset_path(model, seed)),
+                "--summary-out",
+                str(summary),
+            ]
+            if args.debug:
+                cmd.append("--debug")
+            subprocess.check_call(cmd)
 
-            for dataset_path in datasets_to_use:
-                cmd = [
-                    sys.executable,
-                    str(entry_path),
-                    "--mode",
-                    mode,
-                    "--estimator",
-                    str(model_path),
-                    "--dataset",
-                    str(dataset_path),
-                ]
-                if args.debug:
-                    cmd.append("--debug")
-                commands.append(cmd)
-
-    for command in commands:
-        subprocess.check_call(command)
+    # Mean and population std over seeds of each listed metric, for every
+    # model with all its summaries (also those run by another launcher)
+    results: dict[str, dict[str, Any]] = {}
+    for model, _, model_path, model_cfg, dataset_cfg in models:
+        missing = [s for s in seeds if not summary_path(model, s).exists()]
+        if missing:
+            # e.g. a train-supervised run without a ``test:`` block
+            print(f"run.py: no summary for {model} seeds {missing}; skipped.")
+            continue
+        # Summaries this launcher did not write must come from the same
+        # configs, not from an earlier version of the experiment
+        stale = model not in selected and (
+            _load_yaml(model_path) != model_cfg
+            or any(
+                _load_yaml(dataset_path(model, s)) != {**dataset_cfg, "seed": s}
+                for s in seeds
+            )
+        )
+        if stale:
+            print(f"run.py: summaries for {model} are stale; skipped.")
+            continue
+        summaries = {
+            str(s): json.loads(summary_path(model, s).read_text())
+            for s in seeds
+        }
+        results[model] = {}
+        for metric in metrics:
+            values = {
+                s: summary.get(metric) for s, summary in summaries.items()
+            }
+            if all(isinstance(v, int | float) for v in values.values()):
+                results[model][metric] = {
+                    "mean": statistics.mean(values.values()),
+                    "std": statistics.pstdev(values.values()),
+                    "seeds": values,
+                }
+    if results:
+        results_path.write_text(json.dumps(results, indent=2) + "\n")
+        update_readme_results(exp_dir / "README.md")
 
 
 if __name__ == "__main__":

@@ -1,7 +1,9 @@
 """Training and evaluation script for the different estimators."""
 
 import argparse
+import shutil
 import time
+from pathlib import Path
 
 import goggles as gg
 import jax
@@ -87,6 +89,14 @@ def parse_args():
         "The estimator-specific suffix is still appended.",
     )
 
+    parser.add_argument(
+        "--summary-out",
+        type=str,
+        default=None,
+        help="Write the final summary to this JSON file: the eval summary "
+        "(mean EPE etc.) in eval mode, the test summary in train-supervised.",
+    )
+
     return parser.parse_args()
 
 
@@ -102,6 +112,7 @@ if __name__ == "__main__":
         estimator_config,
         out_dir,
         validation_settings,
+        test_settings,
         caching_config,
         wandb_setup,
     ) = prepare_configs(args)
@@ -123,7 +134,12 @@ if __name__ == "__main__":
     key = jax.random.PRNGKey(dataset_config["seed"])
     key, subkey = jax.random.split(key)
 
-    if args.mode not in ["train", "train-supervised"]:
+    # Only RL training ("train") uses the episodic FluidEnv. Supervised
+    # training and eval iterate a non-episodic sampler directly: PIV data is
+    # independent image pairs, not temporal episodes, so FluidEnv.reset()'s
+    # next_episode() call does not apply (and is unsupported by the .mat
+    # scheduler in current synthpix).
+    if args.mode != "train":
         # Load the dataset sampler
         sampler = synthpix.make(
             dataset_config, load_from=dataset_config.get("load_from")
@@ -145,8 +161,8 @@ if __name__ == "__main__":
             batch,
         )
     else:
-        # Create the environment for training
-        # The state of the environment is a tuple of (sampler, flow_gt)
+        # RL training ("train"): episodic environment whose state is a
+        # tuple of (sampler, flow_gt).
         env, env_state = FluidEnv.make(dataset_config=dataset_config)
 
         try:
@@ -198,6 +214,8 @@ if __name__ == "__main__":
     val_sampler = None
     val_interval = None
     val_num_batches = 1
+    test_sampler = None
+    test_num_batches = 1
     if (
         args.mode in ["train", "train-supervised"]
         and validation_settings is not None
@@ -209,6 +227,12 @@ if __name__ == "__main__":
             val_dataset_config, load_from=val_dataset_config.get("load_from")
         )
         logger.info("Validation sampler created successfully.")
+    if args.mode == "train-supervised" and test_settings is not None:
+        test_dataset_config = test_settings["dataset_config"]
+        test_num_batches = test_settings["num_batches"]
+        test_sampler = synthpix.make(
+            test_dataset_config, load_from=test_dataset_config.get("load_from")
+        )
 
     if args.mode == "eval":
         if create_state_fn is None or compute_estimate_fn is None:
@@ -224,6 +248,8 @@ if __name__ == "__main__":
                 "Initializing CacheManager from dataset config: "
                 f"{caching_config}"
             )
+            if "spec" not in caching_config:
+                caching_config["spec"] = estimator.cache_spec()
             # Append estimator-specific suffix to cache_id (e.g. weight hash)
             if "cache_id" in caching_config:
                 suffix = estimator.get_cache_id_suffix(trainable_state)
@@ -248,6 +274,7 @@ if __name__ == "__main__":
                 print_files=dataset_config.get("print_files", False),
                 num_batches=dataset_config.get("num_batches", None),
                 cache_manager=cache_manager,
+                summary_out=args.summary_out,
             )
         finally:
             sampler.shutdown()
@@ -344,6 +371,8 @@ if __name__ == "__main__":
                 "Initializing CacheManager from dataset config: "
                 f"{caching_config}"
             )
+            if "spec" not in caching_config:
+                caching_config["spec"] = estimator.cache_spec()
             # Append estimator-specific suffix to cache_id (e.g. weight hash)
             if "cache_id" in caching_config:
                 suffix = estimator.get_cache_id_suffix(trainable_state)
@@ -371,6 +400,8 @@ if __name__ == "__main__":
                 val_sampler=val_sampler,
                 val_interval=val_interval,
                 val_num_batches=val_num_batches,
+                test_sampler=test_sampler,
+                test_num_batches=test_num_batches,
                 num_batches=dataset_config.get("num_batches", 1000),
                 estimate_type=estimator_config["estimate_type"],
                 save_every=dataset_config.get("save_every", 100),
@@ -393,11 +424,20 @@ if __name__ == "__main__":
                     dataset_config.get("prefetch_replay_size", 0),
                 ),
                 cache_manager=cache_manager,
+                log_timing=dataset_config.get("log_timing", False),
+                photometric_augmentation=dataset_config.get(
+                    "photometric_augmentation"
+                ),
             )
+            test_summary = Path(out_dir, "test_summary.json")
+            if args.summary_out is not None and test_summary.exists():
+                shutil.copyfile(test_summary, args.summary_out)
         finally:
             sampler.shutdown()
             if val_sampler is not None:
                 val_sampler.shutdown()
+            if test_sampler is not None:
+                test_sampler.shutdown()
             if cache_manager is not None:
                 cache_manager.close()
             time.sleep(5)  # wait for the sampler to shutdown properly

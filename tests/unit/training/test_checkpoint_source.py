@@ -11,6 +11,7 @@ import pytest
 from flowgym.checkpoint_source import (
     WANDB_URI_PREFIX,
     is_wandb_uri,
+    parse_hf_uri,
     parse_wandb_uri,
     resolve_checkpoint_source,
 )
@@ -288,3 +289,109 @@ def test_resolve_wandb_uri_rejects_absolute_subpath(
         resolve_checkpoint_source(
             "wandb://entity/project/name:alias//etc/passwd"
         )
+
+
+def test_resolve_wandb_uri_rejects_symlink_escaping_download_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A symlink in the artifact pointing outside the root is rejected."""
+    download_root = tmp_path / "download"
+    download_root.mkdir()
+    (tmp_path / "outside").mkdir()
+    (download_root / "link").symlink_to(tmp_path / "outside")
+
+    _install_fake_wandb(monkeypatch, download_root, active_run=True)
+
+    with pytest.raises(ValueError, match="escapes the artifact download root"):
+        resolve_checkpoint_source("wandb://entity/project/name:alias/link")
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# hf:// sources
+# ──────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "uri, expected",
+    [
+        ("hf://org/repo", ("org/repo", None, "")),
+        ("hf://org/repo@abc", ("org/repo", "abc", "")),
+        (
+            "hf://org/repo@abc/raft32/cylinder",
+            ("org/repo", "abc", "raft32/cylinder"),
+        ),
+        ("hf://org/repo/raft32/", ("org/repo", None, "raft32")),
+    ],
+)
+def test_parse_hf_uri(uri: str, expected: tuple[str, str | None, str]) -> None:
+    """``hf://org/repo[@rev][/subpath]`` splits into id, revision, subpath."""
+    assert parse_hf_uri(uri) == expected
+
+
+@pytest.mark.parametrize(
+    "uri",
+    [
+        "hf://",
+        "hf://org",
+        "hf://org/@rev",
+        "wandb://a/b",
+        "hf://org/repo//model.pt",
+        "hf://org/repo@abc//etc/passwd",
+    ],
+)
+def test_parse_hf_uri_rejects_malformed(uri: str) -> None:
+    """A missing org or repo, another scheme or a leading '/' is an error."""
+    with pytest.raises(ValueError):
+        parse_hf_uri(uri)
+
+
+def test_resolve_hf_uri_downloads_subpath(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only the subpath is requested from the Hub and returned locally."""
+    (tmp_path / "raft32" / "cylinder").mkdir(parents=True)
+    calls: dict[str, Any] = {}
+
+    def _snapshot_download(repo_id: str, **kwargs: Any) -> str:
+        calls.update(repo_id=repo_id, **kwargs)
+        return str(tmp_path)
+
+    fake_hub = MagicMock(snapshot_download=_snapshot_download)
+    monkeypatch.setitem(__import__("sys").modules, "huggingface_hub", fake_hub)
+
+    out = resolve_checkpoint_source("hf://org/repo@abc/raft32/cylinder")
+
+    assert out == (tmp_path / "raft32" / "cylinder").resolve()
+    assert calls["repo_id"] == "org/repo"
+    assert calls["revision"] == "abc"
+    assert "raft32/cylinder/*" in calls["allow_patterns"]
+
+
+def test_resolve_hf_uri_accepts_hub_cache_symlinks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A file symlinked into the Hub cache's ``blobs/`` is a valid target."""
+    blobs = tmp_path / "blobs"
+    snapshot = tmp_path / "snapshots" / "abc"
+    blobs.mkdir()
+    snapshot.mkdir(parents=True)
+    (blobs / "deadbeef").write_bytes(b"weights")
+    (snapshot / "model.pt").symlink_to(blobs / "deadbeef")
+    fake_hub = MagicMock(snapshot_download=lambda *a, **k: str(snapshot))
+    monkeypatch.setitem(__import__("sys").modules, "huggingface_hub", fake_hub)
+
+    out = resolve_checkpoint_source("hf://org/repo@abc/model.pt")
+
+    assert out.read_bytes() == b"weights"
+
+
+def test_resolve_hf_uri_rejects_escaping_subpath(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A ``..`` subpath may not leave the download root."""
+    root = tmp_path / "root"
+    root.mkdir()
+    fake_hub = MagicMock(snapshot_download=lambda *a, **k: str(root))
+    monkeypatch.setitem(__import__("sys").modules, "huggingface_hub", fake_hub)
+    with pytest.raises(ValueError, match="escapes"):
+        resolve_checkpoint_source("hf://org/repo/../outside")

@@ -1,0 +1,10 @@
+# Bandit router, exploration epsilon starting at 0.02 and decaying linearly to
+# 0 over 4000 steps.
+extends: experiments/art_of_piv/appendix/A.2_signal_parameters/models/bandit.yaml
+study:
+  tags:
+    epsilon: 0.02
+config:
+  exploration_config:
+    schedule:
+      init_value: 0.02

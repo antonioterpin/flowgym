@@ -1,0 +1,10 @@
+# Regression variant of the standard router: per frame, predict each library
+# member's error and pick the lowest. Used by the learning-signal ablation.
+extends: experiments/art_of_piv/models/router/standard.yaml
+config:
+  # Huber loss on the log of every member's cached EPE.
+  training_mode: regression
+  loss_config:
+    name: huber
+  target_transform_config:
+    name: log

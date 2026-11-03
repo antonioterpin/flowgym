@@ -319,3 +319,19 @@ def test_cache_manager_enrich():
             payload3.extras["values"], [[0.1, 0.1], [0.3, 0.3]]
         )
         assert estimator.enrich.call_count == 1
+
+
+def test_cache_manager_resolves_hf_root(tmp_path, monkeypatch):
+    """An ``hf://`` root_dir is pulled through synthpix's resolver."""
+    from synthpix.data_sources import hf_resolver
+
+    monkeypatch.setattr(
+        hf_resolver, "resolve_to_directory", lambda spec: tmp_path
+    )
+    cm = CacheManager(
+        root_dir="hf://owner/caches@rev",
+        cache_id="sub*",
+        spec={"values": (np.float32, (2,))},
+        warm_start="none",
+    )
+    assert cm.root_dir == tmp_path

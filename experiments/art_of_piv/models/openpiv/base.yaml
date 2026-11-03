@@ -1,0 +1,9 @@
+# Settings shared by every OpenPIV model; each model file extends this one
+# and sets its window, overlap, search size, passes, correlation, subpixel
+# method and (optionally) signal-to-noise threshold.
+estimator: openpiv_jax
+estimate_type: flow
+config:
+  jit: true
+  openpiv_outlier_replacement_kernel_size: 3
+  openpiv_outlier_replacement_n_iter: 10

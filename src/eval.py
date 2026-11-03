@@ -1,12 +1,17 @@
 """Evaluation script for the different estimators."""
 
 import contextlib
+import json
+import math
 import time
 from collections.abc import Callable
+from dataclasses import replace
+from pathlib import Path
 
 import jax
 import jax.numpy as jnp
 import numpy as np
+import numpy.typing as npt
 
 # Utils
 from goggles import Metrics, get_logger
@@ -27,6 +32,30 @@ from flowgym.types import (
 from flowgym.utils import block_until_ready_dict
 
 logger = get_logger(__name__, with_metrics=True)
+
+
+def _disable_exploration(
+    cache_payload: CachePayload | None,
+) -> CachePayload:
+    """Return a payload with ``is_training=False`` for evaluation paths.
+
+    Hoisted above the ``has_precomputed_errors`` short-circuit so the invariant
+    "any payload leaving an eval entry point has ``is_training=False``" holds
+    unconditionally -- if a future change ever makes the short-circuit fall
+    through to the estimator, we will not silently regress to training-time
+    exploration.
+
+    Args:
+        cache_payload: Optional incoming payload from the caller.
+
+    Returns:
+        A ``CachePayload`` with ``is_training=False``; either rebuilt from
+        ``cache_payload`` (preserving its other fields) or a fresh one when
+        the caller did not supply a payload.
+    """
+    if cache_payload is None:
+        return CachePayload(is_training=False)
+    return replace(cache_payload, is_training=False)
 
 
 def eval_flow(
@@ -59,6 +88,10 @@ def eval_flow(
     img1 = batch.images1
     img2 = batch.images2
     flow_field_gt = batch.flow_fields
+
+    # Normalize so any payload leaving eval has is_training=False; estimators
+    # (e.g. the ArtOfPIV router) branch on this to disable exploration noise.
+    cache_payload = _disable_exploration(cache_payload)
 
     # Create the estimation state
     estimation_state = create_state_fn(img1, key)
@@ -143,6 +176,10 @@ def eval_density(
     if batch.params is None:
         raise ValueError("Batch params cannot be None for density evaluation.")
     density_gt = batch.params.seeding_densities
+
+    # Normalize so any payload leaving eval has is_training=False; estimators
+    # (e.g. the ArtOfPIV router) branch on this to disable exploration noise.
+    cache_payload = _disable_exploration(cache_payload)
 
     # Create the estimation state
     estimation_state = create_state_fn(img1, key)
@@ -254,7 +291,7 @@ def evaluate_batches(
     trainable_state: EstimatorTrainableState,
     estimate_type: str = "flow",
     key: PRNGKey | None = None,
-    num_batches: int = 1,
+    num_batches: int | None = 1,
     reset_sampler: bool = True,
     cache_manager: CacheManager | None = None,
 ) -> Metrics:
@@ -270,6 +307,7 @@ def evaluate_batches(
         estimate_type: Either "flow" or "density".
         key: PRNGKey used for estimator initialization.
         num_batches: Number of batches to evaluate. Must be positive.
+            ``None`` evaluates until the sampler is exhausted.
         reset_sampler: Whether to reset the sampler before evaluation.
         cache_manager: Optional CacheManager for read-through caching.
 
@@ -283,13 +321,14 @@ def evaluate_batches(
     if key is None:
         key = jax.random.PRNGKey(0)
 
-    if num_batches <= 0:
+    if num_batches is not None and num_batches <= 0:
         raise ValueError("num_batches must be a positive integer.")
 
     if reset_sampler and hasattr(sampler, "reset"):
         sampler.reset()
 
     errors_list: list[float] = []
+    files_list: list[str] = []
     aggregated_metrics: dict[str, list[float]] = {}
     batches_processed = 0
     eval_key = key
@@ -325,6 +364,7 @@ def evaluate_batches(
         if errors.ndim == 0:
             errors = errors[None]
         errors_list.extend(errors.tolist())
+        files_list.extend(_frame_files(batch))
 
         for metric_name, value in metrics.items():
             if metric_name == "errors":
@@ -346,7 +386,7 @@ def evaluate_batches(
             aggregated_metrics.setdefault(metric_name, []).extend(metric_values)
 
         batches_processed += 1
-        if batches_processed >= num_batches:
+        if num_batches is not None and batches_processed >= num_batches:
             break
 
     if batches_processed == 0:
@@ -390,7 +430,118 @@ def evaluate_batches(
     # Allow estimator to add derived metrics to the summary
     processed = estimator.process_metrics(dict(summary))
     summary.update(processed)
+    # After the hook, which may turn every value into an array
+    summary["files"] = files_list
     return dict(summary)
+
+
+def metrics_summary(values: npt.ArrayLike, name: str) -> dict[str, float]:
+    """Mean, spread, tail quantiles and extremes of a per-frame metric.
+
+    Args:
+        values: The metric of each frame.
+        name: Metric name used in the keys, e.g. ``"epe"``.
+
+    Returns:
+        ``mean_<name>``, ``std_<name>``, ``median_<name>``, ``p90_<name>``,
+        ``p95_<name>``, ``p99_<name>``, ``max_<name>`` and ``min_<name>``.
+    """
+    values = np.asarray(values, dtype=np.float32)
+    return {
+        f"mean_{name}": float(values.mean()),
+        f"std_{name}": float(values.std()),
+        f"median_{name}": float(np.median(values)),
+        f"p90_{name}": float(np.percentile(values, 90)),
+        f"p95_{name}": float(np.percentile(values, 95)),
+        f"p99_{name}": float(np.percentile(values, 99)),
+        f"max_{name}": float(values.max()),
+        f"min_{name}": float(values.min()),
+    }
+
+
+def write_summary(
+    path: str | Path,
+    summary: dict[str, float],
+    *,
+    files: list[str],
+    errors: npt.ArrayLike,
+) -> None:
+    """Write a summary as JSON, with each frame's EPE under ``frames``.
+
+    Args:
+        path: Output JSON path.
+        summary: Scalar metrics; NaN/inf (not valid JSON) are written as null.
+        files: File name of each frame; ``frames`` is omitted when these do
+            not match ``errors`` (e.g. synthetic data has no files).
+        errors: EPE of each frame.
+    """
+    out: dict = {k: v if math.isfinite(v) else None for k, v in summary.items()}
+    errors = np.asarray(errors, dtype=np.float32).reshape(-1)
+    if files and len(files) == errors.size:
+        out["frames"] = {
+            "file": files,
+            "epe": [e if math.isfinite(e) else None for e in errors.tolist()],
+        }
+    Path(path).write_text(json.dumps(out, indent=2))
+
+
+def _frame_files(batch: SynthpixBatch) -> list[str]:
+    """File names of a batch's real (unpadded) frames.
+
+    Args:
+        batch: The evaluated batch.
+
+    Returns:
+        The base names, or ``[]`` if the batch has no files.
+    """
+    files = getattr(batch, "files", None)
+    if files is None:
+        return []
+    if batch.mask is not None:
+        files = [
+            f for f, m in zip(files, np.asarray(batch.mask), strict=True) if m
+        ]
+    return [Path(f).name for f in files]
+
+
+def scalar_metrics(metrics: Metrics) -> dict[str, float]:
+    """Scalar entries of evaluation metrics (per-sample ``errors`` dropped).
+
+    Args:
+        metrics: Metrics returned by ``evaluate_batches``.
+
+    Returns:
+        Metric name to float.
+    """
+    return {
+        name: float(value)
+        for name, value in metrics.items()
+        if name != "errors"
+        and isinstance(value, (int, float, np.generic, np.ndarray, jax.Array))
+        and np.ndim(value) == 0
+    }
+
+
+def log_eval_metrics(
+    metrics: Metrics, *, prefix: str, step: int, title: str
+) -> None:
+    """Log scalar metrics under ``<prefix>/`` and as one info line.
+
+    Args:
+        metrics: Metrics returned by ``evaluate_batches``.
+        prefix: Metric namespace (e.g. ``val`` or ``test``).
+        step: Step to log the metrics at.
+        title: Start of the info line (e.g. ``Validation after batch 10``).
+    """
+    scalars = scalar_metrics(metrics)
+    for name, value in scalars.items():
+        logger.scalar(f"{prefix}/{name}", value, step=step)
+    shown = ", ".join(
+        f"{name}={value:.5f}"
+        for name, value in scalars.items()
+        if name not in ("num_batches", "num_samples")
+    )
+    logger.info(f"{title}: {shown}")
 
 
 def eval_full_dataset(
@@ -405,6 +556,7 @@ def eval_full_dataset(
     print_files: bool = False,
     num_batches: int | None = None,
     cache_manager: CacheManager | None = None,
+    summary_out: str | Path | None = None,
 ) -> None:
     """Run the full evaluation of the estimator.
 
@@ -420,6 +572,8 @@ def eval_full_dataset(
         print_files: Whether to print the files being evaluated.
         num_batches: Number of batches to evaluate. Must be positive.
         cache_manager: Optional CacheManager for read-through caching.
+        summary_out: Optional JSON path for the final flow summary
+            (mean/max/min EPE and relative error).
 
     Raises:
         RuntimeError: If evaluation sampler yields no batches.
@@ -434,6 +588,7 @@ def eval_full_dataset(
             # if it's not None, since it may be optional.
             stack.enter_context(cache_manager)
         errors_list = []
+        files_list: list[str] = []
         relative_errors_list = []
         if key is None:
             key = jax.random.PRNGKey(0)
@@ -528,6 +683,7 @@ def eval_full_dataset(
                 if errors.ndim == 0:
                     errors = jnp.expand_dims(errors, axis=0)
                 errors_list.extend(list(errors))
+                files_list.extend(_frame_files(batch))
 
             if "relative_errors" in metrics:
                 relative_errors = jnp.asarray(metrics["relative_errors"])
@@ -602,16 +758,17 @@ def eval_full_dataset(
                 f"Min Relative EPE over {batches_processed} batches: "
                 f"{min_relative_errors:.5f}"
             )
-            estimator.record_eval_summary(
-                {
-                    "mean_epe": float(mean_errors),
-                    "max_epe": float(max_errors),
-                    "min_epe": float(min_errors),
-                    "mean_relative_error": float(mean_relative_errors),
-                    "max_relative_error": float(max_relative_errors),
-                    "min_relative_error": float(min_relative_errors),
-                }
-            )
+            summary = metrics_summary(errors_array, "epe")
+            # Cached evals may report errors without relative errors
+            if relative_errors_array.size > 0:
+                summary["mean_relative_error"] = float(mean_relative_errors)
+                summary["max_relative_error"] = float(max_relative_errors)
+                summary["min_relative_error"] = float(min_relative_errors)
+            estimator.record_eval_summary(summary)
+            if summary_out is not None:
+                write_summary(
+                    summary_out, summary, files=files_list, errors=errors_array
+                )
         else:
             logger.info(
                 f"Mean Density Error over {batches_processed} batches: "

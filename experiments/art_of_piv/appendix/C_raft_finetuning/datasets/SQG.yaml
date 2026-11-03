@@ -1,0 +1,12 @@
+# Fine-tuning on the SQG class (datasets/finetune.yaml), validated on its
+# val split and scored on its test split.
+extends: experiments/art_of_piv/appendix/C_raft_finetuning/datasets/finetune.yaml
+file_list:
+  - hf://activefluidcontrol/piv-class1@ccc784ebbe86f16121bdc51ccb20b4cdf6b6a150:train/SQG
+validation:
+  dataset:
+    file_list:
+      - hf://activefluidcontrol/piv-class1@ccc784ebbe86f16121bdc51ccb20b4cdf6b6a150:val/SQG
+test:
+  num_batches: 15
+  dataset: experiments/art_of_piv/appendix/C_raft_finetuning/datasets/test/SQG.yaml

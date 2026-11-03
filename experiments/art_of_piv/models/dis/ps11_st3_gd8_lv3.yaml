@@ -1,0 +1,4 @@
+# In the dis_1khz library; also the row's best single estimator
+# (table_1/models/best_single_dis_1khz.yaml).
+extends: experiments/art_of_piv/models/dis/base.yaml
+config: {patch_size: 11, patch_stride: 3, grad_desc_iters: 8, levels: 3}

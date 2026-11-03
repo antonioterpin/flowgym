@@ -1,0 +1,17 @@
+# uv run python experiments/run.py --exp art_of_piv/table_1
+project: Art_of_PIV
+mode: train-supervised
+dataset: experiments/art_of_piv/datasets/train.yaml
+models:
+  - models/router_dis_20hz.yaml
+  - models/best_single_dis_20hz.yaml
+  - models/router_dis_1khz.yaml
+  - models/best_single_dis_1khz.yaml
+  - models/router_openpiv_1khz.yaml
+  - models/router_openpiv_4khz.yaml
+  - models/best_single_openpiv.yaml
+  - models/router_raft32.yaml
+  - models/best_single_raft32.yaml
+seeds: [0, 1, 2]
+metrics: [mean_epe, std_epe, median_epe, p90_epe, p95_epe, p99_epe, max_epe]
+entrypoint: src/main.py

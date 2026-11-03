@@ -1,0 +1,8 @@
+# Best single estimator of the dis_20hz row, run on its own on the test split.
+extends: experiments/art_of_piv/models/dis/ps9_st2_gd4_lv3.yaml
+mode: eval
+dataset: experiments/art_of_piv/datasets/test.yaml
+study:
+  name: art_of_piv/table_1
+  tags:
+    model: dis_ps9_st2_gd4_lv3

@@ -1,0 +1,7 @@
+# Test split of data/real_labels (rows with split "test"), each pair once.
+extends: experiments/real_labels/datasets/val.yaml
+batch_size: 1
+flow_fields_per_batch: 1
+loop: false
+file_list:
+  - data/real_labels/test

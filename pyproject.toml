@@ -28,7 +28,7 @@ dependencies = [
     "jax>=0.6.0",
     "flax>=0.12.7",
     "ipywidgets",
-    "robo-goggles>=0.2.0",
+    "robo-goggles>=0.3.7",
     "pip>=26.1",
     "scipy>=1.11.0",
 ]
@@ -50,7 +50,7 @@ dev = [
     # >=0.3.1: KinematicDataSource gains scale_mode: "peak" (default), the
     # paper-faithful per-field peak-displacement normalisation used by
     # train_kinematic.yaml (replaces the earlier linear-scale calibration).
-    "synthpix>=0.3.1",
+    "synthpix>=0.4.0",
     "pre-commit==4.0.1",
     "snowballstemmer",
     "pytest==7.4.4",
@@ -66,7 +66,7 @@ dev = [
 ]
 
 synthpix-cuda12 = [
-    "synthpix[cuda12]>=0.3.1",
+    "synthpix[cuda12]>=0.4.0",
 ]
 
 dev-cuda12 = [
@@ -92,6 +92,10 @@ other_methods = [
 
 wandb = [
     "robo-goggles[wandb]",
+]
+
+hf = [
+    "synthpix[hf]>=0.4.0",
 ]
 
 cuda12 = [
@@ -131,7 +135,6 @@ filterwarnings = [
 # Ruff configuration for linting and modern typing enforcement
 [tool.ruff]
 line-length = 80
-target-version = "py310"
 extend-exclude = [
     "src/flowgym/nn/raft_torch_nn/",
     "src/flowgym/flow/raft/raft_piv_pytorch.py",
@@ -184,7 +187,6 @@ skip-checking-raises = false
 # reads this configuration
 [tool.pyright]
 typeCheckingMode = "basic"
-pythonVersion = "3.10"
 include = ["src", "tests", "examples"]
 exclude = [
     "tests",

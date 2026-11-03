@@ -1,0 +1,4 @@
+# The OpenPIV rows' best single estimator alone (appendix A.3, scored on val).
+cache_id_base: piv-class1-openpiv
+estimators:
+  - experiments/art_of_piv/models/openpiv/ws16_ss16_np3_circ_para_s2n.yaml

@@ -121,6 +121,11 @@ caching:
   warm_start: index
 ```
 
+Flow estimators also return `corr16_peak`, a ground-truth-free score of the
+estimate (lower is better, see `flowgym.flow.quality`). On real images,
+which have no ground truth, it is the only field available, so their
+spec is just `corr16_peak: [float32, []]`.
+
 Then point `--cache-root` (and optionally `--cache-id`) at the output. These
 flags supply the cache location, so the same dataset config can fill many
 caches without edits:
@@ -172,3 +177,8 @@ device-independent error).
 - [Flow evaluation](flow-eval.md)
 - [Evaluation and caching API](../api/evaluation.md)
 - [Configuration and data flow](../user-guide/configuration-and-data.md)
+
+## Estimator lifetime
+
+Each estimator owns its compiled scoring function: keep one alive to reuse it
+across batches, and discard it to release it without `jax.clear_caches()`.

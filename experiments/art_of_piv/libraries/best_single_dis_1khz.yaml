@@ -1,0 +1,4 @@
+# The dis_1khz row's best single estimator alone (appendix A.3, scored on val).
+cache_id_base: piv-class1-dis
+estimators:
+  - experiments/art_of_piv/models/dis/ps11_st3_gd8_lv3.yaml

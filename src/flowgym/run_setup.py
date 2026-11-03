@@ -6,6 +6,7 @@ import argparse
 import copy
 import os
 import shutil
+from datetime import datetime
 from pathlib import Path
 
 import goggles as gg
@@ -68,6 +69,7 @@ def prepare_configs(
     str | None,
     dict | None,
     dict | None,
+    dict | None,
     dict,
 ]:
     """Prepare dataset and estimator configurations from CLI arguments.
@@ -83,6 +85,7 @@ def prepare_configs(
             - Estimator configuration dictionary.
             - Output directory path if in training mode, else None.
             - Validation settings dictionary, if validation is enabled.
+            - Test settings dictionary, if a test split is configured.
             - Caching configuration dictionary, if caching is enabled.
             - W&B setup dictionary.
 
@@ -93,6 +96,7 @@ def prepare_configs(
     dataset_config = load_configuration(args.dataset)
     dataset_config2 = None
     validation_settings = None
+    test_settings = None
     caching_config = None
     dataset_tags = None
 
@@ -110,31 +114,9 @@ def prepare_configs(
 
     validation_spec = dataset_config.pop("validation", None)
     if validation_spec is not None:
-        if not isinstance(validation_spec, dict):
-            raise ValueError(
-                "`validation` entry must be a dictionary if provided."
-            )
-        val_dataset_spec = validation_spec.get("dataset")
-        if val_dataset_spec is None:
-            raise ValueError(
-                "`validation.dataset` must be specified when using validation."
-            )
-        if isinstance(val_dataset_spec, str):
-            val_dataset_config = load_configuration(val_dataset_spec)
-        elif isinstance(val_dataset_spec, dict):
-            val_dataset_config = copy.deepcopy(val_dataset_spec)
-        else:
-            raise ValueError(
-                "`validation.dataset` must be either a path to a YAML file "
-                "or a configuration dict."
-            )
-        if val_dataset_config is None:
-            raise ValueError(
-                "Validation dataset configuration could not be loaded."
-            )
-        val_dataset_config.setdefault("loop", False)
-        val_dataset_config.setdefault("randomize", False)
-        val_dataset_config.setdefault("include_images", False)
+        val_dataset_config, num_batches = _eval_split(
+            validation_spec, "validation"
+        )
 
         interval = validation_spec.get("interval")
         if interval is not None:
@@ -149,22 +131,18 @@ def prepare_configs(
                     "`validation.interval` must be a positive integer."
                 )
 
-        num_batches = validation_spec.get("num_batches", 1)
-        try:
-            num_batches = int(num_batches)
-        except (TypeError, ValueError):
-            raise ValueError(
-                "`validation.num_batches` must be convertible to an integer."
-            ) from None
-        if num_batches <= 0:
-            raise ValueError(
-                "`validation.num_batches` must be a positive integer."
-            )
-
         validation_settings = {
             "dataset_config": val_dataset_config,
             "interval": interval,
             "num_batches": num_batches,
+        }
+
+    test_spec = dataset_config.pop("test", None)
+    if test_spec is not None:
+        test_dataset_config, test_num_batches = _eval_split(test_spec, "test")
+        test_settings = {
+            "dataset_config": test_dataset_config,
+            "num_batches": test_num_batches,
         }
     # Handle the seed for reproducibility
     if "seed" not in dataset_config or not isinstance(
@@ -252,9 +230,14 @@ def prepare_configs(
 
     if args.mode in {"train", "train-supervised"} and study_logged is None:
         out_dir = estimator_config.get("out_dir", "output")
+        # One directory per run, so reruns never mix their checkpoints
         out_dir = os.path.join(
-            out_dir, estimator_config["estimator"], str(dataset_config["seed"])
+            out_dir,
+            estimator_config["estimator"],
+            str(dataset_config["seed"]),
+            datetime.now().strftime("%Y-%m-%d_%H-%M-%S"),
         )
+        os.makedirs(out_dir)
         _create_run_outputs(
             args, out_dir, estimator_config, dataset_config, validation_settings
         )
@@ -301,6 +284,7 @@ def prepare_configs(
         estimator_config,
         out_dir,
         validation_settings,
+        test_settings,
         caching_config,
         wandb_setup,
     )
@@ -413,6 +397,59 @@ def log_initial_config_artifacts(
             "Logger does not support artifact logging. "
             "Configuration artifacts will not be logged."
         )
+
+
+def _eval_split(spec: object, name: str) -> tuple[dict, int | None]:
+    """Parse a ``validation``/``test`` block of a dataset config.
+
+    Args:
+        spec: The block: ``dataset`` (YAML path or dict) and ``num_batches``
+            (``all`` evaluates every sample once; the dataset must not loop).
+        name: Block name, for error messages.
+
+    Returns:
+        The split's dataset config and its number of batches (``None`` for
+        all).
+
+    Raises:
+        ValueError: If the block is malformed.
+    """
+    if not isinstance(spec, dict):
+        raise ValueError(f"`{name}` entry must be a dictionary if provided.")
+    dataset_spec = spec.get("dataset")
+    if dataset_spec is None:
+        raise ValueError(f"`{name}.dataset` must be specified.")
+    if isinstance(dataset_spec, str):
+        dataset_config = load_configuration(dataset_spec)
+    elif isinstance(dataset_spec, dict):
+        dataset_config = copy.deepcopy(dataset_spec)
+    else:
+        raise ValueError(
+            f"`{name}.dataset` must be either a path to a YAML file "
+            "or a configuration dict."
+        )
+    if dataset_config is None:
+        raise ValueError(f"`{name}` dataset configuration could not be loaded.")
+    dataset_config.setdefault("loop", False)
+    dataset_config.setdefault("randomize", False)
+    dataset_config.setdefault("include_images", False)
+
+    if spec.get("num_batches") == "all":
+        if dataset_config["loop"]:
+            raise ValueError(
+                f"`{name}.num_batches: all` needs `loop: false` in the dataset."
+            )
+        return dataset_config, None
+
+    try:
+        num_batches = int(spec.get("num_batches", 1))
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"`{name}.num_batches` must be convertible to an integer."
+        ) from None
+    if num_batches <= 0:
+        raise ValueError(f"`{name}.num_batches` must be a positive integer.")
+    return dataset_config, num_batches
 
 
 def _create_run_outputs(

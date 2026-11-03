@@ -24,6 +24,7 @@ def estimate_dis_flow(
     output_full_res: bool,
     starting_flow: jnp.ndarray,
     var_refine_iters: int,
+    sequential: bool = False,
 ) -> jnp.ndarray:
     """Batch version of the DIS optical flow estimation algorithm.
 
@@ -39,26 +40,33 @@ def estimate_dis_flow(
         output_full_res: if True, output the flow at full resolution
         starting_flow: initial flow of shape (B, H, W, 2)
         var_refine_iters: number of iterations for the variational refinement
+        sequential: if True, process the batch one pair at a time with
+            ``lax.map`` (lower peak memory); otherwise ``vmap`` it.
 
     Returns:
         estimated batch of flow field (B, H, W, 2)
     """
-    return jax.vmap(
-        flow_between,
-        in_axes=(0, 0, 0, None, None, None, None, None, None, None, None),
-    )(
-        prev_batch,
-        curr_batch,
-        starting_flow,
-        start_level,
-        levels,
-        level_steps,
-        grad_desc_iters,
-        patch_stride,
-        patch_size,
-        output_full_res,
-        var_refine_iters,
-    )
+
+    def single(args: tuple[jnp.ndarray, ...]) -> jnp.ndarray:
+        prev, curr, flow = args
+        return flow_between(
+            prev,
+            curr,
+            flow,
+            start_level,
+            levels,
+            level_steps,
+            grad_desc_iters,
+            patch_stride,
+            patch_size,
+            output_full_res,
+            var_refine_iters,
+        )
+
+    batch = (prev_batch, curr_batch, starting_flow)
+    if sequential:
+        return lax.map(single, batch)
+    return jax.vmap(single)(batch)
 
 
 def variational_refinement(

@@ -1,0 +1,44 @@
+# Fine-tuning data shared by every class: 50k steps of batch 25 from the
+# class's train split, shuffled. Files datasets/<class>.yaml extend this one
+# and set the class's folders and test split.
+seed: 0
+batch_size: 25
+flow_fields_per_batch: 25
+loop: true
+randomize: true
+buffer_size: 0
+image_shape: [256, 256]
+min_speed_x: 0
+max_speed_x: 0
+min_speed_y: 0
+max_speed_y: 0
+output_units: "pixels"
+scheduler_class: ".mat"
+include_images: true
+
+num_batches: 50000
+log_every: 100
+# Every 5k steps, validate on 4 batches of 25 shuffled val images (the
+# same 100 each time); keep the best checkpoint.
+save_every: 5000
+save_only_best: true
+validation:
+  interval: 5000
+  num_batches: 4
+  dataset:
+    seed: 0
+    batch_size: 25
+    flow_fields_per_batch: 25
+    loop: false
+    randomize: true
+    buffer_size: 50
+    eval_gt: false
+    episode_length: 0
+    image_shape: [256, 256]
+    min_speed_x: 0
+    max_speed_x: 0
+    min_speed_y: 0
+    max_speed_y: 0
+    output_units: "pixels"
+    scheduler_class: ".mat"
+    include_images: true

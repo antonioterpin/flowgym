@@ -222,7 +222,7 @@ GOGGLES_PORT=$PORT PYTHONPATH=src XLA_PYTHON_CLIENT_PREALLOCATE=false \
 GOGGLES_PORT=$PORT PYTHONPATH=src XLA_PYTHON_CLIENT_PREALLOCATE=false \
   uv run python src/eval_lima.py --estimator experiments/lima/lima_piv.yaml \
   --dataset experiments/lima/eval.yaml \
-  --load_from experiments/lima/output/lima_piv/0/checkpoints/32000
+  --load_from experiments/lima/output/lima_piv/0/<run-timestamp>/checkpoints/32000
 
 # --- Regime B: true kinematic training (random displacement fields) ---
 GOGGLES_PORT=$PORT PYTHONPATH=src XLA_PYTHON_CLIENT_PREALLOCATE=false \
@@ -233,7 +233,7 @@ GOGGLES_PORT=$PORT PYTHONPATH=src XLA_PYTHON_CLIENT_PREALLOCATE=false \
 GOGGLES_PORT=$PORT PYTHONPATH=src XLA_PYTHON_CLIENT_PREALLOCATE=false \
   uv run python src/eval_lima.py --estimator experiments/lima/lima_piv_kinematic.yaml \
   --dataset experiments/lima/eval.yaml \
-  --load_from experiments/lima/output_kinematic/lima_piv/0/checkpoints/32000
+  --load_from experiments/lima/output_kinematic/lima_piv/0/<run-timestamp>/checkpoints/32000
 ```
 
 ## References

@@ -1,0 +1,9 @@
+# ART of PIV router for the dis_20hz row: per frame, pick one of the 10 DIS
+# configs in the library.
+extends: experiments/art_of_piv/models/router/standard.yaml
+study:
+  name: art_of_piv/table_1
+  tags:
+    row: dis_20hz
+config:
+  estimators_list_path: experiments/art_of_piv/libraries/dis_20hz.yaml

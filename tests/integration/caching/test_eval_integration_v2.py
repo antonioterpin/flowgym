@@ -3,6 +3,7 @@
 Covers evaluate_batches and eval_full_dataset with real CacheManager instances.
 """
 
+import json
 import tempfile
 from unittest.mock import MagicMock
 
@@ -10,7 +11,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from eval import eval_full_dataset, evaluate_batches
+from eval import eval_full_dataset, evaluate_batches, write_summary
 from flowgym.common.base import Estimator
 from flowgym.training.caching import CacheManager
 
@@ -48,7 +49,7 @@ class MockEvalEstimator(Estimator):
     def finalize_metrics(self):
         return {}
 
-    def get_cache_id_suffix(self, trainable_state):
+    def _cache_id_suffix(self, trainable_state):
         return "_mock_eval"
 
     def _estimate(self, images, state, trainable_state, extras):
@@ -105,6 +106,36 @@ def test_evaluate_batches_caching_robust():
             jnp.array([[0, 200], [0, 201]], dtype=jnp.uint32)
         )
         assert np.all(hit)
+
+
+def test_evaluate_batches_none_runs_the_sampler_to_exhaustion():
+    """``num_batches=None`` evaluates every batch of the sampler once."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        cache_manager = CacheManager(
+            root_dir=tmp_dir,
+            cache_id="eval_all",
+            spec={"epe": (np.float32, ())},
+        )
+
+        def create_state_fn(img, key):
+            return {"estimates": jnp.zeros((len(img), 1, 32, 32, 2))}
+
+        def compute_estimate_fn(img2, state, trained_state, cache_payload=None):
+            return state, {"errors": cache_payload.epe}
+
+        results = evaluate_batches(
+            estimator=MockEvalEstimator(),
+            sampler=[MockEvalBatch(keys=[400, 401]), MockEvalBatch(keys=[402])],
+            create_state_fn=create_state_fn,
+            compute_estimate_fn=compute_estimate_fn,
+            trainable_state=None,
+            num_batches=None,
+            cache_manager=cache_manager,
+            reset_sampler=False,
+        )
+
+        assert results["num_batches"] == 2
+        assert results["num_samples"] == 3
 
 
 def test_eval_full_dataset_caching_robust():
@@ -171,6 +202,73 @@ def test_eval_full_dataset_caching_robust():
         np.testing.assert_allclose(
             mock_estimator._processed_metrics[0]["errors"], [0.1, 0.5]
         )
+
+
+def test_evaluate_batches_files_survive_base_process_metrics(tmp_path):
+    """The base metric hook (np.asarray on every value) keeps files a list."""
+
+    class BaseHookEstimator(MockEvalEstimator):
+        process_metrics = Estimator.process_metrics
+
+    batch = MockEvalBatch(keys=[0, 1])
+    batch.files = ["dir/a.mat", "dir/b.mat"]
+    results = evaluate_batches(
+        estimator=BaseHookEstimator(),
+        sampler=[batch],
+        create_state_fn=lambda img, key: {
+            "estimates": jnp.zeros((len(img), 1, 32, 32, 2))
+        },
+        compute_estimate_fn=lambda img2, state, ts, cache_payload=None: (
+            state,
+            {"errors": np.array([0.1, 0.5])},
+        ),
+        trainable_state=None,
+        num_batches=1,
+        reset_sampler=False,
+    )
+
+    assert results["files"] == ["a.mat", "b.mat"]
+    write_summary(
+        tmp_path / "s.json",
+        {},
+        files=results["files"],
+        errors=results["errors"],
+    )
+
+
+@pytest.mark.parametrize(
+    ("errors", "mean_epe"), [([0.1, 0.5], 0.3), ([0.1, np.nan], None)]
+)
+def test_eval_full_dataset_writes_summary(tmp_path, errors, mean_epe):
+    """``summary_out`` gets valid JSON with only the measured metrics."""
+
+    def compute_estimate_fn(img2, state, trained_state, cache_payload=None):
+        return state, {"errors": np.array([*errors, 9.0])}
+
+    sampler = MagicMock()
+    batch = MockEvalBatch(keys=[0, 1, 2])
+    batch.mask = np.array([True, True, False])
+    batch.files = ["dir/a.mat", "dir/b.mat", "dir/a.mat"]
+    sampler.__iter__.return_value = iter([batch])
+    summary_out = tmp_path / "summary.json"
+    eval_full_dataset(
+        estimator=MockEvalEstimator(),
+        sampler=sampler,
+        create_state_fn=lambda img, key: {
+            "estimates": jnp.zeros((len(img), 1, 32, 32, 2))
+        },
+        compute_estimate_fn=compute_estimate_fn,
+        trainable_state=None,
+        summary_out=summary_out,
+    )
+
+    summary = json.loads(summary_out.read_text())
+    assert summary["mean_epe"] == pytest.approx(mean_epe)
+    assert summary["median_epe"] == pytest.approx(mean_epe)
+    assert "mean_relative_error" not in summary
+    assert summary["frames"]["file"] == ["a.mat", "b.mat"]
+    assert summary["frames"]["epe"][0] == pytest.approx(0.1)
+    assert (summary["frames"]["epe"][1] is None) == (mean_epe is None)
 
 
 if __name__ == "__main__":

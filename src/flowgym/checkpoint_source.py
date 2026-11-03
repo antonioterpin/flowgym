@@ -1,6 +1,6 @@
 """Resolve checkpoint source strings into local filesystem paths.
 
-Two source forms are supported:
+Three source forms are supported:
 
 1. A plain filesystem path (``str`` or :class:`pathlib.Path`). Returned
    resolved to an absolute path, unchanged.
@@ -11,6 +11,13 @@ Two source forms are supported:
    ``entity/project/name:alias`` or ``name:alias``). The artifact is
    downloaded and the resolver returns the path to the optional
    in-artifact subpath, or the download root if no subpath is given.
+
+3. A Hugging Face Hub URI of the form
+   ``hf://<org>/<repo>[@<revision>][/<subpath>]``. The files under
+   ``subpath`` (the whole repo if omitted) are downloaded to the Hub
+   cache and the resolver returns the local path. Pin ``revision`` to a
+   commit SHA for reproducibility. Reading needs no upload rights; a
+   private repo needs ``hf auth login``.
 
 The optional in-artifact subpath must follow an explicit ``:alias``
 segment so the boundary between the artifact reference and the subpath
@@ -26,6 +33,7 @@ Typical use::
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -33,6 +41,7 @@ if TYPE_CHECKING:
     from os import PathLike
 
 WANDB_URI_PREFIX = "wandb://"
+HF_URI_PREFIX = "hf://"
 
 
 def is_wandb_uri(source: str | PathLike[str]) -> bool:
@@ -112,6 +121,96 @@ def parse_wandb_uri(uri: str) -> tuple[str, str]:
     )
 
 
+def parse_hf_uri(uri: str) -> tuple[str, str | None, str]:
+    """Split an ``hf://`` URI into (repo id, revision, subpath).
+
+    Examples::
+
+        parse_hf_uri("hf://org/repo@abc123/raft32/cylinder")
+        # -> ("org/repo", "abc123", "raft32/cylinder")
+
+        parse_hf_uri("hf://org/repo")
+        # -> ("org/repo", None, "")
+
+    Args:
+        uri: URI string starting with the ``hf://`` prefix.
+
+    Returns:
+        A ``(repo_id, revision, subpath)`` triple. ``revision`` is
+        ``None`` when unspecified; ``subpath`` is ``""`` for the whole
+        repository.
+
+    Raises:
+        ValueError: If the prefix is missing, the repo id is not
+            ``<org>/<repo>`` or the subpath starts with ``/``.
+    """
+    if not str(uri).startswith(HF_URI_PREFIX):
+        raise ValueError(f"Expected a {HF_URI_PREFIX!r} URI, got {uri!r}.")
+    org, sep, rest = str(uri)[len(HF_URI_PREFIX) :].partition("/")
+    repo, _, subpath = rest.partition("/")
+    repo, _, revision = repo.partition("@")
+    if not (org and sep and repo):
+        raise ValueError(
+            f"Malformed {HF_URI_PREFIX} URI: expected "
+            f"'hf://<org>/<repo>[@<revision>][/<subpath>]'. Got: {uri!r}."
+        )
+    if subpath.startswith("/"):
+        raise ValueError(
+            f"Malformed {HF_URI_PREFIX} URI: the subpath must not start "
+            f"with '/'. Got: {uri!r}."
+        )
+    return f"{org}/{repo}", revision or None, subpath.rstrip("/")
+
+
+def _inside(
+    download_root: Path, subpath: str, origin: str, *, follow_links: bool = True
+) -> Path:
+    """Return ``download_root / subpath``, which must exist inside the root.
+
+    Args:
+        download_root: Directory the source was materialized in.
+        subpath: Relative path inside ``download_root``.
+        origin: Name of the source, for error messages.
+        follow_links: Resolve symlinks before the containment check, so a
+            link pointing outside the root is rejected. Pass ``False`` for
+            the Hub cache, which links files into its ``blobs/`` directory.
+
+    Returns:
+        The path of ``subpath`` under ``download_root``.
+
+    Raises:
+        ValueError: If ``subpath`` is absolute or escapes ``download_root``.
+        FileNotFoundError: If ``subpath`` does not exist.
+    """
+    # Defend against absolute subpaths and ``..`` traversal: the
+    # subpath comes from a user-supplied URI and must stay strictly
+    # inside the download root.
+    if Path(subpath).is_absolute():
+        raise ValueError(
+            f"Subpath {subpath!r} must be relative to the artifact "
+            f"download root (got an absolute path)."
+        )
+    # The Hub cache links files into ``blobs/``, so there the comparison is
+    # lexical; elsewhere a symlink must not lead out of the root.
+    if follow_links:
+        resolved = (download_root / subpath).resolve()
+        root = download_root.resolve()
+    else:
+        resolved = Path(os.path.normpath(download_root / subpath))
+        root = Path(os.path.normpath(download_root))
+    if not resolved.is_relative_to(root):
+        raise ValueError(
+            f"Subpath {subpath!r} escapes the artifact download root "
+            f"{download_root}."
+        )
+    if not resolved.exists():
+        raise FileNotFoundError(
+            f"Subpath {subpath!r} not found inside artifact downloaded "
+            f"from {origin!r} (looked in {download_root})."
+        )
+    return resolved
+
+
 def resolve_checkpoint_source(
     source: str | PathLike[str],
     *,
@@ -120,7 +219,7 @@ def resolve_checkpoint_source(
     """Resolve a checkpoint source string to a local filesystem path.
 
     Args:
-        source: Either a filesystem path or a ``wandb://`` URI. See the
+        source: A filesystem path, a ``wandb://`` or an ``hf://`` URI. See the
             module docstring for the URI grammar.
         download_dir: Optional override for where wandb materializes
             the artifact files. When ``None``, wandb uses its default
@@ -131,15 +230,15 @@ def resolve_checkpoint_source(
         is ``<download_root>/<subpath>`` when a subpath was specified,
         else ``<download_root>``.
 
+    A missing, absolute or escaping subpath raises
+    :class:`FileNotFoundError` / :class:`ValueError` (see ``_inside``).
+
     Raises:
-        FileNotFoundError: When a wandb URI specifies an in-artifact
-            subpath that does not exist in the downloaded tree.
-        ImportError: When a wandb URI is given but the ``wandb``
-            package is not installed.
-        ValueError: When the in-artifact subpath is absolute or
-            otherwise escapes the artifact's download root (e.g. via
-            ``..`` segments).
+        ImportError: When a wandb or hf URI is given but the matching
+            package (``wandb`` / ``huggingface_hub``) is not installed.
     """
+    if str(source).startswith(HF_URI_PREFIX):
+        return _resolve_hf(str(source), download_dir)
     if not is_wandb_uri(source):
         return Path(source).resolve()
 
@@ -174,24 +273,45 @@ def resolve_checkpoint_source(
 
     if not subpath:
         return download_root
+    return _inside(download_root, subpath, wandb_ref)
 
-    # Defend against absolute subpaths and ``..`` traversal: the
-    # subpath comes from a user-supplied URI and must stay strictly
-    # inside the artifact's download root.
-    if Path(subpath).is_absolute():
-        raise ValueError(
-            f"Subpath {subpath!r} must be relative to the artifact "
-            f"download root (got an absolute path)."
+
+def _resolve_hf(uri: str, download_dir: str | PathLike[str] | None) -> Path:
+    """Download the files an ``hf://`` URI points to and return their path.
+
+    Args:
+        uri: The ``hf://`` URI.
+        download_dir: Optional ``local_dir`` for the download.
+
+    Returns:
+        Local path of the URI's subpath (the repo root without one).
+
+    Raises:
+        ImportError: If ``huggingface_hub`` is not installed.
+    """
+    repo_id, revision, subpath = parse_hf_uri(uri)
+    # Lazy import: only needed for the URI path.
+    try:
+        from huggingface_hub import snapshot_download  # noqa: PLC0415
+    except ImportError as exc:
+        raise ImportError(
+            f"Resolving an {HF_URI_PREFIX} checkpoint source requires the "
+            "huggingface_hub package (`uv sync --extra hf`)."
+        ) from exc
+
+    download_root = Path(
+        snapshot_download(
+            repo_id,
+            revision=revision,
+            allow_patterns=[f"{subpath}/*", subpath] if subpath else None,
+            local_dir=None if download_dir is None else str(download_dir),
         )
-    resolved = (download_root / subpath).resolve()
-    if not resolved.is_relative_to(download_root):
-        raise ValueError(
-            f"Subpath {subpath!r} escapes the artifact download root "
-            f"{download_root}."
-        )
-    if not resolved.exists():
-        raise FileNotFoundError(
-            f"Subpath {subpath!r} not found inside artifact downloaded "
-            f"from {wandb_ref!r} (looked in {download_root})."
-        )
-    return resolved
+    ).resolve()
+    if not subpath:
+        return download_root
+    return _inside(
+        download_root,
+        subpath,
+        f"{repo_id}@{revision or 'main'}",
+        follow_links=False,
+    )

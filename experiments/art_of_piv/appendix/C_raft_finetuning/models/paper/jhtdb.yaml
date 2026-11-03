@@ -1,0 +1,13 @@
+# The paper's jhtdb specialist (the W&B checkpoint the table_1 raft32
+# library uses), scored on the same test split for comparison.
+extends: experiments/art_of_piv/models/raft32/jhtdb.yaml
+mode: eval
+dataset: experiments/art_of_piv/appendix/C_raft_finetuning/datasets/test/jhtdb.yaml
+study:
+  name: art_of_piv/appendix/C_raft_finetuning
+  tags:
+    flow_class: jhtdb
+    checkpoint: paper
+# Compiled, as the fine-tuned specialists.
+config:
+  jit: true

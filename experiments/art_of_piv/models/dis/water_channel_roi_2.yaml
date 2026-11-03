@@ -1,0 +1,15 @@
+# Region 2 of the region-selection library of appendix F: a 256 x 256 crop
+# of the 720 x 768 parent frame (the bottom right), estimated by one DIS configuration.
+extends: experiments/art_of_piv/models/dis/base.yaml
+config:
+  preprocess:
+    - name: crop_special
+      target_height: 256
+      target_width: 256
+      fraction_v: 0.8275862068965517
+      fraction_h: 1.0
+  postprocess: []
+  patch_size: 13
+  patch_stride: 7
+  grad_desc_iters: 6
+  levels: 2

@@ -1,0 +1,11 @@
+# DIS A of appendix F, the water channel (+150 rpm, larger displacements):
+# native resolution search. Its preprocessing is applied once to the frames
+# by the dataset builder, not per member.
+extends: experiments/art_of_piv/models/dis/base.yaml
+config:
+  preprocess: []
+  postprocess: []
+  patch_size: 19
+  patch_stride: 11
+  grad_desc_iters: 4
+  levels: 1
