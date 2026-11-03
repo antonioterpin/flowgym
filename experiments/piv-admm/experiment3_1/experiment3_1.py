@@ -199,12 +199,26 @@ def set_nested_value(
 
 
 def _tau_tag(tau: float) -> str:
-    """Format tau for path names."""
+    """Format tau for path names.
+
+    Args:
+        tau: Threshold value to format.
+
+    Returns:
+        Tau with ``.`` replaced by ``_``.
+    """
     return str(tau).replace(".", "_")
 
 
 def _checkpoint_has_saved_steps(checkpoint_dir: Path) -> bool:
-    """Return True when an Orbax checkpoint directory has at least one step."""
+    """Return whether an Orbax checkpoint directory has at least one step.
+
+    Args:
+        checkpoint_dir: Orbax checkpoint directory.
+
+    Returns:
+        True if the directory exists and contains a step subdirectory.
+    """
     if not checkpoint_dir.exists() or not checkpoint_dir.is_dir():
         return False
     return any(
@@ -217,7 +231,21 @@ def inject_dis_learned_oracle_postprocess(
     estimators_cfg: dict[str, Any],
     checkpoint_dir: Path,
 ) -> dict[str, Any]:
-    """Attach learned-oracle postprocess to each DIS sub-estimator."""
+    """Attach learned-oracle postprocess to each DIS sub-estimator.
+
+    Args:
+        estimators_cfg: Estimators-list configuration with an ``estimators``
+            key.
+        checkpoint_dir: Checkpoint directory of the learned oracle.
+
+    Returns:
+        A copy of ``estimators_cfg`` with the learned-oracle step prepended
+        to the postprocessing of every DIS sub-estimator.
+
+    Raises:
+        ValueError: If the estimators list or an estimator config is
+            malformed.
+    """
     out = copy.deepcopy(estimators_cfg)
     estimators = out.get("estimators", [])
     if not isinstance(estimators, list):

@@ -138,8 +138,6 @@ def test_real_integration_checkpointing(tmp_path):
     template_state = NNEstimatorTrainableState.create(
         apply_fn=apply_fn, params=params, tx=tx
     )
-    restored_estimator = load_model(
-        save_path, template_state, mode="resume"
-    )
+    restored_estimator = load_model(save_path, template_state, mode="resume")
     assert restored_estimator.step == 10
     assert jnp.allclose(restored_estimator.params["w"], state.params["w"])

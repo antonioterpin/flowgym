@@ -41,6 +41,7 @@ def average_smoothing(
         valid:
             Optional mask of shape (B, H, W) where 1 means valid.
         state: Current state of the estimator.
+        **kwargs: Additional keyword arguments (ignored).
 
     Returns:
         Smoothed flow with the same shape as the input.
