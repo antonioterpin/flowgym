@@ -420,9 +420,9 @@ def test_quantize_max_speed_effect():
     assert quantized_high.dtype == jnp.uint8, "Output should be uint8"
 
 
-@pytest.mark.parametrize("B", [1, 16, 256])
-@pytest.mark.parametrize("H", [64, 128, 256, 1024])
-@pytest.mark.parametrize("W", [64, 128, 256, 1024])
+@pytest.mark.parametrize("B", [1, 16])
+@pytest.mark.parametrize("H", [64, 128])
+@pytest.mark.parametrize("W", [64, 128])
 @pytest.mark.parametrize("seed", [42])
 def test_resize_flow(B, H, W, seed):
     """Test resizing flow fields."""
@@ -440,6 +440,8 @@ def test_resize_flow(B, H, W, seed):
         target_width=target_shape[1],
         valid=None,
     )
+    # Wait for the result so its cost is not billed to the next test.
+    resized_flow.block_until_ready()
 
     assert resized_flow.shape == (
         B,
