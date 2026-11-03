@@ -73,6 +73,7 @@ def build_testable_art_of_piv_estimator(
     estimator._estimators_initialized = True
     estimator.sub_model_states = (None,) * estimator.num_estimators
     estimator._sub_cache_managers = {}
+    estimator._cache_id_base = None
     estimator._unified_epe_index = {}
     estimator._cache_bootstrapped = False
     estimator._cache_root_dir = None

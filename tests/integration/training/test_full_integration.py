@@ -349,7 +349,10 @@ def test_train_rl_full_integration(tmp_path, mock_env):
 
     # Run training with mocked Checkpointer (train.py imports it
     # under its own namespace).
-    with patch("train.Checkpointer", side_effect=_FakeCheckpointer):
+    with (
+        patch("train.Checkpointer", side_effect=_FakeCheckpointer),
+        patch("train.log_flow_estimate") as log_flow,
+    ):
         train(
             estimator=model,
             estimator_config={"config": {"jit": False}},
@@ -367,6 +370,8 @@ def test_train_rl_full_integration(tmp_path, mock_env):
             replay_buffer_capacity=100,
             replay_ratio=1.0,
         )
+
+    assert log_flow.call_count == 3, "Each episode still requests a flow plot"
 
     # Verify checkpoints were created — Checkpointer uses the flat
     # ``out_dir/checkpoints/<episode>/`` layout.
@@ -410,6 +415,7 @@ def test_train_rl_replay_buffer_used(tmp_path, mock_env):
     with (
         patch("train.ReplayBuffer", wraps=ReplayBuffer) as mock_buffer,
         patch("train.Checkpointer", side_effect=_FakeCheckpointer),
+        patch("train.log_flow_estimate"),
     ):
         train(
             estimator=model,
@@ -472,6 +478,7 @@ def test_train_rl_replay_buffer_samples(tmp_path, mock_env):
             model, "create_train_step", return_value=tracking_train_step
         ),
         patch("train.Checkpointer", side_effect=_FakeCheckpointer),
+        patch("train.log_flow_estimate"),
     ):
         train(
             estimator=model,
