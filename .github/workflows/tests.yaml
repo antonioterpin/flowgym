@@ -58,11 +58,36 @@ jobs:
             - name: Install dependencies
               run: uv sync --group dev
 
+            # Most of the suite's time is XLA compilation, so persist JAX's
+            # compilation cache across runs. PR runs can read caches saved on
+            # the default branch, which the nightly run fills. Compiled CPU
+            # code is specific to the instruction set, so key on the CPU model.
+            - name: Identify runner CPU
+              id: cpu
+              run: |
+                  model=$(grep -m1 'model name' /proc/cpuinfo | sha256sum)
+                  echo "model=${model:0:12}" >> "$GITHUB_OUTPUT"
+
+            - name: Restore JAX compilation cache
+              uses: actions/cache/restore@v6
+              with:
+                  path: ${{ runner.temp }}/jax-cache
+                  key: jax-${{ runner.os }}-${{ steps.cpu.outputs.model }}-${{ hashFiles('uv.lock') }}-${{ github.run_id }}-${{ github.run_attempt }}
+                  restore-keys: |
+                      jax-${{ runner.os }}-${{ steps.cpu.outputs.model }}-${{ hashFiles('uv.lock') }}-
+                      jax-${{ runner.os }}-${{ steps.cpu.outputs.model }}-
+
             # One pytest-xdist worker per logical CPU (`auto` counts physical
             # cores, half the runner's vCPUs); --durations keeps the slowest
             # tests visible in the log.
             - name: Run pytest
               env:
+                  JAX_COMPILATION_CACHE_DIR: ${{ runner.temp }}/jax-cache
+                  # Cache every compilation, and evict least recently used
+                  # entries above 512 MB.
+                  JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS: 0
+                  JAX_PERSISTENT_CACHE_MIN_ENTRY_SIZE_BYTES: 0
+                  JAX_COMPILATION_CACHE_MAX_SIZE: 536870912
                   FAST_TIER: >-
                       ${{ github.event_name == 'pull_request'
                       && !contains(github.event.pull_request.labels.*.name, 'full-tests') }}
@@ -72,3 +97,11 @@ jobs:
                   else
                       uv run pytest -n logical --durations=30
                   fi
+
+            # Save even when tests fail, so a red PR still warms its cache.
+            - name: Save JAX compilation cache
+              if: always()
+              uses: actions/cache/save@v6
+              with:
+                  path: ${{ runner.temp }}/jax-cache
+                  key: jax-${{ runner.os }}-${{ steps.cpu.outputs.model }}-${{ hashFiles('uv.lock') }}-${{ github.run_id }}-${{ github.run_attempt }}
