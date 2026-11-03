@@ -18,6 +18,7 @@ from flowgym.common.base import (
 )
 from flowgym.flow.postprocess import (
     apply_postprocessing,
+    is_jittable_step,
     is_outlier_rejection_step,
     validate_params,
 )
@@ -225,6 +226,17 @@ class FlowFieldEstimator(Estimator):
             return flow_field, out_extras, {**metrics, **postprocess_metrics}
 
         return call
+
+    def supports_postprocess_jit(self) -> bool:
+        """Return whether the postprocessing pipeline can be JIT-compiled.
+
+        Returns:
+            True if every configured postprocessing step is jittable.
+        """
+        return all(
+            is_jittable_step(step.keywords["name"])
+            for step in self.postprocessing_steps
+        )
 
     def postprocess(
         self,

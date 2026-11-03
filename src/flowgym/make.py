@@ -5,14 +5,11 @@ from __future__ import annotations
 import contextlib
 import os
 import tempfile
-from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
 if TYPE_CHECKING:
     from synthpix.types import SynthpixBatch
-
-    from flowgym.flow.base import FlowFieldEstimator
 
 try:
     import torch
@@ -39,6 +36,7 @@ from flowgym.types import (
     CachePayload,
     CompiledComputeEstimateFn,
     CompiledCreateStateFn,
+    CompiledEstimator,
     PRNGKey,
 )
 from flowgym.utils import DEBUG, MissingDependency
@@ -64,48 +62,53 @@ def make_manager(ckpt_dir: Path, keep: int = 3) -> ocp.CheckpointManager:
     )
 
 
-@overload
-def compile_model(
-    model: Estimator, estimates: None, jit: bool = True, history_size: int = 1
-) -> tuple[
-    None,
-    CompiledComputeEstimateFn,
-]: ...
-
-
-@overload
-def compile_model(
-    model: Estimator,
-    estimates: jnp.ndarray,
-    jit: bool = True,
-    history_size: int = 1,
-) -> tuple[
-    CompiledCreateStateFn,
-    CompiledComputeEstimateFn,
-]: ...
-
-
 def compile_model(
     model: Estimator,
     estimates: jnp.ndarray | None,
     jit: bool = True,
     history_size: int = 1,
-) -> tuple[
-    CompiledCreateStateFn | None,
-    CompiledComputeEstimateFn,
-]:
-    """Compile the model for JAX.
+) -> CompiledEstimator:
+    """Compile the model's entry points for JAX.
+
+    Each entry point is JIT-compiled only if everything it runs supports it:
+    the estimator (:meth:`Estimator.supports_jit`) and its processing steps
+    (:meth:`Estimator.supports_preprocess_jit`,
+    :meth:`FlowFieldEstimator.supports_postprocess_jit`). The others run
+    eagerly, so a non-JAX estimator still gets compiled processing.
 
     Args:
-        model: The flow field estimator model.
-        estimates: Example estimates for shape inference.
-        jit: Whether to use JIT compilation.
+        model: The estimator model.
+        estimates: Example estimates for shape inference. If None, no
+            create-state function is built.
+        jit: Whether to allow JIT compilation. Ignored in debug mode.
         history_size: The size of the history for the model.
 
     Returns:
-        Compiled functions.
+        The compiled entry points.
     """
-    create_state_fn: CompiledCreateStateFn | None
+    # Local import to avoid a circular import at module import time.
+    from flowgym.flow.base import FlowFieldEstimator  # noqa: PLC0415
+
+    jit = jit and not DEBUG
+    flow_model = model if isinstance(model, FlowFieldEstimator) else None
+    preprocess_jit = model.supports_preprocess_jit()
+    postprocess_jit = (
+        flow_model is None or flow_model.supports_postprocess_jit()
+    )
+    estimator_jit = model.supports_jit()
+
+    def maybe_jit(fn: Any, supported: bool, name: str) -> Any:
+        if not jit:
+            return fn
+        if not supported:
+            logger.warning(
+                f"Running {name} of {type(model).__name__} without JIT: "
+                "non-jittable code path detected."
+            )
+            return fn
+        return jax.jit(fn)
+
+    create_state_fn: CompiledCreateStateFn | None = None
     if estimates is not None:
 
         def create_state_fn_impl(images: jnp.ndarray, rng: PRNGKey) -> History:
@@ -120,9 +123,11 @@ def compile_model(
                 rng=rng,
             )
 
-        create_state_fn = create_state_fn_impl
-    else:
-        create_state_fn = None
+        create_state_fn = maybe_jit(
+            create_state_fn_impl,
+            estimator_jit and preprocess_jit,
+            "create_state",
+        )
 
     def compute_estimate_fn(
         images: jnp.ndarray,
@@ -134,47 +139,21 @@ def compile_model(
             images, state, trainable_state, cache_payload=cache_payload
         )
 
-    if jit and not DEBUG:
-        return (
-            jax.jit(create_state_fn) if create_state_fn is not None else None
-        ), jax.jit(compute_estimate_fn)
-    return create_state_fn, compute_estimate_fn
-
-
-def compile_preprocess(
-    model: Estimator, jit: bool = True
-) -> Callable[[jnp.ndarray], jnp.ndarray]:
-    """Expose the model's configured image preprocessing function.
-
-    Args:
-        model: An estimator, such as the final result of make_estimator.
-        jit: Compile with JAX unless global debug mode is enabled.
-
-    Returns:
-        A function accepting raw batched images and returning processed images.
-    """
-    return jax.jit(model.preprocess) if jit and not DEBUG else model.preprocess
-
-
-def compile_postprocess(
-    model: FlowFieldEstimator, jit: bool = True
-) -> Callable[
-    [jnp.ndarray, jnp.ndarray, History, EstimatorTrainableState],
-    tuple[jnp.ndarray, dict],
-]:
-    """Expose the model's configured flow postprocessing function.
-
-    Args:
-        model: A flow estimator, such as the final result of make_estimator.
-        jit: Compile with JAX unless global debug mode is enabled. Disable
-            this for custom steps that cannot be traced by JAX.
-
-    Returns:
-        A function accepting raw flow, preprocessed current images, history,
-        and trainable state, returning processed flow and diagnostic metrics.
-    """
-    return (
-        jax.jit(model.postprocess) if jit and not DEBUG else model.postprocess
+    return CompiledEstimator(
+        create_state=create_state_fn,
+        compute_estimate=maybe_jit(
+            compute_estimate_fn,
+            estimator_jit and preprocess_jit and postprocess_jit,
+            "compute_estimate",
+        ),
+        preprocess=maybe_jit(model.preprocess, preprocess_jit, "preprocess"),
+        postprocess=(
+            None
+            if flow_model is None
+            else maybe_jit(
+                flow_model.postprocess, postprocess_jit, "postprocess"
+            )
+        ),
     )
 
 
@@ -644,24 +623,20 @@ def make_estimator(
         dummy_estimates = None
     else:
         dummy_estimates = jnp.zeros(estimate_shape, dtype=jnp.float32)
-    use_jit = estimator_config["config"].get("jit", False) and not DEBUG
-    if use_jit and not model.supports_jit():
-        logger.warning(
-            "Disabling JIT for estimator "
-            f"{estimator_config['estimator']}: "
-            "non-jittable code path detected."
-        )
-        use_jit = False
-
-    create_state_fn, compute_estimate_fn = compile_model(
+    compiled = compile_model(
         model,
         dummy_estimates,
-        use_jit,
+        estimator_config["config"].get("jit", False),
         history_size=estimator_config["config"].get("history_size", 1),
     )
     logger.info("Model compiled successfully.")
 
-    return trained_state, create_state_fn, compute_estimate_fn, model
+    return (
+        trained_state,
+        compiled.create_state,
+        compiled.compute_estimate,
+        model,
+    )
 
 
 def select_gt(estimate_type: str, batch: SynthpixBatch) -> jnp.ndarray:

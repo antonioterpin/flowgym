@@ -224,31 +224,36 @@ instead of an inline list — see
 
 ## Access preprocessing and postprocessing
 
-The model returned by `make_estimator` exposes the same processing pipelines
-used during state creation and estimation. Compile them independently when
-saving preprocessed images or filtering externally computed flow:
+`compile_model(model, estimates)` returns a `CompiledEstimator` with every
+entry point of the model: `create_state`, `compute_estimate`, `preprocess`
+and, for flow estimators, `postprocess`. Use the last two to save
+preprocessed images or to filter externally computed flow:
 
 ```python
-from flowgym.make import compile_preprocess, compile_postprocess
+from flowgym.make import compile_model
 
-preprocess = compile_preprocess(model)
-processed_images = preprocess(raw_images)
+compiled = compile_model(model, estimates)
+processed_images = compiled.preprocess(raw_images)
 
 # For flow estimators; state contains already preprocessed previous images.
-postprocess = compile_postprocess(model)
-filtered_flow, metrics = postprocess(
+filtered_flow, metrics = compiled.postprocess(
     raw_flow, processed_images, state, trained_state
 )
 ```
 
-Both helpers enable JIT by default (except in global debug mode). Pass
-`jit=False` for eager execution or custom steps that are not JAX compatible.
+Each entry point is JIT-compiled only if everything it runs can be traced:
+the estimator (`supports_jit()`) and its processing steps
+(`supports_preprocess_jit()`, `supports_postprocess_jit()`). The rest run
+eagerly with a warning, so a NumPy or OpenCV estimator still gets compiled
+processing. A step opts out of JIT by setting `jittable = False` on its
+function. Pass `jit=False` to run everything eagerly; global debug mode does
+the same.
+
 Empty pipelines return their input unchanged. Postprocessing also returns
 the same diagnostic metrics as a normal estimation call, including rejection
-masks. It does not advance history. The existing `make_estimator` and
-`compile_model` return tuples are unchanged.
+masks. It does not advance history.
 
-Continue to pass **raw images** to `create_state_fn` and `compute_estimate_fn`:
+Continue to pass **raw images** to `create_state` and `compute_estimate`:
 those functions apply preprocessing themselves. Likewise, pass **raw flow**
-to `postprocess`, since an estimate from `compute_estimate_fn` has already
+to `postprocess`, since an estimate from `compute_estimate` has already
 been postprocessed.
