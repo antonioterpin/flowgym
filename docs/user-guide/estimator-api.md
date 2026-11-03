@@ -221,3 +221,11 @@ instead of an inline list — see
 - [API reference](../api/index.md)
 - [Configuration and data flow](configuration-and-data.md)
 - [Training and evaluation workflows](training-and-evaluation.md)
+
+## Consensus children with resized inputs
+
+Consensus initializes each child's image history through that child's own
+preprocessing pipeline. Children may process different image sizes, provided
+their postprocessed flows share the consensus input grid. The parent can
+resize the final consensus output independently. See
+[consensus state and resizing](../api/estimators/consensus.md#child-state-and-resizing).
