@@ -21,10 +21,11 @@ jobs:
 
             # The pre-commit config has local hooks (basedpyright, pydoclint)
             # that shell out to `uv run`, so the project env must be synced
-            # first. The other_methods extra is needed so basedpyright can
-            # resolve the optional cv2/torch/openpiv/pyoptflow imports.
+            # first. The other_methods and hf extras are needed so basedpyright
+            # can resolve the optional cv2/torch/openpiv/pyoptflow and
+            # huggingface_hub imports.
             - name: Install dependencies
-              run: uv sync --group dev --extra other_methods
+              run: uv sync --group dev --extra other_methods --extra hf
 
             - name: Run pre-commit
               run: uv run pre-commit run --all-files
