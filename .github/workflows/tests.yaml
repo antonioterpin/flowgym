@@ -62,6 +62,8 @@ jobs:
             # compilation cache across runs. PR runs can read caches saved on
             # the default branch, which the nightly run fills. Compiled CPU
             # code is specific to the instruction set, so key on the CPU model.
+            # A cache is only reused under the same uv.lock, so dependency
+            # updates start a fresh one instead of growing it forever.
             - name: Identify runner CPU
               id: cpu
               run: |
@@ -75,7 +77,6 @@ jobs:
                   key: jax-${{ runner.os }}-${{ steps.cpu.outputs.model }}-${{ hashFiles('uv.lock') }}-${{ github.run_id }}-${{ github.run_attempt }}
                   restore-keys: |
                       jax-${{ runner.os }}-${{ steps.cpu.outputs.model }}-${{ hashFiles('uv.lock') }}-
-                      jax-${{ runner.os }}-${{ steps.cpu.outputs.model }}-
 
             # One pytest-xdist worker per logical CPU (`auto` counts physical
             # cores, half the runner's vCPUs); --durations keeps the slowest
@@ -83,11 +84,11 @@ jobs:
             - name: Run pytest
               env:
                   JAX_COMPILATION_CACHE_DIR: ${{ runner.temp }}/jax-cache
-                  # Cache every compilation, and evict least recently used
-                  # entries above 512 MB.
+                  # Cache every compilation. No JAX_COMPILATION_CACHE_MAX_SIZE:
+                  # its LRU eviction locks every access, which serializes the
+                  # xdist workers and doubled a cold run's time.
                   JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS: 0
                   JAX_PERSISTENT_CACHE_MIN_ENTRY_SIZE_BYTES: 0
-                  JAX_COMPILATION_CACHE_MAX_SIZE: 536870912
                   FAST_TIER: >-
                       ${{ github.event_name == 'pull_request'
                       && !contains(github.event.pull_request.labels.*.name, 'full-tests') }}
