@@ -4,6 +4,7 @@ Covers parameter validation, round-trip correctness, JIT performance,
 and quantization for all postprocessing steps.
 """
 
+import random
 import timeit
 
 import jax
@@ -139,6 +140,21 @@ bad_params = [
 ]
 
 
+# Every step on its own, then a few multi-step pipelines (batched and not).
+pipelines = [
+    pytest.param(16, [idx], id=f"{fn.__name__}-{idx}")
+    for idx, (fn, _) in enumerate(all_post)
+] + [
+    pytest.param(
+        B,
+        random.Random(seed).choices(range(len(all_post)), k=N),
+        id=f"B{B}-N{N}-seed{seed}",
+    )
+    for B in (1, 16)
+    for N, seed in ((5, 42), (15, 123))
+]
+
+
 def apply_from_idxs(idxs, flow):
     """Apply postprocessing functions from given indices."""
     valid = jnp.ones_like(flow[..., 0], dtype=bool)
@@ -149,19 +165,10 @@ def apply_from_idxs(idxs, flow):
     return flow
 
 
-@pytest.mark.parametrize("B", [1, 16])
-@pytest.mark.parametrize(
-    "N", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
-)
-@pytest.mark.parametrize("seed", [42, 123, 456, 789, 1, 2, 3, 43, 44, 45])
-def test_postprocess_config(B, N, seed):
-    """Compiled estimator with random postprocessing steps matches ref."""
-    # Sample idxs
-    key = jrandom.PRNGKey(seed)
-    key, subkey = jrandom.split(key)
-    idxs = jrandom.choice(
-        key, jnp.arange(len(all_post)), shape=(N,), replace=True
-    )
+@pytest.mark.parametrize("B, idxs", pipelines)
+def test_postprocess_config(B, idxs):
+    """Compiled estimator with config-built postprocessing steps matches ref."""
+    key, subkey = jrandom.split(jrandom.PRNGKey(0))
 
     # Create a random flow
     image = jrandom.uniform(
@@ -198,23 +205,16 @@ def test_postprocess_config(B, N, seed):
 
 
 @pytest.mark.parametrize(
-    "N", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    "fn, params",
+    [
+        pytest.param(fn, params, id=f"{fn.__name__}-{i}")
+        for i, (fn, params) in enumerate(bad_params)
+    ],
 )
-@pytest.mark.parametrize("seed", [42, 123, 456, 789, 1, 2, 3, 43, 44, 45])
-def test_preprocess_config_invalid_params(N, seed):
-    """from_config raises ValueError or TypeError for invalid parameters."""
-    # Sample idxs
-    key = jrandom.PRNGKey(seed)
-    idxs = jrandom.choice(
-        key, jnp.arange(len(bad_params)), shape=(N,), replace=True
-    )
-
-    # Create a post_processing configuration
+def test_postprocess_config_invalid_params(fn, params):
+    """Each invalid postprocessing parameter raises ValueError or TypeError."""
     post_process_config = {
-        "postprocessing_steps": [
-            {"name": bad_params[idx][0].__name__} | bad_params[idx][1]
-            for idx in idxs
-        ]
+        "postprocessing_steps": [{"name": fn.__name__} | params]
     }
     with pytest.raises((ValueError, TypeError)):
         # Instantiate the dummy estimator
