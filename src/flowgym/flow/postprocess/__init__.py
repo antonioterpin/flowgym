@@ -254,9 +254,30 @@ def apply_postprocessing(
 
 
 def is_outlier_rejection_step(name: str) -> bool:
-    """Return whether the named postprocessing step rejects outliers."""
+    """Return whether the named postprocessing step rejects outliers.
+
+    Args:
+        name: Name of the postprocessing step.
+
+    Returns:
+        True if the step is flagged as an outlier-rejection step.
+    """
     fn = globals().get(name)
     return bool(getattr(fn, "is_outlier_rejection", False))
+
+
+def is_jittable_step(name: str) -> bool:
+    """Return whether the named postprocessing step can be JIT-compiled.
+
+    Steps are pure JAX unless their function sets ``jittable = False``.
+
+    Args:
+        name: Name of the postprocessing step.
+
+    Returns:
+        True if the step can be traced by JAX.
+    """
+    return bool(getattr(globals().get(name), "jittable", True))
 
 
 __all__ = [
@@ -272,6 +293,7 @@ __all__ = [
     "constant_threshold_filter_validate_params",
     "gaussian_smoothing",
     "gaussian_smoothing_validate_params",
+    "is_jittable_step",
     "is_outlier_rejection_step",
     "laplace_interpolation",
     "laplace_interpolation_validate_params",

@@ -108,9 +108,7 @@ def test_index_lookup_populates_all_spec_columns():
 
         # Warm start by index so the hit is served from the on-disk parquet
         # via _lookup_index (the path that carried the bug).
-        cm_read = CacheManager(
-            tmp_dir, cache_id, spec=spec, warm_start="index"
-        )
+        cm_read = CacheManager(tmp_dir, cache_id, spec=spec, warm_start="index")
         payload_out, hit = cm_read.lookup(keys)
 
         assert bool(hit[0])

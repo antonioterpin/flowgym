@@ -175,6 +175,19 @@ def test_invalid_geometry_raises(override):
         OpenPIVJAXEstimator(**{**_CANONICAL_KW, **override})
 
 
+@pytest.mark.parametrize(
+    "override, valid",
+    [
+        ({"subpixel_method": "quartic"}, "parabolic"),
+        ({"correlation_method": "quadratic"}, "linear"),
+    ],
+)
+def test_unknown_method_from_config_names_valid_choices(override, valid):
+    """A misspelled method from config is rejected, listing the valid ones."""
+    with pytest.raises(ValueError, match=valid):
+        OpenPIVJAXEstimator.from_config({**_CANONICAL_KW, **override})
+
+
 @pytest.mark.parametrize("override", [{"n_passes": 1}, {"n_passes": 2}])
 def test_subpixel_method_is_forwarded(image_pair, override):
     """subpixel_method reaches every pass, single and multipass."""

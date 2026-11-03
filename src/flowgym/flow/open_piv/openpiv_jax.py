@@ -144,8 +144,8 @@ class OpenPIVJAXEstimator(FlowFieldEstimator):
         window_size: int | tuple[int, int] = 16,
         search_size: int | tuple[int, int] = 21,
         overlap: int | tuple[int, int] = 8,
-        subpixel_method: str = "gaussian",
-        correlation_method: str = "circular",
+        subpixel_method: process.SubpixelMethod = "gaussian",
+        correlation_method: process.CorrelationMethod = "circular",
         n_passes: int = 1,
         sig2noise_threshold: float | None = None,
         openpiv_outlier_replacement_kernel_size: int = 3,
@@ -185,10 +185,6 @@ class OpenPIVJAXEstimator(FlowFieldEstimator):
             raise ValueError("overlap must be non-negative.")
         if any(o >= w for o, w in zip(overlap_hw, window_hw, strict=True)):
             raise ValueError("overlap must be less than window_size.")
-        if subpixel_method not in ("gaussian", "parabolic", "centroid"):
-            raise ValueError(f"Bad subpixel_method: {subpixel_method!r}")
-        if correlation_method not in ("circular", "linear"):
-            raise ValueError(f"Bad correlation_method: {correlation_method!r}")
         if not isinstance(n_passes, int) or n_passes < 1:
             raise ValueError("n_passes must be a positive integer.")
         if (
@@ -206,8 +202,8 @@ class OpenPIVJAXEstimator(FlowFieldEstimator):
             raise ValueError(
                 "openpiv_outlier_replacement_n_iter must be a positive integer."
             )
-        self.subpixel_method = subpixel_method
-        self.correlation_method = correlation_method
+        self.subpixel_method: process.SubpixelMethod = subpixel_method
+        self.correlation_method: process.CorrelationMethod = correlation_method
         self.n_passes = n_passes
         self.sig2noise_threshold = (
             None if sig2noise_threshold is None else float(sig2noise_threshold)
@@ -233,18 +229,26 @@ class OpenPIVJAXEstimator(FlowFieldEstimator):
         Returns:
             The flow field and a boolean outlier mask.
         """
-        piv_kwargs = {
-            "window_size": self.window_size,
-            "search_area_size": self.search_size,
-            "overlap": self.overlap,
-            "subpixel_method": self.subpixel_method,
-            "correlation_method": self.correlation_method,
-        }
         if self.sig2noise_threshold is None:
-            flow = process.extended_search_area_piv(img1, img2, **piv_kwargs)
+            flow = process.extended_search_area_piv(
+                img1,
+                img2,
+                window_size=self.window_size,
+                search_area_size=self.search_size,
+                overlap=self.overlap,
+                subpixel_method=self.subpixel_method,
+                correlation_method=self.correlation_method,
+            )
             return flow, jnp.isnan(flow).any(axis=-1)
         flow, s2n = process.extended_search_area_piv(
-            img1, img2, sig2noise_method="peak2peak", **piv_kwargs
+            img1,
+            img2,
+            window_size=self.window_size,
+            search_area_size=self.search_size,
+            overlap=self.overlap,
+            subpixel_method=self.subpixel_method,
+            correlation_method=self.correlation_method,
+            sig2noise_method="peak2peak",
         )
         mask = process.sig2noise_val(s2n, self.sig2noise_threshold)
         return flow, mask | jnp.isnan(flow).any(axis=-1)

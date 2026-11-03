@@ -3,12 +3,24 @@ version: 2
 updates:
     - package-ecosystem: github-actions
       directory: /
+      target-branch: dev
       schedule:
           interval: weekly
       open-pull-requests-limit: 5
 
-    - package-ecosystem: pip
+    # `uv` (not `pip`) so that Dependabot regenerates uv.lock together
+    # with pyproject.toml; the `pip` ecosystem leaves the lockfile stale.
+    - package-ecosystem: uv
       directory: /
+      target-branch: dev
       schedule:
           interval: weekly
       open-pull-requests-limit: 5
+      # The docs pins only resolve together (myst-parser and
+      # sphinx-rtd-theme bound the Sphinx major), so bump them as one PR.
+      groups:
+          docs:
+              patterns:
+                  - sphinx
+                  - sphinx-*
+                  - myst-parser

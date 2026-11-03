@@ -36,7 +36,18 @@ _LEARNED_ORACLE_STATE_CACHE: dict[
 def _normalize_oracle_features(
     features: list[int] | tuple[int, ...] | None,
 ) -> tuple[int, ...]:
-    """Validate and normalize learned-oracle CNN feature sizes."""
+    """Validate and normalize learned-oracle CNN feature sizes.
+
+    Args:
+        features: CNN feature sizes, or None for the default sizes.
+
+    Returns:
+        Feature sizes as a tuple.
+
+    Raises:
+        ValueError: If ``features`` is empty or contains non-positive or
+            non-integer values.
+    """
     if features is None:
         return _DEFAULT_ORACLE_FEATURES
     if not isinstance(features, (list, tuple)) or len(features) == 0:
@@ -56,7 +67,17 @@ def _load_learned_oracle_state_from_checkpoint(
     features: tuple[int, ...],
     include_image_pair: bool = False,
 ) -> tuple[EstimatorTrainableState, int]:
-    """Load and cache a learned-oracle trainable state from checkpoint."""
+    """Load and cache a learned-oracle trainable state from checkpoint.
+
+    Args:
+        load_from: Checkpoint directory path for the learned oracle.
+        features: CNN feature sizes used by the checkpoint.
+        include_image_pair: Whether the checkpoint expects the image pair as
+            additional input channels.
+
+    Returns:
+        Tuple of the loaded trainable state and its number of input channels.
+    """
     checkpoint_path = str(Path(load_from).resolve())
     cache_key = (checkpoint_path, features, include_image_pair)
     cached = _LEARNED_ORACLE_STATE_CACHE.get(cache_key)
@@ -88,7 +109,18 @@ def preload_learned_oracle_state(
     features: list[int] | tuple[int, ...] | None = None,
     include_image_pair: bool = False,
 ) -> EstimatorTrainableState:
-    """Preload learned-oracle state for a jittable inference path."""
+    """Preload learned-oracle state for a jittable inference path.
+
+    Args:
+        load_from: Checkpoint directory path for the learned oracle.
+        features: CNN feature sizes used by the checkpoint, or None for the
+            default sizes.
+        include_image_pair: Whether the checkpoint expects the image pair as
+            additional input channels.
+
+    Returns:
+        The loaded learned-oracle trainable state.
+    """
     state, _ = _load_learned_oracle_state_from_checkpoint(
         load_from=load_from,
         features=_normalize_oracle_features(features),
@@ -101,6 +133,16 @@ def _infer_oracle_input_channels(params: Any) -> int:
     """Infer expected input channels from first convolution params.
 
     Falls back to ``3`` when parameters do not expose ``Conv_0/kernel``.
+
+    Args:
+        params: Parameters of the learned-oracle model.
+
+    Returns:
+        Number of input channels (2, 3, or 5).
+
+    Raises:
+        ValueError: If the kernel is not 4D or the channel count is
+            unsupported.
     """
     try:
         conv0_kernel = jnp.asarray(params["Conv_0"]["kernel"])
@@ -238,15 +280,16 @@ def adaptive_local_filter_validate_params(
             (patch = (2*radius+1, 2*radius+1)).
 
     Raises:
-        ValueError: If n_sigma is not a positive number or radius is negative.
+        ValueError: If n_sigma is not a positive number or radius is not
+            a positive integer.
     """
     if not isinstance(n_sigma, (int, float)):
         raise ValueError(f"Invalid n_sigma: {n_sigma}. Must be a number.")
     if n_sigma <= 0:
         raise ValueError(f"Invalid n_sigma: {n_sigma}. Must be positive.")
-    if not isinstance(radius, int) or radius < 0:
+    if not isinstance(radius, int) or radius < 1:
         raise ValueError(
-            f"Invalid radius: {radius}. Must be a non-negative integer."
+            f"Invalid radius: {radius}. Must be a positive integer."
         )
 
 
@@ -342,7 +385,7 @@ def universal_median_test_validate_params(
 
     Raises:
         ValueError: If r_threshold is not positive, epsilon is not positive,
-            or radius is negative.
+            or radius is not a positive integer.
     """
     if not isinstance(r_threshold, (int, float)) or r_threshold <= 0:
         raise ValueError(
@@ -350,9 +393,9 @@ def universal_median_test_validate_params(
         )
     if not isinstance(epsilon, (int, float)) or epsilon <= 0:
         raise ValueError(f"Invalid epsilon: {epsilon}. Must be positive.")
-    if not isinstance(radius, int) or radius < 0:
+    if not isinstance(radius, int) or radius < 1:
         raise ValueError(
-            f"Invalid radius: {radius}. Must be a non-negative integer."
+            f"Invalid radius: {radius}. Must be a positive integer."
         )
 
 
@@ -482,6 +525,7 @@ def learned_oracle_threshold(
              Optional mask of shape (B, H, W) where 1 means valid.
              If provided, the outlier mask will be combined with this mask.
         state: Current state of the estimator.
+        threshold_value: Probability threshold to keep a vector as inlier.
         load_from: Optional checkpoint directory path for the learned oracle.
         features: CNN feature sizes used by the learned oracle checkpoint.
         include_image_pair:
@@ -509,6 +553,11 @@ def learned_oracle_threshold(
         Filtered flow field with outliers removed.
         mask of shape (B, H, W) where 1 means valid.
         Current state of the estimator.
+
+    Raises:
+        ValueError: If no usable model state is available, the model input
+            channels are inconsistent with ``include_image_pair``, or the
+            inputs have invalid shapes.
     """
     model_trainable_state = (
         oracle_trainable_state

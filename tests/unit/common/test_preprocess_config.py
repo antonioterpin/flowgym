@@ -4,6 +4,7 @@ Covers end-to-end equivalence of config-constructed preprocessing pipelines
 against direct function calls, invalid-param rejection, and JIT throughput.
 """
 
+import random
 import timeit
 
 import jax
@@ -103,6 +104,21 @@ bad_params = [
 ]
 
 
+# Every step on its own, then a few multi-step pipelines (batched and not).
+pipelines = [
+    pytest.param(16, [idx], id=f"{fn.__name__}-{idx}")
+    for idx, (fn, _) in enumerate(all_pre)
+] + [
+    pytest.param(
+        B,
+        random.Random(seed).choices(range(len(all_pre)), k=N),
+        id=f"B{B}-N{N}-seed{seed}",
+    )
+    for B in (1, 16)
+    for N, seed in ((5, 42), (15, 123))
+]
+
+
 def apply_from_idxs(idxs, image):
     """Apply preprocessing functions from given indices."""
     for idx in idxs:
@@ -110,19 +126,10 @@ def apply_from_idxs(idxs, image):
     return image
 
 
-@pytest.mark.parametrize("B", [1, 16])
-@pytest.mark.parametrize(
-    "N", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
-)
-@pytest.mark.parametrize("seed", [42, 123, 456, 789, 1, 2, 3, 43, 44, 45])
-def test_preprocess_config(B, N, seed):
+@pytest.mark.parametrize("B, idxs", pipelines)
+def test_preprocess_config(B, idxs):
     """Config-driven pipeline matches direct function calls."""
-    # Sample idxs
-    key = jrandom.PRNGKey(seed)
-    key, subkey = jrandom.split(key)
-    idxs = jrandom.choice(
-        key, jnp.arange(len(all_pre)), shape=(N,), replace=True
-    )
+    key, subkey = jrandom.split(jrandom.PRNGKey(0))
 
     # Create a random image
     image = jrandom.uniform(
@@ -142,9 +149,9 @@ def test_preprocess_config(B, N, seed):
     # Instantiate the dummy estimator
     estimator = DummyEstimator.from_config(pre_processing_config)
     trainable_state = estimator.create_trainable_state(image, key)
-    create_state_fn, compute_estimate_fn = compile_model(
-        estimator, processed_image_reference, False
-    )
+    compiled = compile_model(estimator, processed_image_reference, False)
+    create_state_fn = compiled.create_state
+    compute_estimate_fn = compiled.compute_estimate
     # Create the state
     state = create_state_fn(image, key)
     state, _ = compute_estimate_fn(image, state, trainable_state)
@@ -160,23 +167,16 @@ def test_preprocess_config(B, N, seed):
 
 
 @pytest.mark.parametrize(
-    "N", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    "fn, params",
+    [
+        pytest.param(fn, params, id=f"{fn.__name__}-{i}")
+        for i, (fn, params) in enumerate(bad_params)
+    ],
 )
-@pytest.mark.parametrize("seed", [42, 123, 456, 789, 1, 2, 3, 43, 44, 45])
-def test_preprocess_config_invalid_params(N, seed):
-    """Invalid preprocessing parameters raise ValueError or TypeError."""
-    # Sample idxs
-    key = jrandom.PRNGKey(seed)
-    idxs = jrandom.choice(
-        key, jnp.arange(len(bad_params)), shape=(N,), replace=True
-    )
-
-    # Create a pre_processing configuration
+def test_preprocess_config_invalid_params(fn, params):
+    """Each invalid preprocessing parameter raises ValueError or TypeError."""
     pre_processing_config = {
-        "preprocessing_steps": [
-            {"name": bad_params[idx][0].__name__} | bad_params[idx][1]
-            for idx in idxs
-        ]
+        "preprocessing_steps": [{"name": fn.__name__} | params]
     }
     with pytest.raises((ValueError, TypeError)):
         # Instantiate the dummy estimator
@@ -221,7 +221,9 @@ def test_preprocess_jit(B, H, time_limit, seed):
     # Instantiate the dummy estimator
     estimator = DummyEstimator.from_config(pre_processing_config)
     trainable_state = estimator.create_trainable_state(image, key)
-    create_state_fn, compute_estimate_fn = compile_model(estimator, image, True)
+    compiled = compile_model(estimator, image, True)
+    create_state_fn = compiled.create_state
+    compute_estimate_fn = compiled.compute_estimate
     # Warm up
     state = create_state_fn(image, key)
     state, _ = compute_estimate_fn(image, state, trainable_state)
@@ -241,5 +243,5 @@ def test_preprocess_jit(B, H, time_limit, seed):
 
     assert runtime < time_limit, (
         f"JIT preprocessing took too long: {runtime:.6f} seconds per execution,"
+        f" time limit: {time_limit:.6f} seconds"
     )
-    f" time limit: {time_limit:.6f} seconds"

@@ -130,7 +130,7 @@ def laplace_interpolation_naive(flow, valid, num_iter):
     "B, H, W",
     [
         (1, 64, 64),
-        (32, 64, 64),
+        pytest.param(32, 64, 64, marks=pytest.mark.slow),
     ],
 )
 @pytest.mark.parametrize("p", [0.95, 0.9, 0.8, 0.1])

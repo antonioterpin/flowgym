@@ -7,7 +7,7 @@ import copy
 import hashlib
 import inspect
 import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, get_type_hints
 
 if TYPE_CHECKING:
     from synthpix.types import SynthpixBatch
@@ -24,9 +24,13 @@ from goggles import Metrics, get_logger
 from goggles.history import create_history, update_history
 from goggles.history.spec import HistorySpec
 from goggles.history.types import History
+from typeguard import TypeCheckError, check_type
 
 from flowgym.common.base.trainable_state import EstimatorTrainableState
 from flowgym.common.preprocess import build_preprocessing_steps
+from flowgym.common.preprocess import (
+    is_jittable_step as is_jittable_preprocessing_step,
+)
 from flowgym.types import CachePayload, PRNGKey, TrainStep
 from flowgym.utils import load_configuration
 
@@ -87,6 +91,19 @@ class Estimator(abc.ABC):
             f"{self.__class__.__name__} initialized with parameters:\n"
             f"{pformat(param_log)}"
         )
+
+    def preprocess(self, images: jnp.ndarray) -> jnp.ndarray:
+        """Apply the configured preprocessing pipeline to batched images.
+
+        Args:
+            images: Input images before preprocessing.
+
+        Returns:
+            Images after all configured preprocessing steps.
+        """
+        for step in self.preprocessing_steps:
+            images = step(images)
+        return images
 
     def create_state(
         self,
@@ -174,8 +191,7 @@ class Estimator(abc.ABC):
             )
 
         # Apply preprocessing to images
-        for step in self.preprocessing_steps:
-            images = step(images)
+        images = self.preprocess(images)
 
         B, H, W = images.shape
 
@@ -334,8 +350,7 @@ class Estimator(abc.ABC):
             )
 
         # Preprocess images
-        for step in self.preprocessing_steps:
-            images = step(images)
+        images = self.preprocess(images)
 
         # Handle per-batch RNG keys if present
         have_keys = "keys" in state
@@ -767,6 +782,20 @@ class Estimator(abc.ABC):
         """
         return self.supports_jit()
 
+    def supports_preprocess_jit(self) -> bool:
+        """Return whether the preprocessing pipeline can be JIT-compiled.
+
+        Independent of :meth:`supports_jit`: a NumPy/OpenCV estimator can
+        still preprocess its images with pure-JAX steps.
+
+        Returns:
+            True if every configured preprocessing step is jittable.
+        """
+        return all(
+            is_jittable_preprocessing_step(step.keywords["name"])
+            for step in self.preprocessing_steps
+        )
+
     @classmethod
     def get_init_param_names(cls) -> set[str]:
         """Get `__init__` parameters from the class and its parents.
@@ -784,6 +813,21 @@ class Estimator(abc.ABC):
         return params
 
     @classmethod
+    def get_init_param_hints(cls) -> dict[str, Any]:
+        """Get `__init__` parameter type hints from the class and its parents.
+
+        Returns:
+            A mapping from parameter name to type hint; a subclass hint
+            overrides its parents' hint for the same parameter.
+        """
+        hints: dict[str, Any] = {}
+        for c in reversed(inspect.getmro(cls)):
+            if "__init__" in c.__dict__ and c is not object:
+                hints.update(get_type_hints(c.__init__))
+        hints.pop("return", None)
+        return hints
+
+    @classmethod
     def from_config(cls, config: dict[str, Any]) -> Estimator:
         """Construct an estimator from a config dictionary.
 
@@ -797,7 +841,8 @@ class Estimator(abc.ABC):
             An instance of the estimator initialized with the provided config.
 
         Raises:
-            ValueError: If preprocess/postprocess configuration is not valid.
+            ValueError: If preprocess/postprocess configuration is not valid,
+                or a config value does not match its `__init__` type hint.
         """
         # Get valid keys from the class's __init__ parameters
         valid_keys = cls.get_init_param_names()
@@ -853,6 +898,20 @@ class Estimator(abc.ABC):
                 f"{cls.__name__} ignores unknown config keys {sorted(ignored)}."
             )
         filtered = {k: v for k, v in config.items() if k in valid_keys}
+
+        # Config values come from YAML untyped, so check them against the
+        # __init__ hints here instead of in each estimator.
+        hints = cls.get_init_param_hints()
+        for key, value in filtered.items():
+            if key not in hints:
+                continue
+            try:
+                check_type(value, hints[key])
+            except TypeCheckError as e:
+                raise ValueError(
+                    f"{cls.__name__} config {key}={value!r}: {e}."
+                ) from e
+
         estimator = cls(**filtered)
         estimator._config = copy.deepcopy(filtered)
         return estimator
