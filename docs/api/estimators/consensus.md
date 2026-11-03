@@ -14,12 +14,6 @@ Refinement via Consensus ADMM*, 2025
 
 ## Child state and resizing
 
-Each child initializes its own state from the preceding parent input image,
-so its preprocessing and extra history fields are applied consistently to
-both frames. Child image grids may differ; their final flows must share the
-consensus input grid. Parent postprocessing may then resize that grid.
-
-When temporal propagation is enabled, the previous consensus flow is
-interpolated onto the input grid before initializing each child's estimate
-history. Otherwise children start with zero flow. Child state is rebuilt for
-each pair; individual child estimates are not carried between calls.
+Each child rebuilds its state for every image pair with its own
+`create_state`, so children may preprocess to different image sizes and the
+parent may resize its output. Child flows must share the consensus input grid.

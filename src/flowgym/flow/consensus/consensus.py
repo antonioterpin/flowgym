@@ -156,10 +156,8 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
                 child_index=index,
             ) -> tuple[History, dict]:
                 image, state = input
-                # The parent history is on the parent's output grid. Each
-                # child must preprocess its own previous image and initialize
-                # its extras before estimation. Consensus works on the parent
-                # input grid, before the parent's postprocessing resize.
+                # Rebuild the child's history with its own preprocessing;
+                # the parent's estimates may be on a resized output grid.
                 initial_flow, _, _ = resize_flow(
                     state["estimates"][:, -1],
                     target_height=image.shape[1],
@@ -172,13 +170,11 @@ class ConsensusFlowEstimator(FlowFieldEstimator):
                     estimate_history_size=history_size,
                 )
                 if "keys" in state:
-                    keys = state["keys"].reshape(image.shape[0], -1)[:, -2:]
                     child_state["keys"] = jax.vmap(
                         lambda key: jax.random.fold_in(key, child_index)
-                    )(keys)[:, None, :]
+                    )(state["keys"][:, -1])[:, None, :]
                 child_state, metrics = estimator(image, child_state, ts)
-                # Only the final flow belongs to the common consensus grid;
-                # child image histories/extras can have different shapes.
+                # Child histories may differ in shape; only flows are stacked.
                 return {"estimates": child_state["estimates"][:, -1:]}, metrics
 
             estimators.append(estimator_fn)

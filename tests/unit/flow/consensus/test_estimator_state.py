@@ -88,7 +88,6 @@ def test_consensus_initializes_children_on_their_own_grid(
     assert state["estimates"].shape == (2, 1, 4, 4, 2), (
         "Parent grid must survive"
     )
-    # resize_flow interpolates the grid without changing flow magnitudes.
     np.testing.assert_allclose(state["estimates"], 1.0, atol=1e-6)
     state, _ = compute(images * 3, state, trained)
     np.testing.assert_allclose(
