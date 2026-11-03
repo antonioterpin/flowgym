@@ -1,7 +1,7 @@
 """Module for OpenPIV processing in JAX."""
 
 from collections.abc import Callable
-from typing import overload
+from typing import assert_never, overload
 
 import jax
 import jax.numpy as jnp
@@ -11,9 +11,6 @@ from flowgym.flow.open_piv.types import (
     CorrelationMethod,
     SignalToNoiseMethod,
     SubpixelMethod,
-    parse_correlation_method,
-    parse_sig2noise_method,
-    parse_subpixel_method,
 )
 from flowgym.flow.process import img_resize
 from flowgym.utils import DEBUG
@@ -308,18 +305,13 @@ def fft_correlate_images(
     Note:
         ``correlation_method`` is a Python string that selects a code path,
         so under ``jax.jit`` it must be marked static (e.g.
-        ``static_argnames="correlation_method"``). The ``ValueError`` below
-        only fires when the value is concrete; passing it as a traced
-        argument instead raises an opaque tracer ``TypeError``.
+        ``static_argnames="correlation_method"``). An unsupported value
+        fails ``assert_never`` only when it is concrete; passing it as a
+        traced argument instead raises an opaque tracer ``TypeError``.
 
     Returns:
         Cross-correlation result (..., height, width).
-
-    Note:
-        :func:`parse_correlation_method` raises ``ValueError`` for unsupported
-        configuration strings.
     """
-    correlation_method = parse_correlation_method(correlation_method)
 
     aa = normalize_intensity(aa)
     bb = normalize_intensity(bb)
@@ -350,11 +342,13 @@ def fft_correlate_images(
             (fsize[0] - s1[0]) // 2 : (fsize[0] + s1[0]) // 2,
             (fsize[1] - s1[1]) // 2 : (fsize[1] + s1[1]) // 2,
         ]
-    else:  # circular
+    elif correlation_method == "circular":
         f2a = jnp.conj(jnp.fft.rfft2(aa, axes=(-2, -1)))
         f2b = jnp.fft.rfft2(bb, axes=(-2, -1))
         corr = jnp.fft.irfft2(f2a * f2b, axes=(-2, -1))
         corr = jnp.fft.fftshift(corr, axes=(-2, -1))
+    else:
+        assert_never(correlation_method)
 
     corr = corr / (s2[0] * s2[1])
     corr = jnp.clip(corr, 0, 1)
@@ -470,12 +464,7 @@ def sig2noise_ratio(
     Returns:
         Signal-to-noise ratios of shape ``corr.shape[:-2]``, with flagged
         windows set to 0.
-
-    Note:
-        :func:`parse_sig2noise_method` raises ``ValueError`` for unsupported
-        configuration strings.
     """
-    sig2noise_method = parse_sig2noise_method(sig2noise_method)
     if DEBUG:
         assert corr.ndim >= 2, (
             f"Correlation must be (..., height, width), instead {corr.shape}"
@@ -506,8 +495,10 @@ def sig2noise_ratio(
             | (peaks2_j == W - 1)
         )
         noise = peaks2
-    else:
+    elif sig2noise_method == "peak2mean":
         noise = jnp.abs(jnp.nanmean(corr, axis=(-2, -1)))
+    else:
+        assert_never(sig2noise_method)
 
     # Reference: np.divide(..., out=zeros, where=noise > 0). The guarded
     # denominator keeps the division NaN-free under jit.
@@ -581,12 +572,7 @@ def subpixel_displacement(
 
     Returns:
         Subpixel displacements (disp_vx, disp_vy).
-
-    Note:
-        :func:`parse_subpixel_method` raises ``ValueError`` for unsupported
-        configuration strings.
     """
-    subpixel_method = parse_subpixel_method(subpixel_method)
     if DEBUG:
         assert corr.ndim == 3, (
             "Correlation must be (batch_size * n_windows, height, width), "
@@ -682,7 +668,7 @@ def subpixel_displacement(
         shift_j = (cd - cu) / (2 * cd - 4 * c + 2 * cu)
         disp_vy = shift_i + safe_i - jnp.floor(H / 2)
         disp_vx = shift_j + safe_j - jnp.floor(W / 2)
-    else:  # gaussian
+    elif subpixel_method == "gaussian":
         # Detect any non-positive values -> fallback to 3-point parabolic.
         inv = (c <= 0) | (cl <= 0) | (cr <= 0) | (cd <= 0) | (cu <= 0)
 
@@ -708,6 +694,8 @@ def subpixel_displacement(
 
         disp_vy = shift_i + safe_i - jnp.floor(H / 2)
         disp_vx = shift_j + safe_j - jnp.floor(W / 2)
+    else:
+        assert_never(subpixel_method)
 
     # 8) Mask out the originally invalid peaks → NaN
     disp_vx = jnp.where(invalid, jnp.nan, disp_vx)

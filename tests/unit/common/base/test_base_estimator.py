@@ -4,6 +4,8 @@ Covers create_state shape/tiling, extras merging, RNG handling,
 and validation of invalid input shapes and RNG types.
 """
 
+from typing import Literal
+
 import jax
 import jax.numpy as jnp
 import pytest
@@ -16,6 +18,22 @@ class DummyEstimator(Estimator):
 
     def _estimate(self, *args, **kwargs):
         pass
+
+
+class TypedEstimator(DummyEstimator):
+    """Estimator with typed parameters, as configured from YAML."""
+
+    def __init__(
+        self,
+        mode: Literal["fast", "slow"] = "fast",
+        size: int = 1,
+        scale: float = 1.0,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.mode = mode
+        self.size = size
+        self.scale = scale
 
 
 @pytest.fixture
@@ -143,3 +161,19 @@ def test_from_config_warns_on_unknown_keys(monkeypatch):
     )
     assert len(warnings) == 1
     assert "no_such_param" in warnings[0]
+
+
+def test_from_config_accepts_values_matching_init_hints():
+    """Valid values pass, including a YAML int for a float parameter."""
+    est = TypedEstimator.from_config({"mode": "slow", "size": 3, "scale": 2})
+    assert (est.mode, est.size, est.scale) == ("slow", 3, 2)
+
+
+@pytest.mark.parametrize(
+    "key, value",
+    [("mode", "medium"), ("size", "3"), ("size", 2.5), ("scale", "1.0")],
+)
+def test_from_config_rejects_values_not_matching_init_hints(key, value):
+    """A config value of the wrong type names the estimator and the key."""
+    with pytest.raises(ValueError, match=rf"TypedEstimator.*{key}"):
+        TypedEstimator.from_config({key: value})

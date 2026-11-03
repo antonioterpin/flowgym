@@ -132,16 +132,16 @@ def test_subpixel_displacement_matches_vectorized_reference(
 
 
 def test_subpixel_displacement_invalid_method_raises():
-    """An unknown subpixel method raises a clear ValueError."""
+    """An unknown subpixel method raises instead of running gaussian."""
     corr = jnp.ones((1, 8, 8))
     peaks_i = jnp.array([4])
     peaks_j = jnp.array([4])
-    with pytest.raises(ValueError, match="Unknown subpixel_method"):
+    with pytest.raises(AssertionError, match="quartic"):
         subpixel_displacement(corr, peaks_i, peaks_j, subpixel_method="quartic")
 
 
 def test_pipeline_invalid_subpixel_method_raises():
-    """The full pipeline surfaces the ValueError, not an opaque tracer error.
+    """The full pipeline surfaces the error, not an opaque tracer error.
 
     ``extended_search_area_piv`` routes ``subpixel_method`` through to
     ``subpixel_displacement``; this pins that the validation still fires
@@ -150,7 +150,7 @@ def test_pipeline_invalid_subpixel_method_raises():
     """
     frame_a = jnp.zeros((1, 32, 32))
     frame_b = jnp.zeros((1, 32, 32))
-    with pytest.raises(ValueError, match="Unknown subpixel_method"):
+    with pytest.raises(AssertionError, match="quartic"):
         extended_search_area_piv(
             frame_a,
             frame_b,
@@ -374,9 +374,9 @@ def test_fft_correlate_linear_pins_bb_denominator():
 
 
 def test_fft_correlate_invalid_method_raises():
-    """An unknown correlation method raises a clear ValueError."""
+    """An unknown correlation method raises instead of running circular."""
     win = jnp.ones((2, 16, 16))
-    with pytest.raises(ValueError, match="Unknown correlation_method"):
+    with pytest.raises(AssertionError, match="quadratic"):
         fft_correlate_images(win, win, correlation_method="quadratic")
 
 

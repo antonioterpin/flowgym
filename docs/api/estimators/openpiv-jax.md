@@ -24,6 +24,5 @@ image velocimetry
 
 Method arguments are typed with the `Literal` aliases in
 `flowgym.flow.open_piv.types` (`SubpixelMethod`, `CorrelationMethod`,
-`SignalToNoiseMethod`). Use the matching `parse_*` helpers to validate strings
-from configuration. `sig2noise_val` returns a boolean mask where `True` marks
-an outlier.
+`SignalToNoiseMethod`); `from_config` rejects other values from YAML.
+`sig2noise_val` returns a boolean mask where `True` marks an outlier.

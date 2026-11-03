@@ -185,10 +185,6 @@ class OpenPIVJAXEstimator(FlowFieldEstimator):
             raise ValueError("overlap must be non-negative.")
         if any(o >= w for o, w in zip(overlap_hw, window_hw, strict=True)):
             raise ValueError("overlap must be less than window_size.")
-        subpixel_method = process.parse_subpixel_method(subpixel_method)
-        correlation_method = process.parse_correlation_method(
-            correlation_method
-        )
         if not isinstance(n_passes, int) or n_passes < 1:
             raise ValueError("n_passes must be a positive integer.")
         if (

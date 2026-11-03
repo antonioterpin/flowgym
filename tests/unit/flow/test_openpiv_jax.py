@@ -330,9 +330,9 @@ def test_sig2noise_batched_leading_dims(random_images):
 
 
 def test_sig2noise_invalid_method_raises():
-    """An unknown method raises ValueError, mirroring the reference."""
+    """An unknown method raises instead of running a default branch."""
     corr = jnp.ones((1, 8, 8))
-    with pytest.raises(ValueError, match="sig2noise_method"):
+    with pytest.raises(AssertionError, match="peak2median"):
         sig2noise_ratio(corr, sig2noise_method="peak2median")
 
 

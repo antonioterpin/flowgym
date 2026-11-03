@@ -183,9 +183,9 @@ def test_invalid_geometry_raises(override):
     ],
 )
 def test_unknown_method_from_config_names_valid_choices(override, valid):
-    """A misspelled method is rejected and the error lists the valid ones."""
+    """A misspelled method from config is rejected, listing the valid ones."""
     with pytest.raises(ValueError, match=valid):
-        OpenPIVJAXEstimator(**{**_CANONICAL_KW, **override})
+        OpenPIVJAXEstimator.from_config({**_CANONICAL_KW, **override})
 
 
 @pytest.mark.parametrize("override", [{"n_passes": 1}, {"n_passes": 2}])
