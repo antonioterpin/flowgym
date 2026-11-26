@@ -161,6 +161,34 @@ def test_build_pyramid():
     assert pyr[1].shape == (4, 4)
 
 
+@pytest.mark.parametrize("axis", [0, 1])
+@pytest.mark.parametrize("phase", [0, 1, 2, 3])
+def test_pyramid_rejects_aliasing(axis: int, phase: int) -> None:
+    """Unresolved stripes must not become phase-dependent coarse brightness."""
+    stripe = jnp.roll(jnp.tile(jnp.array([0.0, 0.0, 1.0, 1.0]), 32), phase)
+    image = jnp.broadcast_to(stripe, (128, 128))
+    if axis == 0:
+        image = image.T
+    coarse, native = build_pyramid(image, levels=2, start_level=0, steps=2)
+    np.testing.assert_array_equal(native, image)
+    np.testing.assert_allclose(coarse[2:-2, 2:-2], 0.5, atol=1e-6)
+
+
+@pytest.mark.parametrize("shape", [(64, 80), (64, 80, 3)])
+def test_pyramid_preserves_channels_and_constant_intensity(
+    shape: tuple[int, ...],
+) -> None:
+    """Pyramid spacing changes only spatial dimensions and preserves DC."""
+    image = jnp.full(shape, 37.0)
+    pyramid = build_pyramid(image, levels=2, start_level=1, steps=2)
+    assert [level.shape for level in pyramid] == [
+        (8, 10, *shape[2:]),
+        (32, 40, *shape[2:]),
+    ]
+    for level in pyramid:
+        np.testing.assert_allclose(level, 37.0, atol=1e-5)
+
+
 # Test for flow_between with no motion
 def test_flow_between_no_movement():
     """flow_between produces zero flow for identical constant images."""
