@@ -635,8 +635,8 @@ def build_pyramid(
 ) -> list[jnp.ndarray]:
     """Build an image pyramid from coarsest to finest resolution.
 
-    The pyramid is built by downsampling the image by a factor of 2 at each
-    level.
+    Downsample with an anti-aliased linear filter so unresolved particle
+    texture does not alias into coarse-scale motion. Channels are preserved.
 
     Args:
         img: jnp.ndarray of shape (H, W) or (H, W, C)
@@ -659,8 +659,8 @@ def build_pyramid(
             downsampled image of shape (H // factor, W // factor)
         """
         factor = 2 ** (level * steps + start_level)
-        shape = (H // factor, W // factor)
-        return img_resize(img, shape)
+        shape = (H // factor, W // factor, *img.shape[2:])
+        return jax.image.resize(img, shape, method="linear", antialias=True)
 
     # Build the pyramid from coarsest to finest
     # We use a list because we want to store images of different shapes
